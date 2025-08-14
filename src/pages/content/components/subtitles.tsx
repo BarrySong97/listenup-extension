@@ -1,4 +1,5 @@
 import React, { FC, useEffect, useState, useRef } from "react";
+import { VList } from "virtua";
 
 interface SubtitleItem {
   id: number;
@@ -16,179 +17,145 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 等待YouTube页面数据加载
-  const waitForYouTubeData = async (maxWait = 10000): Promise<any> => {
-    const startTime = Date.now();
+  // 计算字幕项的大概高度
+  const getItemSize = (item: SubtitleItem): number => {
+    const baseHeight = 60; // 基础高度
+    const textLines = Math.ceil(item.text.length / 50); // 粗略估算行数
+    return baseHeight + (textLines - 1) * 20; // 每多一行增加20px
+  };
 
-    while (Date.now() - startTime < maxWait) {
-      const ytInitialData = (window as any).ytInitialData;
-      const ytInitialPlayerResponse = (window as any).ytInitialPlayerResponse;
-      const ytcfg = (window as any).ytcfg;
-      const yt = (window as any).yt;
+  // 解析字幕内容
+  const parseSubtitleContent = async (
+    content: string
+  ): Promise<SubtitleItem[]> => {
+    console.log("🔍 解析字幕内容，前100字符:", content.substring(0, 100));
 
-      if (ytInitialPlayerResponse || ytInitialData || ytcfg || yt) {
-        console.log("找到YouTube数据:", {
-          ytInitialData: !!ytInitialData,
-          ytInitialPlayerResponse: !!ytInitialPlayerResponse,
-          ytcfg: !!ytcfg,
-          yt: !!yt,
-        });
-        return { ytInitialData, ytInitialPlayerResponse, ytcfg, yt };
+    try {
+      // 尝试解析JSON格式
+      if (content.trim().startsWith("{") || content.trim().startsWith("[")) {
+        console.log("📄 检测到JSON格式");
+        return parseJSONSubtitles(content);
+      }
+      // 手动解析其他格式
+      else if (content.includes("WEBVTT")) {
+        console.log("📄 检测到WebVTT格式");
+        return parseWebVTT(content);
+      } else if (
+        content.includes("<transcript>") ||
+        content.includes("<text")
+      ) {
+        console.log("📄 检测到XML格式");
+        return parseXMLSubtitles(content);
       }
 
-      // 等待100ms再重试
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      console.log("❌ 未识别的字幕格式");
+      return [];
+    } catch (err) {
+      console.error("解析失败:", err);
+      return [];
+    }
+  };
+
+  // 解析JSON格式字幕 (YouTube API格式)
+  const parseJSONSubtitles = (content: string): SubtitleItem[] => {
+    try {
+      const data = JSON.parse(content);
+      console.log("📊 JSON数据结构:", data);
+
+      if (!data.events) {
+        console.log("❌ 未找到events字段");
+        return [];
+      }
+
+      const subtitles: SubtitleItem[] = [];
+
+      data.events.forEach((event: any, index: number) => {
+        const startTime = (event.tStartMs || 0) / 1000; // 转换为秒
+        const duration = (event.dDurationMs || 0) / 1000; // 转换为秒
+        const endTime = startTime + duration;
+
+        // 组合所有segments的文本
+        let text = "";
+        if (event.segs && Array.isArray(event.segs)) {
+          text = event.segs.map((seg: any) => seg.utf8 || "").join("");
+        }
+
+        if (text.trim()) {
+          subtitles.push({
+            id: index,
+            startTime,
+            endTime,
+            text: text.trim(),
+          });
+        }
+      });
+
+      console.log("✅ JSON格式解析完成，字幕数量:", subtitles.length);
+      return subtitles.sort((a, b) => a.startTime - b.startTime);
+    } catch (err) {
+      console.error("JSON解析失败:", err);
+      return [];
+    }
+  };
+
+  // 解析 WebVTT 格式
+  const parseWebVTT = (content: string): SubtitleItem[] => {
+    const lines = content.split("\n");
+    const subtitles: SubtitleItem[] = [];
+    let currentIndex = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      // 匹配时间戳行 (例如: 00:00:01.000 --> 00:00:03.000)
+      const timeMatch = line.match(
+        /(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})/
+      );
+      if (timeMatch) {
+        const startTime = parseTimeString(timeMatch[1]);
+        const endTime = parseTimeString(timeMatch[2]);
+
+        // 获取字幕文本（下一行或多行）
+        let text = "";
+        let j = i + 1;
+        while (
+          j < lines.length &&
+          lines[j].trim() &&
+          !lines[j].includes("-->")
+        ) {
+          text += (text ? "\n" : "") + lines[j].trim();
+          j++;
+        }
+
+        if (text) {
+          subtitles.push({
+            id: currentIndex++,
+            startTime,
+            endTime,
+            text: text.replace(/<[^>]*>/g, ""), // 移除HTML标签
+          });
+        }
+
+        i = j - 1; // 跳过已处理的行
+      }
     }
 
-    throw new Error("等待YouTube数据超时");
+    return subtitles;
   };
 
-  // 从URL获取视频ID
-  const getVideoId = (): string | null => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const videoId = urlParams.get("v");
-    if (videoId) return videoId;
-
-    // 从URL路径中提取
-    const pathMatch = window.location.pathname.match(/\/watch/);
-    if (pathMatch) {
-      const hashMatch = window.location.href.match(/[?&]v=([^&]+)/);
-      return hashMatch ? hashMatch[1] : null;
-    }
-
-    return null;
-  };
-
-  // 获取完整字幕数据
-  const getFullSubtitles = async () => {
-    window.addEventListener("esYoutubeCaptionsData", (event) => {
-      console.log(event);
-    });
-    window.addEventListener("esYoutubeCaptionsChanged", (event) => {
-      console.log(event);
-    });
-    window.addEventListener("esYoutubeLoaded", (event) => {
-      console.log(event);
-    });
-    // try {
-    //   console.log('开始获取字幕数据...');
-
-    //   // 等待YouTube数据加载
-    //   const { ytInitialData, ytInitialPlayerResponse, ytcfg, yt } = await waitForYouTubeData();
-
-    //   console.log('YouTube数据详情:', {
-    //     ytInitialData,
-    //     ytInitialPlayerResponse,
-    //     ytcfg,
-    //     yt
-    //   });
-
-    //   // 方法1: 从 ytInitialPlayerResponse 获取
-    //   if (ytInitialPlayerResponse?.captions) {
-    //     console.log('从ytInitialPlayerResponse获取字幕');
-    //     const captionTracks = ytInitialPlayerResponse.captions.playerCaptionsTracklistRenderer?.captionTracks;
-    //     console.log('captionTracks:', captionTracks);
-
-    //     if (captionTracks && captionTracks.length > 0) {
-    //       const firstTrack = captionTracks[0];
-    //       const subtitleUrl = firstTrack.baseUrl;
-
-    //       if (subtitleUrl) {
-    //         return await fetchAndParseSubtitles(subtitleUrl);
-    //       }
-    //     }
-    //   }
-
-    //   // 方法2: 从 ytInitialData 获取
-    //   if (ytInitialData) {
-    //     console.log('尝试从ytInitialData获取字幕');
-    //     const playerResponse = ytInitialData?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.find((content: any) =>
-    //       content.videoPrimaryInfoRenderer || content.videoSecondaryInfoRenderer
-    //     );
-
-    //     console.log('playerResponse from ytInitialData:', playerResponse);
-    //   }
-
-    //   // 方法3: 从HTML中解析script标签
-    //   const scriptTags = document.querySelectorAll('script');
-    //   for (const script of scriptTags) {
-    //     const content = script.textContent || '';
-    //     if (content.includes('captionTracks')) {
-    //       console.log('在script标签中找到captionTracks');
-    //       try {
-    //         const captionTracksMatch = content.match(/"captionTracks":\s*(\[[^\]]+\])/);
-    //         if (captionTracksMatch) {
-    //           const captionTracks = JSON.parse(captionTracksMatch[1]);
-    //           console.log('解析到的captionTracks:', captionTracks);
-
-    //           if (captionTracks.length > 0) {
-    //             const firstTrack = captionTracks[0];
-    //             const subtitleUrl = firstTrack.baseUrl;
-    //             if (subtitleUrl) {
-    //               return await fetchAndParseSubtitles(subtitleUrl);
-    //             }
-    //           }
-    //         }
-    //       } catch (parseError) {
-    //         console.error('解析script标签失败:', parseError);
-    //       }
-    //     }
-    //   }
-
-    //   // 方法4: 尝试从视频元素的 textTracks
-    //   const video = document.querySelector("video");
-    //   if (video && video.textTracks && video.textTracks.length > 0) {
-    //     console.log('尝试从textTracks获取:', video.textTracks);
-
-    //     for (let i = 0; i < video.textTracks.length; i++) {
-    //       const track = video.textTracks[i];
-    //       if (track.kind === "subtitles" || track.kind === "captions") {
-    //         const cues = track.cues;
-    //         if (cues && cues.length > 0) {
-    //           const subtitleItems: SubtitleItem[] = [];
-    //           for (let j = 0; j < cues.length; j++) {
-    //             const cue = cues[j];
-    //             subtitleItems.push({
-    //               id: j,
-    //               startTime: cue.startTime,
-    //               endTime: cue.endTime,
-    //               text: cue.text || "",
-    //             });
-    //           }
-    //           return subtitleItems.sort((a, b) => a.startTime - b.startTime);
-    //         }
-    //       }
-    //     }
-    //   }
-
-    //   throw new Error("未找到可用的字幕数据源");
-    // } catch (err) {
-    //   console.error("获取字幕失败:", err);
-    //   throw err;
-    // }
-  };
-
-  // 获取并解析字幕文件
-  const fetchAndParseSubtitles = async (
-    subtitleUrl: string
-  ): Promise<SubtitleItem[]> => {
-    console.log("获取字幕URL:", subtitleUrl);
-    const response = await fetch(subtitleUrl);
-    const xmlText = await response.text();
-    console.log("字幕XML内容长度:", xmlText.length);
-
-    // 解析字幕XML
+  // 解析 XML 格式字幕
+  const parseXMLSubtitles = (content: string): SubtitleItem[] => {
     const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+    const xmlDoc = parser.parseFromString(content, "text/xml");
     const textNodes = xmlDoc.querySelectorAll("text");
 
-    const subtitleItems: SubtitleItem[] = [];
+    const subtitles: SubtitleItem[] = [];
     textNodes.forEach((node, index) => {
       const start = parseFloat(node.getAttribute("start") || "0");
       const dur = parseFloat(node.getAttribute("dur") || "0");
       const text = node.textContent || "";
 
-      subtitleItems.push({
+      subtitles.push({
         id: index,
         startTime: start,
         endTime: start + dur,
@@ -196,8 +163,46 @@ const Subtitles: FC<SubtitlesProps> = () => {
       });
     });
 
-    console.log(`解析到 ${subtitleItems.length} 条字幕`);
-    return subtitleItems.sort((a, b) => a.startTime - b.startTime);
+    return subtitles.sort((a, b) => a.startTime - b.startTime);
+  };
+
+  // 解析时间字符串为秒数
+  const parseTimeString = (timeStr: string): number => {
+    const parts = timeStr.split(":");
+    const seconds = parseFloat(parts[2]);
+    const minutes = parseInt(parts[1]);
+    const hours = parseInt(parts[0]);
+
+    return hours * 3600 + minutes * 60 + seconds;
+  };
+
+  // 监听来自background的消息
+  const setupBackgroundListener = () => {
+    console.log("🎵 设置Background消息监听器...");
+  };
+
+  // 处理字幕内容
+  const processSubtitleContent = async (content: string) => {
+    try {
+      console.log("📄 内容预览:", JSON.parse(content));
+
+      if (content.trim()) {
+        const parsedSubs = await parseSubtitleContent(content);
+        setSubtitles(parsedSubs);
+        setError(null);
+        console.log("✅ 成功解析字幕数量:", parsedSubs.length);
+      }
+    } catch (err) {
+      console.error("❌ 处理字幕失败:", err);
+      setError("处理字幕失败: " + (err as Error).message);
+    }
+  };
+
+  // 获取完整字幕数据
+  const getFullSubtitles = async () => {
+    setupBackgroundListener();
+
+    console.log("✅ Background监听器已设置，等待字幕请求...");
   };
 
   // 格式化时间为 MM:SS 格式
@@ -208,6 +213,22 @@ const Subtitles: FC<SubtitlesProps> = () => {
       .toString()
       .padStart(2, "0")}`;
   };
+  useEffect(() => {
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === "SUBTITLE_CONTENT_READY") {
+        console.log(
+          "🎯 收到Background字幕内容:",
+          message.content.length,
+          "字符"
+        );
+
+        // 直接处理字幕内容
+        processSubtitleContent(message.content);
+      }
+
+      return true;
+    });
+  }, []);
 
   useEffect(() => {
     // 检查是否在YouTube页面
@@ -220,16 +241,11 @@ const Subtitles: FC<SubtitlesProps> = () => {
       setLoading(true);
       setError(null);
 
-      // 等待视频加载
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
       try {
         getFullSubtitles();
-        // setSubtitles(subtitleData);
 
-        // if (subtitleData.length === 0) {
-        //   setError("未找到字幕数据");
-        // }
+        // 设置一个提示信息
+        setError("Background监听器已启动，请播放视频以获取字幕...");
       } catch (err) {
         setError(err instanceof Error ? err.message : "获取字幕时出错");
       } finally {
@@ -255,11 +271,24 @@ const Subtitles: FC<SubtitlesProps> = () => {
         // 修改推荐视频容器的样式，为我们的内容腾出空间
         const secondaryEl = secondaryContent as HTMLElement;
         if (secondaryEl) {
+          // 在 secondaryEl 的子元素前面插入一个新的元素
+          // const customDiv = document.createElement("div");
+          // customDiv.textContent = "这里是自定义插入的元素";
+          // customDiv.style.background = "#222";
+          // customDiv.style.color = "#fff";
+          // customDiv.style.padding = "8px";
+          // customDiv.style.marginBottom = "8px";
+          // customDiv.style.borderRadius = "6px";
+          // secondaryEl.insertBefore(customDiv, secondaryEl.firstChild);
+          const x = secondaryEl.getBoundingClientRect().x;
+          if (containerRef.current) {
+            containerRef.current.style.left = `${x}px`;
+          }
           secondaryEl.style.marginTop = `${Math.max(playerRect.height, 400)}px`;
         }
 
         // 尝试加载字幕
-        loadSubtitles();
+        // loadSubtitles();
       }
     };
 
@@ -290,7 +319,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
   return (
     <div
       ref={containerRef}
-      className="fixed top-[80px] right-4 w-[400px] z-[9999] bg-gray-900 border border-gray-700 rounded-lg shadow-xl"
+      className="fixed top-[80px] w-[400px] z-[9999] bg-gray-900 border border-gray-700 rounded-lg shadow-xl"
       style={{
         height: videoHeight > 0 ? `${videoHeight}px` : "400px",
         maxHeight: "80vh",
@@ -316,25 +345,31 @@ const Subtitles: FC<SubtitlesProps> = () => {
           )}
 
           {!loading && !error && subtitles.length > 0 && (
-            <div className="p-2">
-              <div className="mb-2 text-xs text-gray-400 text-center">
+            <div className="flex flex-col h-full">
+              <div className="p-2 text-xs text-gray-400 text-center border-b border-gray-700">
                 共 {subtitles.length} 条字幕
               </div>
-              <div className="space-y-1">
-                {subtitles.map((subtitle) => (
-                  <div
-                    key={subtitle.id}
-                    className="bg-gray-800 p-2 rounded text-sm hover:bg-gray-700 transition-colors"
-                  >
-                    <div className="text-blue-400 text-xs mb-1">
-                      [{formatTime(subtitle.startTime)} -{" "}
-                      {formatTime(subtitle.endTime)}]
+              <div className="flex-1 px-2 py-2">
+                <VList style={{ height: "100%" }}>
+                  {subtitles.map((subtitle) => (
+                    <div
+                      key={subtitle.id}
+                      className="bg-gray-800 p-3 mb-2 rounded-lg text-sm hover:bg-gray-700 transition-colors cursor-pointer"
+                      style={{
+                        minHeight: getItemSize(subtitle) + "px",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <div className="text-blue-400 text-lg mb-2 font-mono">
+                        [{formatTime(subtitle.startTime)} -{" "}
+                        {formatTime(subtitle.endTime)}]
+                      </div>
+                      <div className="text-white leading-relaxed text-xl">
+                        {subtitle.text}
+                      </div>
                     </div>
-                    <div className="text-white leading-relaxed">
-                      {subtitle.text}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </VList>
               </div>
             </div>
           )}
