@@ -2,12 +2,13 @@ import { createRoot } from "react-dom/client";
 import { HeroUIProvider } from "@heroui/react";
 import styleText from "./style.css?inline";
 import Subtitles from "./components/subtitles";
+import { transformCSSForShadowDOM } from "../../../tailwind-rem-to-em.js";
 
 // 创建Shadow DOM容器
 const hostDiv = document.createElement("div");
 hostDiv.id = "__listenup-extension-host";
 hostDiv.style.position = "relative";
-hostDiv.style.zIndex = "9999";
+hostDiv.style.zIndex = "9";
 
 // 创建Shadow Root
 const shadowRoot = hostDiv.attachShadow({ mode: "open" });
@@ -19,24 +20,12 @@ reactContainer.style.fontSize = "16px";
 
 // 注入Tailwind CSS到Shadow DOM
 const injectStyles = () => {
-  // 注入Tailwind CSS (通过Vite的?inline导入)
+  // 转换CSS以适配Shadow DOM，将:root和html选择器转换为:host
+
+  // 注入转换后的Tailwind CSS
   const tailwindStyle = document.createElement("style");
   tailwindStyle.textContent = styleText;
   shadowRoot.appendChild(tailwindStyle);
-
-  // 添加基础样式确保组件正常显示
-  const baseStyleElement = document.createElement("style");
-  baseStyleElement.textContent = `
-    :host {
-      all: initial;
-      position: relative;
-      z-index: 9999;
-    }
-    * {
-      box-sizing: border-box;
-    }
-  `;
-  shadowRoot.appendChild(baseStyleElement);
 };
 
 // 注入样式

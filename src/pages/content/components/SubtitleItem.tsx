@@ -34,11 +34,11 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
       onClick={() => onSubtitleClick?.(subtitle.startTime)}
     >
       <div className="flex items-start justify-between gap-4">
-        <span className={`text-sm font-mono shrink-0 `}>
+        <span className={`text-xs font-mono shrink-0 `}>
           {formatTime(subtitle.startTime)} - {formatTime(subtitle.endTime)}
         </span>
         <div className="flex-1 min-w-0">
-          <p className={`text-base leading-relaxed `}>{subtitle.text}</p>
+          <p className={`text-sm leading-relaxed `}>{subtitle.text}</p>
         </div>
       </div>
     </div>

@@ -119,7 +119,6 @@ const Subtitles: FC<SubtitlesProps> = () => {
             const x = secondaryEl.getBoundingClientRect().x;
             if (containerRef.current) {
               // 在Shadow DOM中，需要相对于页面定位
-              containerRef.current.style.position = "fixed";
               containerRef.current.style.left = `${x}px`;
               containerRef.current.style.top = "80px";
             }
@@ -157,43 +156,45 @@ const Subtitles: FC<SubtitlesProps> = () => {
   }
 
   return (
-    <Card
+    <div
       ref={containerRef}
-      className={`fixed w-[400px] z-[99] backdrop-blur-sm ${
-        isDark ? "dark" : ""
-      } bg-background text-[#0f0f0f]`}
-      style={{
-        height: videoHeight > 0 ? `${videoHeight}px` : "400px",
-        maxHeight: "80vh",
-      }}
+      className={`absolute w-[400px]  ${isDark ? "dark" : "light"}`}
     >
-      <SubtitleHeader subtitleCount={subtitles.length} />
-      <CardBody className="p-0">
-        <SubtitleStates
-          loading={loading}
-          error={error}
-          isEmpty={!loading && !error && subtitles.length === 0}
-        />
+      <Card
+        shadow="lg"
+        style={{
+          height: videoHeight > 0 ? `${videoHeight}px` : "400px",
+          maxHeight: "80vh",
+        }}
+      >
+        <SubtitleHeader subtitleCount={subtitles.length} />
+        <CardBody className="p-0">
+          <SubtitleStates
+            loading={loading}
+            error={error}
+            isEmpty={!loading && !error && subtitles.length === 0}
+          />
 
-        {!loading && !error && subtitles.length > 0 && (
-          <VList
-            ref={vListRef}
-            style={{ height: "100%" }}
-            className="px-4 py-2"
-          >
-            {subtitles.map((subtitle, index) => (
-              <div key={subtitle.id} className="py-1">
-                <SubtitleItemComponent
-                  subtitle={subtitle}
-                  isActive={index === currentSubtitleIndex}
-                  onSubtitleClick={handleSubtitleClick}
-                />
-              </div>
-            ))}
-          </VList>
-        )}
-      </CardBody>
-    </Card>
+          {!loading && !error && subtitles.length > 0 && (
+            <VList
+              ref={vListRef}
+              style={{ height: "100%" }}
+              className="px-4 py-2"
+            >
+              {subtitles.map((subtitle, index) => (
+                <div key={subtitle.id} className="py-1">
+                  <SubtitleItemComponent
+                    subtitle={subtitle}
+                    isActive={index === currentSubtitleIndex}
+                    onSubtitleClick={handleSubtitleClick}
+                  />
+                </div>
+              ))}
+            </VList>
+          )}
+        </CardBody>
+      </Card>
+    </div>
   );
 };
 
