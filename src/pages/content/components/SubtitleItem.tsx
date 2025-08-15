@@ -4,13 +4,15 @@ import { SubtitleItem } from "@src/lib/subtitleTypes";
 interface SubtitleItemProps {
   subtitle: SubtitleItem;
   isActive: boolean;
-  onSubtitleClick?: (startTime: number) => void;
+  onSubtitleClick?: (subtitle: SubtitleItem, index: number) => void;
+  index: number;
 }
 
 export const SubtitleItemComponent = memo(function SubtitleItem({
   subtitle,
   isActive,
   onSubtitleClick,
+  index,
 }: SubtitleItemProps) {
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -31,7 +33,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
             : "bg-content1 border-transparent hover:border-default-200"
         }
       `}
-      onClick={() => onSubtitleClick?.(subtitle.startTime)}
+      onClick={() => onSubtitleClick?.(subtitle, index)}
     >
       <div className="flex items-start justify-between gap-4">
         <span className={`text-xs font-mono shrink-0 `}>
