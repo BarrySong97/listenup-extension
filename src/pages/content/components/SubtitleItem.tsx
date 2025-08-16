@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { SubtitleItem } from "@src/lib/subtitleTypes";
@@ -16,12 +16,21 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   onSubtitleClick,
   index,
 }: SubtitleItemProps) {
+  const [copyStatus, setCopyStatus] = useState(false);
+
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${minutes.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
+  };
+
+  const showCopySuccess = () => {
+    setCopyStatus(true);
+    setTimeout(() => {
+      setCopyStatus(false);
+    }, 1500);
   };
 
   const handleCopySubtitle = async () => {
@@ -31,6 +40,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
       
       await navigator.clipboard.writeText(copyText);
       console.log("已复制字幕:", copyText);
+      showCopySuccess();
     } catch (error) {
       console.error("复制失败:", error);
     }
@@ -63,7 +73,11 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
           className="shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity"
           onPressStart={handleCopySubtitle}
         >
-          <Icon icon="mdi:content-copy" className="w-4 h-4" />
+          {copyStatus ? (
+            <Icon icon="mdi:check" className="w-4 h-4 text-success" />
+          ) : (
+            <Icon icon="mdi:content-copy" className="w-4 h-4" />
+          )}
         </Button>
       </div>
     </div>
