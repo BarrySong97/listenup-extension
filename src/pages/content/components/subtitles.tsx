@@ -37,7 +37,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
           maxHeight: "80vh",
         }}
       >
-        <SubtitleHeader subtitleCount={subtitles.length} />
+        <SubtitleHeader subtitleCount={subtitles.length} subtitles={subtitles} />
         <CardBody className="p-0">
           <SubtitleStates
             loading={loading}

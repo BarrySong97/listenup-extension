@@ -8,10 +8,23 @@ import { youtubeController } from '@src/lib/youtubeController';
  */
 export const useSubtitleSync = (isYoutube: boolean, subtitles: SubtitleItem[]) => {
   const [currentTime, setCurrentTime] = useState(0);
+  const [isAdPlaying, setIsAdPlaying] = useState(false);
   const timeUpdateCleanupRef = useRef<(() => void) | null>(null);
+
+  // 检测是否有广告播放
+  const checkAdStatus = () => {
+    const adOverlay = document.querySelector('.ytp-ad-player-overlay, .ytp-ad-module, .ytp-ad-overlay-slot');
+    const adText = document.querySelector('.ytp-ad-text, .ytp-ad-skip-button');
+    return !!(adOverlay || adText);
+  };
 
   // 计算当前活跃字幕索引 - 优化重叠处理
   const currentSubtitleIndex = useMemo(() => {
+    // 如果广告正在播放，不高亮任何字幕
+    if (isAdPlaying) {
+      return -1;
+    }
+
     const tolerance = 0.02; // 减小tolerance避免重叠问题
     
     // 从后往前查找，优先匹配后面的字幕（处理重叠时的优先级）
@@ -43,7 +56,7 @@ export const useSubtitleSync = (isYoutube: boolean, subtitles: SubtitleItem[]) =
       }
     }
     return -1;
-  }, [currentTime, subtitles]);
+  }, [currentTime, subtitles, isAdPlaying]);
 
   // 设置视频时间监听
   useEffect(() => {
@@ -57,6 +70,8 @@ export const useSubtitleSync = (isYoutube: boolean, subtitles: SubtitleItem[]) =
     // 设置新的时间更新监听器
     const cleanup = youtubeController.setupTimeUpdateListener((time) => {
       setCurrentTime(time);
+      // 每次时间更新时检查广告状态
+      setIsAdPlaying(checkAdStatus());
     });
 
     timeUpdateCleanupRef.current = cleanup;

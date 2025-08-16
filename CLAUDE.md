@@ -69,6 +69,11 @@ Content script configuration in `manifest.json` targets all URLs (`<all_urls>`) 
 - `src/pages/content/index.tsx` (JavaScript)
 - `contentStyle.css` (CSS)
 
+### Shadow DOM 特殊注意事项
+在Shadow DOM环境中工作时需要注意以下问题：
+- **Button事件处理**: HeroUI Button组件的`onPress`事件在Shadow DOM中可能无法正常触发，应该使用`onPressStart`事件替代
+- **事件监听**: 某些React事件在Shadow DOM中的行为可能与常规DOM不同，需要使用替代的事件处理方式
+
 ### Loading Extension for Testing
 **Chrome:**
 1. Go to `chrome://extensions`

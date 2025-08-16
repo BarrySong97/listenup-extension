@@ -53,15 +53,24 @@ export const useSubtitleContent = () => {
   // 监听来自background的字幕消息
   useEffect(() => {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.type === "SUBTITLE_CONTENT_READY") {
+      if (message.type === "SUBTITLE_REQUEST_START") {
+        console.log("🎯 开始请求字幕...");
+        setLoading(true);
+        setError(null);
+      } else if (message.type === "SUBTITLE_CONTENT_READY") {
         console.log(
           "🎯 收到Background字幕内容:",
           message.content.length,
           "字符"
         );
 
+        setLoading(false);
         // 直接处理字幕内容
         processSubtitleContent(message.content);
+      } else if (message.type === "SUBTITLE_REQUEST_ERROR") {
+        console.log("❌ 字幕请求失败:", message.error);
+        setLoading(false);
+        setError(message.error || "获取字幕失败");
       }
 
       return true;

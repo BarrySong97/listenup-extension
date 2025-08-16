@@ -11,8 +11,9 @@ export const useYouTubeLayout = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 检查是否在YouTube页面
-    const isYouTubePage = subtitleFetcher.isYouTubePage();
+    // 检查是否在YouTube视频页面（/watch页面）
+    const isYouTubePage = subtitleFetcher.isYouTubePage() && 
+                         window.location.pathname.includes('/watch');
     setIsYoutube(isYouTubePage);
 
     if (!isYouTubePage) return;
