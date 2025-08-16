@@ -11,6 +11,9 @@
       "32": "icon-32.png"
     }
   },
+  "side_panel": {
+    "default_path": "src/pages/panel/index.html"
+  },
   "chrome_url_overrides": {
     "newtab": "src/pages/newtab/index.html"
   },
@@ -19,7 +22,8 @@
   },
   "permissions": [
     "activeTab",
-    "webRequest"
+    "webRequest",
+    "sidePanel"
   ],
   "host_permissions": [
     "*://*.youtube.com/*"

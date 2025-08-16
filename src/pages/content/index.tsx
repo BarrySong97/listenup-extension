@@ -2,7 +2,6 @@ import { createRoot } from "react-dom/client";
 import { HeroUIProvider } from "@heroui/react";
 import styleText from "./style.css?inline";
 import Subtitles from "./components/subtitles";
-import { transformCSSForShadowDOM } from "../../../tailwind-rem-to-em.js";
 
 // 创建Shadow DOM容器
 const hostDiv = document.createElement("div");
@@ -24,7 +23,7 @@ const injectStyles = () => {
 
   // 注入转换后的Tailwind CSS
   const tailwindStyle = document.createElement("style");
-  tailwindStyle.textContent = styleText;
+  tailwindStyle.textContent = styleText.replaceAll("rem", "em");
   shadowRoot.appendChild(tailwindStyle);
 };
 

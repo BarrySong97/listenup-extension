@@ -80,10 +80,12 @@ chrome.webRequest.onCompleted.addListener(
 
 // 监听来自content script的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "GET_SUBTITLE_CACHE") {
+  console.log(message);
+  // 处理打开side panel的请求
+  if (message.action === "openSidePanel") {
     const tabId = sender.tab?.id;
     if (tabId) {
-      sendResponse({ subtitles: subtitleCache[tabId] || [] });
+      chrome.sidePanel.open({ tabId });
     }
   }
 
