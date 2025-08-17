@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { subtitleFetcher } from '@src/lib/subtitleFetcher';
+import { useState, useEffect, useRef } from "react";
+import { subtitleFetcher } from "@src/lib/subtitleFetcher";
 
 /**
  * YouTube页面布局管理钩子
@@ -10,14 +10,9 @@ export const useYouTubeLayout = () => {
   const [videoHeight, setVideoHeight] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  console.log("🎭 useYouTubeLayout - 当前状态:", { isYoutube, videoHeight });
+
   useEffect(() => {
-    // 检查是否在YouTube视频页面（/watch页面）
-    const isYouTubePage = subtitleFetcher.isYouTubePage() && 
-                         window.location.pathname.includes('/watch');
-    setIsYoutube(isYouTubePage);
-
-    if (!isYouTubePage) return;
-
     const setupLayout = () => {
       // 找到视频播放器
       const videoPlayer = subtitleFetcher.getVideoPlayer();
@@ -47,16 +42,69 @@ export const useYouTubeLayout = () => {
       }
     };
 
-    // 等待页面加载完成
-    const timer = setTimeout(setupLayout, 1000);
+    const checkAndSetupPage = () => {
+      // 检查是否在YouTube视频页面
+      const isYouTubePage = subtitleFetcher.isYouTubePage();
+      const isVideoPage =
+        isYouTubePage &&
+        (window.location.pathname === "/watch" ||
+          window.location.search.includes("v=") ||
+          window.location.pathname.startsWith("/watch"));
+
+      console.log("🔍 页面检测:", {
+        hostname: window.location.hostname,
+        pathname: window.location.pathname,
+        search: window.location.search,
+        isYouTubePage,
+        isVideoPage,
+      });
+
+      setIsYoutube(isVideoPage);
+
+      if (!isVideoPage) {
+        // 清理样式
+        const secondaryContent = subtitleFetcher.getSecondaryContent();
+        if (secondaryContent) {
+          (secondaryContent as HTMLElement).style.marginTop = "";
+        }
+        return;
+      }
+
+      // 延迟设置布局，等待页面加载
+      setTimeout(setupLayout, 1000);
+    };
+
+    // 初始检查
+    checkAndSetupPage();
 
     // 监听页面变化（YouTube是单页应用）
-    const observer = new MutationObserver(setupLayout);
+    let lastUrl = location.href;
+    const observer = new MutationObserver(() => {
+      const url = location.href;
+      if (url !== lastUrl) {
+        lastUrl = url;
+        // URL变化时重新检查页面
+        setTimeout(checkAndSetupPage, 1000);
+      }
+    });
     observer.observe(document.body, { childList: true, subtree: true });
 
+    // 监听浏览器前进后退
+    const handlePopState = () => {
+      setTimeout(checkAndSetupPage, 1000);
+    };
+    window.addEventListener("popstate", handlePopState);
+
+    // 监听YouTube导航事件
+    const handleYTNavigate = () => {
+      setTimeout(checkAndSetupPage, 1000);
+    };
+    window.addEventListener("yt-navigate-finish", handleYTNavigate);
+
     return () => {
-      clearTimeout(timer);
       observer.disconnect();
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("yt-navigate-finish", handleYTNavigate);
       // 清理样式
       const secondaryContent = subtitleFetcher.getSecondaryContent();
       if (secondaryContent) {

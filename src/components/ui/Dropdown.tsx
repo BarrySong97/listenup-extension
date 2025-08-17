@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, cloneElement } from "react";
+import React, { useState, useRef, useEffect, cloneElement, useId } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { Listbox, ListboxItem } from "@heroui/react";
@@ -17,6 +17,10 @@ interface DropdownProps {
   menuClassName?: string;
 }
 
+// Global state to track open dropdowns
+let openDropdownId: string | null = null;
+const dropdownCloseCallbacks = new Set<() => void>();
+
 export const Dropdown: React.FC<DropdownProps> = ({
   trigger,
   items,
@@ -25,6 +29,22 @@ export const Dropdown: React.FC<DropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownId = useId();
+
+  // 注册关闭回调并处理全局状态
+  useEffect(() => {
+    const closeThis = () => {
+      if (isOpen) {
+        setIsOpen(false);
+      }
+    };
+
+    dropdownCloseCallbacks.add(closeThis);
+    
+    return () => {
+      dropdownCloseCallbacks.delete(closeThis);
+    };
+  }, [isOpen]);
 
   // 点击外部关闭dropdown
   useEffect(() => {
@@ -34,6 +54,9 @@ export const Dropdown: React.FC<DropdownProps> = ({
         !dropdownRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
+        if (openDropdownId === dropdownId) {
+          openDropdownId = null;
+        }
       }
     };
 
@@ -41,15 +64,32 @@ export const Dropdown: React.FC<DropdownProps> = ({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [dropdownId]);
 
   const handleTriggerClick = () => {
-    setIsOpen(!isOpen);
+    // 如果有其他dropdown打开，先关闭它们
+    if (openDropdownId && openDropdownId !== dropdownId) {
+      dropdownCloseCallbacks.forEach(callback => callback());
+    }
+    
+    const newIsOpen = !isOpen;
+    setIsOpen(newIsOpen);
+    
+    if (newIsOpen) {
+      openDropdownId = dropdownId;
+    } else {
+      if (openDropdownId === dropdownId) {
+        openDropdownId = null;
+      }
+    }
   };
 
   const handleItemClick = (item: DropdownItem) => {
     item.onClick();
     setIsOpen(false);
+    if (openDropdownId === dropdownId) {
+      openDropdownId = null;
+    }
   };
 
   // 克隆trigger并添加onPressStart事件

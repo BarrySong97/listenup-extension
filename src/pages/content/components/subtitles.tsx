@@ -21,7 +21,17 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
   const { vListRef } = useSubtitleAutoScroll(currentSubtitleIndex);
 
+  console.log('🎬 Subtitles组件状态:', {
+    isYoutube,
+    videoHeight,
+    subtitlesLength: subtitles.length,
+    loading,
+    error,
+    url: window.location.href
+  });
+
   if (!isYoutube) {
+    console.log('❌ isYoutube为false，组件返回null');
     return null;
   }
 

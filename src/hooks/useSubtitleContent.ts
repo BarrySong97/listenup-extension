@@ -50,9 +50,17 @@ export const useSubtitleContent = () => {
     );
   }, []);
 
+  // 清理字幕状态的函数
+  const clearSubtitles = useCallback(() => {
+    console.log("🧹 清理字幕状态");
+    setSubtitles([]);
+    setLoading(false);
+    setError(null);
+  }, []);
+
   // 监听来自background的字幕消息
   useEffect(() => {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const messageListener = (message: any, sender: any, sendResponse: any) => {
       if (message.type === "SUBTITLE_REQUEST_START") {
         console.log("🎯 开始请求字幕...");
         setLoading(true);
@@ -71,11 +79,20 @@ export const useSubtitleContent = () => {
         console.log("❌ 字幕请求失败:", message.error);
         setLoading(false);
         setError(message.error || "获取字幕失败");
+      } else if (message.type === "CLEAR_SUBTITLES") {
+        console.log("🎬 收到清理字幕指令，视频ID:", message.videoId);
+        clearSubtitles();
       }
 
       return true;
-    });
-  }, [processSubtitleContent]);
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+    
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
+  }, [processSubtitleContent, clearSubtitles]);
 
   return {
     subtitles,
@@ -83,5 +100,6 @@ export const useSubtitleContent = () => {
     error,
     setLoading,
     setError,
+    clearSubtitles,
   };
 };
