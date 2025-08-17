@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { HeroUIProvider } from "@heroui/react";
 import styleText from "./style.css?inline";
 import Subtitles from "./components/subtitles";
+import { youtubeController } from "@src/lib/youtubeController";
 
 // 创建Shadow DOM容器
 const hostDiv = document.createElement("div");
@@ -68,6 +69,9 @@ const detectVideoChange = () => {
     currentVideoId = null;
     isOnVideoPage = false;
     
+    // 清理视频元素缓存
+    youtubeController.clearCache();
+    
     // 通知清理字幕
     chrome.runtime.sendMessage({
       type: "PAGE_CHANGED",
@@ -86,6 +90,9 @@ const detectVideoChange = () => {
       currentVideoId = videoId;
       isOnVideoPage = true;
       
+      // 清理视频元素缓存，强制重新获取
+      youtubeController.clearCache();
+      
       // 通知background script
       chrome.runtime.sendMessage({
         type: "VIDEO_CHANGED",
@@ -98,6 +105,9 @@ const detectVideoChange = () => {
       // 进入视频页面但视频ID相同
       console.log("🎬 进入视频页面:", videoId);
       isOnVideoPage = true;
+      
+      // 也清理缓存，确保获取当前的视频元素
+      youtubeController.clearCache();
     }
   } else if (isWatchPage && !videoId) {
     // 在watch页面但没有视频ID，清理状态
@@ -105,6 +115,9 @@ const detectVideoChange = () => {
       console.log("🚪 视频页面但无视频ID，清理字幕");
       currentVideoId = null;
       isOnVideoPage = false;
+      
+      // 清理视频元素缓存
+      youtubeController.clearCache();
       
       chrome.runtime.sendMessage({
         type: "PAGE_CHANGED",

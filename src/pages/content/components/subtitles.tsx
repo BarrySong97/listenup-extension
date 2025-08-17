@@ -15,23 +15,13 @@ export interface SubtitlesProps {}
 const Subtitles: FC<SubtitlesProps> = () => {
   // 使用各种专门的hooks
   const { theme, isDark } = useYouTubeTheme();
-  const { isYoutube, videoHeight, containerRef } = useYouTubeLayout();
+  const { isYoutube, videoHeight, containerRef, isPositioned } = useYouTubeLayout();
   const { subtitles, loading, error } = useSubtitleContent();
   const { currentSubtitleIndex } = useSubtitleSync(isYoutube, subtitles);
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
   const { vListRef } = useSubtitleAutoScroll(currentSubtitleIndex);
 
-  console.log('🎬 Subtitles组件状态:', {
-    isYoutube,
-    videoHeight,
-    subtitlesLength: subtitles.length,
-    loading,
-    error,
-    url: window.location.href
-  });
-
   if (!isYoutube) {
-    console.log('❌ isYoutube为false，组件返回null');
     return null;
   }
 
@@ -39,6 +29,10 @@ const Subtitles: FC<SubtitlesProps> = () => {
     <div
       ref={containerRef}
       className={`absolute w-[400px] ${isDark ? "dark" : "light"}`}
+      style={{
+        opacity: isPositioned ? 1 : 0,
+        transition: 'opacity 0.2s ease-in-out'
+      }}
     >
       <Card
         shadow="lg"

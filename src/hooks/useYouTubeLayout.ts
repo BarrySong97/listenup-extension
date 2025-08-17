@@ -8,9 +8,9 @@ import { subtitleFetcher } from "@src/lib/subtitleFetcher";
 export const useYouTubeLayout = () => {
   const [isYoutube, setIsYoutube] = useState(false);
   const [videoHeight, setVideoHeight] = useState(0);
+  const [isPositioned, setIsPositioned] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  console.log("🎭 useYouTubeLayout - 当前状态:", { isYoutube, videoHeight });
 
   useEffect(() => {
     const setupLayout = () => {
@@ -33,6 +33,8 @@ export const useYouTubeLayout = () => {
               // 在Shadow DOM中，需要相对于页面定位
               containerRef.current.style.left = `${x}px`;
               containerRef.current.style.top = "80px";
+              // 设置定位完成
+              setIsPositioned(true);
             }
             secondaryEl.style.marginTop = `${
               Math.max(playerRect.height, 400) + 32
@@ -51,24 +53,21 @@ export const useYouTubeLayout = () => {
           window.location.search.includes("v=") ||
           window.location.pathname.startsWith("/watch"));
 
-      console.log("🔍 页面检测:", {
-        hostname: window.location.hostname,
-        pathname: window.location.pathname,
-        search: window.location.search,
-        isYouTubePage,
-        isVideoPage,
-      });
 
       setIsYoutube(isVideoPage);
 
       if (!isVideoPage) {
-        // 清理样式
+        // 清理样式和状态
+        setIsPositioned(false);
         const secondaryContent = subtitleFetcher.getSecondaryContent();
         if (secondaryContent) {
           (secondaryContent as HTMLElement).style.marginTop = "";
         }
         return;
       }
+
+      // 重置定位状态，准备重新定位
+      setIsPositioned(false);
 
       // 延迟设置布局，等待页面加载
       setTimeout(setupLayout, 1000);
@@ -117,5 +116,6 @@ export const useYouTubeLayout = () => {
     isYoutube,
     videoHeight,
     containerRef,
+    isPositioned,
   };
 };

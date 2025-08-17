@@ -4,23 +4,74 @@
  */
 export class YouTubeController {
   private cachedVideoElement: HTMLVideoElement | null = null;
+  private timeUpdateCallback: ((currentTime: number) => void) | null = null;
+  private timeUpdateCleanup: (() => void) | null = null;
+  private videoCheckInterval: NodeJS.Timeout | null = null;
 
   /**
    * 获取YouTube视频元素（带缓存）
    */
   public getVideoElement(): HTMLVideoElement | null {
-    if (this.cachedVideoElement && document.contains(this.cachedVideoElement)) {
+    // 重新查找视频元素
+    const videoElement = document.querySelector("video") as HTMLVideoElement;
+    
+    // 检查是否是新的视频元素
+    const isNewElement = videoElement !== this.cachedVideoElement;
+    
+    if (videoElement) {
+      if (isNewElement) {
+        this.cachedVideoElement = videoElement;
+        
+        // 如果有活跃的时间更新回调，重新附加到新元素
+        if (this.timeUpdateCallback) {
+          this.reattachTimeUpdateListener();
+        }
+      }
       return this.cachedVideoElement;
+    } else {
+      if (this.cachedVideoElement) {
+        this.cachedVideoElement = null;
+      }
+      return null;
     }
+  }
 
-    this.cachedVideoElement = document.querySelector("video");
-    return this.cachedVideoElement;
+  /**
+   * 重新附加时间更新监听器到新的视频元素
+   */
+  private reattachTimeUpdateListener(): void {
+    // 清理旧的监听器
+    if (this.timeUpdateCleanup) {
+      this.timeUpdateCleanup();
+    }
+    
+    // 附加到新元素
+    if (this.cachedVideoElement && this.timeUpdateCallback) {
+      const handleTimeUpdate = () => {
+        if (this.timeUpdateCallback && this.cachedVideoElement) {
+          this.timeUpdateCallback(this.cachedVideoElement.currentTime);
+        }
+      };
+
+      this.cachedVideoElement.addEventListener("timeupdate", handleTimeUpdate);
+      
+      this.timeUpdateCleanup = () => {
+        if (this.cachedVideoElement) {
+          this.cachedVideoElement.removeEventListener("timeupdate", handleTimeUpdate);
+        }
+      };
+    }
   }
 
   /**
    * 清除缓存的视频元素（页面跳转时使用）
    */
   public clearCache(): void {
+    this.stopVideoElementMonitoring();
+    if (this.timeUpdateCleanup) {
+      this.timeUpdateCleanup();
+      this.timeUpdateCleanup = null;
+    }
     this.cachedVideoElement = null;
   }
 
@@ -81,24 +132,56 @@ export class YouTubeController {
   }
 
   /**
+   * 开始监控视频元素变化
+   */
+  private startVideoElementMonitoring(): void {
+    if (this.videoCheckInterval) {
+      clearInterval(this.videoCheckInterval);
+    }
+    
+    this.videoCheckInterval = setInterval(() => {
+      this.getVideoElement();
+    }, 2000); // 每2秒检查一次
+  }
+  
+  /**
+   * 停止监控视频元素变化
+   */
+  private stopVideoElementMonitoring(): void {
+    if (this.videoCheckInterval) {
+      clearInterval(this.videoCheckInterval);
+      this.videoCheckInterval = null;
+    }
+  }
+
+  /**
    * 设置时间更新监听器
    */
   public setupTimeUpdateListener(
     callback: (currentTime: number) => void
   ): () => void {
-    const video = this.getVideoElement();
-    if (!video) {
-      return () => {};
+    // 清理之前的监听器
+    if (this.timeUpdateCleanup) {
+      this.timeUpdateCleanup();
     }
+    
+    // 保存回调用于后续重新附加
+    this.timeUpdateCallback = callback;
+    
+    // 立即附加到当前视频元素
+    this.reattachTimeUpdateListener();
+    
+    // 开始监控视频元素变化
+    this.startVideoElementMonitoring();
 
-    const handleTimeUpdate = () => {
-      callback(video.currentTime);
-    };
-
-    video.addEventListener("timeupdate", handleTimeUpdate);
-
+    // 返回清理函数
     return () => {
-      video.removeEventListener("timeupdate", handleTimeUpdate);
+      this.stopVideoElementMonitoring();
+      if (this.timeUpdateCleanup) {
+        this.timeUpdateCleanup();
+        this.timeUpdateCleanup = null;
+      }
+      this.timeUpdateCallback = null;
     };
   }
 

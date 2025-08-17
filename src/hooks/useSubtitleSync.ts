@@ -1,36 +1,53 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { SubtitleItem } from '@src/lib/subtitleTypes';
-import { youtubeController } from '@src/lib/youtubeController';
+import { useState, useEffect, useRef, useMemo } from "react";
+import { SubtitleItem } from "@src/lib/subtitleTypes";
+import { youtubeController } from "@src/lib/youtubeController";
 
 /**
  * 字幕同步逻辑钩子
  * 处理视频时间跟踪和当前字幕高亮
  */
-export const useSubtitleSync = (isYoutube: boolean, subtitles: SubtitleItem[]) => {
+export const useSubtitleSync = (
+  isYoutube: boolean,
+  subtitles: SubtitleItem[]
+) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
   const timeUpdateCleanupRef = useRef<(() => void) | null>(null);
 
+  // console.log('🎯 useSubtitleSync状态:', {
+  //   isYoutube,
+  //   currentTime,
+  //   subtitlesLength: subtitles.length,
+  //   isAdPlaying
+  // });
+
   // 检测是否有广告播放
   const checkAdStatus = () => {
-    const adOverlay = document.querySelector('.ytp-ad-player-overlay, .ytp-ad-module, .ytp-ad-overlay-slot');
-    const adText = document.querySelector('.ytp-ad-text, .ytp-ad-skip-button');
+    const adOverlay = document.querySelector(
+      ".ytp-ad-player-overlay, .ytp-ad-module, .ytp-ad-overlay-slot"
+    );
+    const adText = document.querySelector(".ytp-ad-text, .ytp-ad-skip-button");
     return !!(adOverlay || adText);
   };
 
   // 计算当前活跃字幕索引 - 优化重叠处理
   const currentSubtitleIndex = useMemo(() => {
-    // 如果广告正在播放，不高亮任何字幕
-    if (isAdPlaying) {
+    // 如果没有字幕数据，直接返回-1
+    if (subtitles.length === 0) {
       return -1;
     }
+    
+    // 注释掉广告检测，让字幕始终可以高亮显示
+    // if (isAdPlaying) {
+    //   return -1;
+    // }
 
     const tolerance = 0.02; // 减小tolerance避免重叠问题
-    
+
     // 从后往前查找，优先匹配后面的字幕（处理重叠时的优先级）
     for (let i = subtitles.length - 1; i >= 0; i--) {
       const subtitle = subtitles[i];
-      
+
       // 精确匹配：当前时间在字幕时间范围内
       if (
         currentTime >= subtitle.startTime - tolerance &&
@@ -40,12 +57,14 @@ export const useSubtitleSync = (isYoutube: boolean, subtitles: SubtitleItem[]) =
         if (i > 0) {
           const prevSubtitle = subtitles[i - 1];
           const overlap = subtitle.startTime - prevSubtitle.endTime;
-          
+
           // 如果有重叠且当前时间更接近当前字幕的开始时间
           if (Math.abs(overlap) <= 0.001) {
-            const distToCurrentStart = Math.abs(currentTime - subtitle.startTime);
+            const distToCurrentStart = Math.abs(
+              currentTime - subtitle.startTime
+            );
             const distToPrevEnd = Math.abs(currentTime - prevSubtitle.endTime);
-            
+
             // 如果更接近当前字幕的开始时间，选择当前字幕
             if (distToCurrentStart <= distToPrevEnd) {
               return i;
@@ -55,12 +74,15 @@ export const useSubtitleSync = (isYoutube: boolean, subtitles: SubtitleItem[]) =
         return i;
       }
     }
+    
     return -1;
   }, [currentTime, subtitles, isAdPlaying]);
 
   // 设置视频时间监听
   useEffect(() => {
-    if (!isYoutube) return;
+    if (!isYoutube) {
+      return;
+    }
 
     // 清理之前的监听器
     if (timeUpdateCleanupRef.current) {
