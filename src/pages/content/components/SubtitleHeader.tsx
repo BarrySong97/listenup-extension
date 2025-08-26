@@ -42,10 +42,10 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         .join("\n\n");
 
       await navigator.clipboard.writeText(allSubtitlesText);
-      console.log("已复制所有字幕内容");
+      console.log("All subtitles copied");
       showCopySuccess();
     } catch (error) {
-      console.error("复制失败:", error);
+      console.error("Copy failed:", error);
     }
   };
 
@@ -60,10 +60,10 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         .join("\n");
 
       await navigator.clipboard.writeText(llmText);
-      console.log("已复制给大模型格式");
+      console.log("LLM format copied");
       showCopySuccess();
     } catch (error) {
-      console.error("复制失败:", error);
+      console.error("Copy failed:", error);
     }
   };
 
@@ -103,9 +103,9 @@ export const SubtitleHeader = memo(function SubtitleHeader({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      console.log("SRT文件下载完成");
+      console.log("SRT file downloaded");
     } catch (error) {
-      console.error("下载SRT文件失败:", error);
+      console.error("SRT download failed:", error);
     }
   };
 
@@ -129,9 +129,9 @@ export const SubtitleHeader = memo(function SubtitleHeader({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      console.log("TXT文件下载完成");
+      console.log("TXT file downloaded");
     } catch (error) {
-      console.error("下载TXT文件失败:", error);
+      console.error("TXT download failed:", error);
     }
   };
 
@@ -139,13 +139,13 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   const copyDropdownItems: DropdownItem[] = [
     {
       key: "copy-all",
-      label: "复制所有字幕",
+      label: "Copy All Subtitles",
       icon: "mdi:content-copy",
       onClick: handleCopyAllSubtitles,
     },
     {
       key: "copy-llm",
-      label: "复制给大模型",
+      label: "Copy for LLM",
       icon: "mdi:robot",
       onClick: handleCopyForLLM,
     },
@@ -154,13 +154,13 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   const downloadDropdownItems: DropdownItem[] = [
     {
       key: "download-srt",
-      label: "下载SRT文件",
+      label: "Download SRT",
       icon: "mdi:file-video-outline",
       onClick: handleDownloadSRT,
     },
     {
       key: "download-txt",
-      label: "下载TXT文件",
+      label: "Download TXT",
       icon: "mdi:file-document-outline",
       onClick: handleDownloadTXT,
     },
@@ -182,7 +182,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
                   className="min-w-0"
                 >
                   <Icon icon="mdi:download" className="w-4 h-4" />
-                  下载
+                  Download
                   <Icon icon="mdi:chevron-down" className="w-4 h-4" />
                 </Button>
               }
@@ -199,11 +199,11 @@ export const SubtitleHeader = memo(function SubtitleHeader({
                   {copyStatus ? (
                     <>
                       <Icon icon="mdi:check" className="w-4 h-4" />
-                      已复制
+                      Copied
                     </>
                   ) : (
                     <>
-                      复制
+                      Copy
                       <Icon icon="mdi:chevron-down" className="w-4 h-4" />
                     </>
                   )}

@@ -124,7 +124,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
       <div className="p-4 space-y-3">
         {/* 字幕信息 */}
         <div className="text-center">
-          <p className="text-sm text-default-600 mb-1">当前字幕</p>
+          <p className="text-sm text-default-600 mb-1">Current Subtitle</p>
           <p className="text-xs font-mono text-default-500">
             {Math.floor(currentSubtitle.startTime / 60)}:
             {Math.floor(currentSubtitle.startTime % 60)
@@ -152,7 +152,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
             }
             onPressStart={toggleVideoPlayback}
           >
-            {isVideoPlaying ? "暂停片段" : "播放片段"}
+            {isVideoPlaying ? "Pause" : "Play Segment"}
           </Button>
           <Button
             size="sm"
@@ -166,7 +166,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
             }
             onPressStart={handleToggleLoop}
           >
-            {isLooping ? "停止循环" : "循环播放"}
+            {isLooping ? "Stop Loop" : "Loop Play"}
           </Button>
         </div>
 
@@ -187,7 +187,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
               }
               onPressStart={handleRecordingToggle}
             >
-              {isRecording ? "停止录音" : "开始录音"}
+              {isRecording ? "Stop Recording" : "Start Recording"}
             </Button>
 
             {hasRecording && (
@@ -205,7 +205,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
                   onPressStart={handlePlaybackToggle}
                   isDisabled={isRecording}
                 >
-                  {isPlaying ? "暂停" : "播放"}
+                  {isPlaying ? "Pause" : "Play"}
                 </Button>
                 <Button
                   size="sm"
@@ -215,7 +215,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
                   onPressStart={clearRecording}
                   isDisabled={isRecording || isPlaying}
                 >
-                  清除
+                  Clear
                 </Button>
               </>
             )}
@@ -225,7 +225,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
           {hasRecording && (
             <div className="text-center">
               <p className="text-xs text-default-500">
-                录音时长: {formatDuration(duration)}
+                Recording Duration: {formatDuration(duration)}
               </p>
             </div>
           )}
