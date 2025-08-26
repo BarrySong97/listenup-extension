@@ -1,5 +1,5 @@
 import { Card, CardBody } from "@heroui/react";
-import React, { FC } from "react";
+import React, { FC, useEffect } from "react";
 import { VList } from "virtua";
 import { useYouTubeTheme } from "@src/hooks/useYouTubeTheme";
 import { useYouTubeLayout } from "@src/hooks/useYouTubeLayout";
@@ -7,9 +7,11 @@ import { useSubtitleContent } from "@src/hooks/useSubtitleContent";
 import { useSubtitleSync } from "@src/hooks/useSubtitleSync";
 import { useSubtitleNavigation } from "@src/hooks/useSubtitleNavigation";
 import { useSubtitleAutoScroll } from "@src/hooks/useSubtitleAutoScroll";
+import { useSubtitleLoop } from "@src/hooks/useSubtitleLoop";
 import { SubtitleItemComponent } from "./SubtitleItem";
 import { SubtitleStates } from "./SubtitleStates";
 import { SubtitleHeader } from "./SubtitleHeader";
+import { SubtitleFooter } from "./SubtitleFooter";
 
 export interface SubtitlesProps {}
 const Subtitles: FC<SubtitlesProps> = () => {
@@ -20,6 +22,19 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const { currentSubtitleIndex } = useSubtitleSync(isYoutube, subtitles);
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
   const { vListRef } = useSubtitleAutoScroll(currentSubtitleIndex);
+  const { isLooping, toggleLooping, cleanup: cleanupLoop } = useSubtitleLoop();
+
+  // 获取当前字幕项
+  const currentSubtitle = currentSubtitleIndex >= 0 && currentSubtitleIndex < subtitles.length 
+    ? subtitles[currentSubtitleIndex] 
+    : null;
+
+  // 组件卸载时清理循环播放
+  useEffect(() => {
+    return () => {
+      cleanupLoop();
+    };
+  }, [cleanupLoop]);
 
   if (!isYoutube) {
     return null;
@@ -67,6 +82,14 @@ const Subtitles: FC<SubtitlesProps> = () => {
               ))}
             </VList>
           )}
+
+          {/* 字幕底部控制组件 */}
+          <SubtitleFooter
+            currentSubtitle={currentSubtitle}
+            isActive={!loading && !error && subtitles.length > 0 && currentSubtitleIndex >= 0}
+            isLooping={isLooping}
+            onToggleLoop={() => toggleLooping(currentSubtitle)}
+          />
         </CardBody>
       </Card>
     </div>
