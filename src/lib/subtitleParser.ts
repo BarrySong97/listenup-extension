@@ -1,4 +1,4 @@
-import { SubtitleItem, ParsedSubtitleData } from './subtitleTypes';
+import { SubtitleItem, ParsedSubtitleData } from "./subtitleTypes";
 
 /**
  * 解析时间字符串为秒数
@@ -18,10 +18,8 @@ export const parseTimeString = (timeStr: string): number => {
 export const parseJSONSubtitles = (content: string): SubtitleItem[] => {
   try {
     const data: ParsedSubtitleData = JSON.parse(content);
-    console.log("📊 JSON数据结构:", data);
 
     if (!data.events) {
-      console.log("❌ 未找到events字段");
       return [];
     }
 
@@ -48,7 +46,6 @@ export const parseJSONSubtitles = (content: string): SubtitleItem[] => {
       }
     });
 
-    console.log("✅ JSON格式解析完成，字幕数量:", subtitles.length);
     return subtitles.sort((a, b) => a.startTime - b.startTime);
   } catch (err) {
     console.error("JSON解析失败:", err);
@@ -78,11 +75,7 @@ export const parseWebVTT = (content: string): SubtitleItem[] => {
       // 获取字幕文本（下一行或多行）
       let text = "";
       let j = i + 1;
-      while (
-        j < lines.length &&
-        lines[j].trim() &&
-        !lines[j].includes("-->")
-      ) {
+      while (j < lines.length && lines[j].trim() && !lines[j].includes("-->")) {
         text += (text ? "\n" : "") + lines[j].trim();
         j++;
       }
@@ -131,28 +124,21 @@ export const parseXMLSubtitles = (content: string): SubtitleItem[] => {
 /**
  * 主解析函数 - 自动检测格式并解析
  */
-export const parseSubtitleContent = async (content: string): Promise<SubtitleItem[]> => {
-  console.log("🔍 解析字幕内容，前100字符:", content.substring(0, 100));
-
+export const parseSubtitleContent = async (
+  content: string
+): Promise<SubtitleItem[]> => {
   try {
     // 尝试解析JSON格式
     if (content.trim().startsWith("{") || content.trim().startsWith("[")) {
-      console.log("📄 检测到JSON格式");
       return parseJSONSubtitles(content);
     }
     // 手动解析其他格式
     else if (content.includes("WEBVTT")) {
-      console.log("📄 检测到WebVTT格式");
       return parseWebVTT(content);
-    } else if (
-      content.includes("<transcript>") ||
-      content.includes("<text")
-    ) {
-      console.log("📄 检测到XML格式");
+    } else if (content.includes("<transcript>") || content.includes("<text")) {
       return parseXMLSubtitles(content);
     }
 
-    console.log("❌ 未识别的字幕格式");
     return [];
   } catch (err) {
     console.error("解析失败:", err);

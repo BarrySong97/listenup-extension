@@ -42,7 +42,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         .join("\n\n");
 
       await navigator.clipboard.writeText(allSubtitlesText);
-      console.log("All subtitles copied");
+
       showCopySuccess();
     } catch (error) {
       console.error("Copy failed:", error);
@@ -60,7 +60,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         .join("\n");
 
       await navigator.clipboard.writeText(llmText);
-      console.log("LLM format copied");
+
       showCopySuccess();
     } catch (error) {
       console.error("Copy failed:", error);
@@ -102,8 +102,6 @@ export const SubtitleHeader = memo(function SubtitleHeader({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      console.log("SRT file downloaded");
     } catch (error) {
       console.error("SRT download failed:", error);
     }
@@ -128,8 +126,6 @@ export const SubtitleHeader = memo(function SubtitleHeader({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      console.log("TXT file downloaded");
     } catch (error) {
       console.error("TXT download failed:", error);
     }

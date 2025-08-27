@@ -17,7 +17,8 @@ export interface SubtitlesProps {}
 const Subtitles: FC<SubtitlesProps> = () => {
   // 使用各种专门的hooks
   const { theme, isDark } = useYouTubeTheme();
-  const { isYoutube, videoHeight, containerRef, isPositioned } = useYouTubeLayout();
+  const { isYoutube, videoHeight, containerRef, isPositioned } =
+    useYouTubeLayout();
   const { subtitles, loading, error } = useSubtitleContent();
   const { currentSubtitleIndex } = useSubtitleSync(isYoutube, subtitles);
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
@@ -25,9 +26,10 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const { isLooping, toggleLooping, cleanup: cleanupLoop } = useSubtitleLoop();
 
   // 获取当前字幕项
-  const currentSubtitle = currentSubtitleIndex >= 0 && currentSubtitleIndex < subtitles.length 
-    ? subtitles[currentSubtitleIndex] 
-    : null;
+  const currentSubtitle =
+    currentSubtitleIndex >= 0 && currentSubtitleIndex < subtitles.length
+      ? subtitles[currentSubtitleIndex]
+      : null;
 
   // 组件卸载时清理循环播放
   useEffect(() => {
@@ -46,7 +48,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
       className={`absolute w-[400px] ${isDark ? "dark" : "light"}`}
       style={{
         opacity: isPositioned ? 1 : 0,
-        transition: 'opacity 0.2s ease-in-out'
+        transition: "opacity 0.2s ease-in-out",
       }}
     >
       <Card
@@ -56,8 +58,11 @@ const Subtitles: FC<SubtitlesProps> = () => {
           maxHeight: "80vh",
         }}
       >
-        <SubtitleHeader subtitleCount={subtitles.length} subtitles={subtitles} />
-        <CardBody className="p-0">
+        <SubtitleHeader
+          subtitleCount={subtitles.length}
+          subtitles={subtitles}
+        />
+        <CardBody className="p-0 h-full">
           <SubtitleStates
             loading={loading}
             error={error}
@@ -86,7 +91,12 @@ const Subtitles: FC<SubtitlesProps> = () => {
           {/* 字幕底部控制组件 */}
           <SubtitleFooter
             currentSubtitle={currentSubtitle}
-            isActive={!loading && !error && subtitles.length > 0 && currentSubtitleIndex >= 0}
+            isActive={
+              !loading &&
+              !error &&
+              subtitles.length > 0 &&
+              currentSubtitleIndex >= 0
+            }
             isLooping={isLooping}
             onToggleLoop={() => toggleLooping(currentSubtitle)}
           />

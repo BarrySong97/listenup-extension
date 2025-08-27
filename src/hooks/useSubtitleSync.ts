@@ -14,12 +14,7 @@ export const useSubtitleSync = (
   const [isAdPlaying, setIsAdPlaying] = useState(false);
   const timeUpdateCleanupRef = useRef<(() => void) | null>(null);
 
-  // console.log('🎯 useSubtitleSync状态:', {
-  //   isYoutube,
-  //   currentTime,
-  //   subtitlesLength: subtitles.length,
-  //   isAdPlaying
-  // });
+  //
 
   // 检测是否有广告播放
   const checkAdStatus = () => {
@@ -36,7 +31,7 @@ export const useSubtitleSync = (
     if (subtitles.length === 0) {
       return -1;
     }
-    
+
     // 注释掉广告检测，让字幕始终可以高亮显示
     // if (isAdPlaying) {
     //   return -1;
@@ -74,7 +69,7 @@ export const useSubtitleSync = (
         return i;
       }
     }
-    
+
     return -1;
   }, [currentTime, subtitles, isAdPlaying]);
 

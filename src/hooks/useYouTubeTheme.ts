@@ -25,8 +25,6 @@ export const useYouTubeTheme = () => {
     const updateTheme = () => {
       const detectedTheme = detectYouTubeTheme();
       setTheme(detectedTheme);
-
-      console.log("🎨 检测到YouTube主题:", detectedTheme);
     };
 
     // 初始检测

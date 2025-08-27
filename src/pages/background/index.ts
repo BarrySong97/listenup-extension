@@ -1,5 +1,3 @@
-console.log("background script loaded");
-
 // 存储字幕数据
 let subtitleCache: { [tabId: number]: any[] } = {};
 
@@ -45,26 +43,24 @@ chrome.webRequest.onCompleted.addListener(
     // 提取视频ID（如果存在）
     const videoIdMatch = url.match(/[?&]v=([^&]+)/);
     const currentVideoId = videoIdMatch ? videoIdMatch[1] : null;
-    
+
     // 检查是否需要重新处理
     const urlKey = url.split("?")[0];
     const existingEntry = processedUrls.get(urlKey);
     const tabId = details.tabId || -1;
-    
+
     // 如果存在相同URL的记录，检查是否是新视频
     if (existingEntry) {
       const lastVideoId = tabVideoIds.get(tabId);
       // 如果视频ID发生变化，或者超过30秒，则重新处理
       const isNewVideo = currentVideoId && currentVideoId !== lastVideoId;
       const isStale = Date.now() - existingEntry.timestamp > 30000;
-      
+
       if (!isNewVideo && !isStale) {
-        console.log("🔄 跳过重复URL处理:", urlKey, "视频ID:", currentVideoId);
         return;
       }
-      
+
       if (isNewVideo) {
-        console.log("🎬 检测到新视频，重新处理字幕:", currentVideoId);
       }
     }
 
@@ -73,38 +69,47 @@ chrome.webRequest.onCompleted.addListener(
       url: urlKey,
       tabId: tabId,
       timestamp: Date.now(),
-      videoId: currentVideoId || undefined
+      videoId: currentVideoId || undefined,
     });
-    
+
     // 更新tab的视频ID
     if (currentVideoId && tabId !== -1) {
       tabVideoIds.set(tabId, currentVideoId);
     }
-    console.log("🎯 Background监听到字幕响应完成，状态码:", details.statusCode);
 
-    // 由于webRequest API无法直接获取响应体，我们还是需要fetch
-    // 但这次是在响应完成后立即fetch，避免重复
+    // 通知content script字幕请求完成，让其重新尝试直接获取
+    if (details.tabId && details.tabId !== -1) {
+      chrome.tabs
+        .sendMessage(details.tabId, {
+          type: "SUBTITLE_REQUEST_DETECTED",
+          url: url,
+          videoId: currentVideoId,
+          timestamp: Date.now(),
+        })
+        .catch((err) => {});
+    }
+
+    // 保留原有fetch机制作为最后的备用方案
+    // 只有在直接获取失败时才会使用这个结果
     try {
       const response = await fetch(url);
       const content = await response.text();
 
-      console.log("📄 获取字幕内容成功，长度:", content.length);
-
-      // 发送内容到content script
-      if (details.tabId && details.tabId !== -1) {
-        chrome.tabs
-          .sendMessage(details.tabId, {
-            type: "SUBTITLE_CONTENT_READY",
-            content: content,
-            url: url,
-            timestamp: Date.now(),
-          })
-          .catch((err) => {
-            console.log("发送字幕内容失败:", err.message);
-          });
-      }
+      // 延迟发送，给直接获取方式一些时间
+      setTimeout(() => {
+        if (details.tabId && details.tabId !== -1) {
+          chrome.tabs
+            .sendMessage(details.tabId, {
+              type: "SUBTITLE_CONTENT_FALLBACK",
+              content: content,
+              url: url,
+              timestamp: Date.now(),
+            })
+            .catch((err) => {});
+        }
+      }, 3000); // 3秒后发送备用内容
     } catch (err) {
-      console.error("获取字幕内容失败:", err);
+      console.error("Background备用获取字幕内容失败:", err);
     }
 
     // 清理缓存
@@ -117,7 +122,6 @@ chrome.webRequest.onCompleted.addListener(
           processedUrls.delete(key);
         }
       }
-      console.log("已清理过期URL缓存，当前缓存大小:", processedUrls.size);
     }, 60000); // 每分钟清理一次
   },
   {
@@ -127,52 +131,48 @@ chrome.webRequest.onCompleted.addListener(
 
 // 监听来自content script的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log(message);
-  
   const tabId = sender.tab?.id;
-  
+
   // 处理打开side panel的请求
   if (message.action === "openSidePanel") {
     if (tabId) {
       chrome.sidePanel.open({ tabId });
     }
   }
-  
+
   // 处理视频变化通知
   if (message.type === "VIDEO_CHANGED" && tabId) {
     const { videoId } = message;
-    console.log("🎬 收到视频变化通知:", videoId, "Tab:", tabId);
-    
+
     // 更新当前视频ID
     if (videoId) {
       tabVideoIds.set(tabId, videoId);
     }
-    
+
     // 通知content script清理字幕状态
-    chrome.tabs.sendMessage(tabId, {
-      type: "CLEAR_SUBTITLES",
-      videoId: videoId
-    }).catch(err => {
-      console.log("发送清理字幕消息失败:", err.message);
-    });
+    chrome.tabs
+      .sendMessage(tabId, {
+        type: "CLEAR_SUBTITLES",
+        videoId: videoId,
+      })
+      .catch((err) => {});
   }
-  
+
   // 处理页面变化通知（离开视频页面）
   if (message.type === "PAGE_CHANGED" && tabId) {
     const { pageType } = message;
-    console.log("🚪 收到页面变化通知:", pageType, "Tab:", tabId);
-    
+
     if (pageType === "non-video") {
       // 清理该tab的视频ID
       tabVideoIds.delete(tabId);
-      
+
       // 通知content script清理字幕状态
-      chrome.tabs.sendMessage(tabId, {
-        type: "CLEAR_SUBTITLES",
-        pageType: pageType
-      }).catch(err => {
-        console.log("发送清理字幕消息失败:", err.message);
-      });
+      chrome.tabs
+        .sendMessage(tabId, {
+          type: "CLEAR_SUBTITLES",
+          pageType: pageType,
+        })
+        .catch((err) => {});
     }
   }
 

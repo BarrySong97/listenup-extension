@@ -14,7 +14,7 @@ export const SubtitleStates = memo(function SubtitleStates({
   // Loading状态
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32">
+      <div className="flex items-center justify-center h-full">
         <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
         <p className="text-sm ml-3">正在加载字幕...</p>
       </div>
@@ -24,8 +24,8 @@ export const SubtitleStates = memo(function SubtitleStates({
   // Error状态
   if (error) {
     return (
-      <div className="p-4 text-center">
-        <p className="text-sm text-warning">{error}</p>
+      <div className="p-4 flex items-center justify-center h-full">
+        {/* <p className="text-sm text-warning">{error}</p> */}
         <p className="text-xs mt-1 ">请确保视频有字幕且已加载</p>
       </div>
     );
@@ -34,7 +34,7 @@ export const SubtitleStates = memo(function SubtitleStates({
   // Empty状态
   if (isEmpty) {
     return (
-      <div className="flex items-center justify-center h-32">
+      <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <p className="text-sm">暂无字幕数据</p>
           <p className="text-xs mt-1">请尝试播放有字幕的视频</p>

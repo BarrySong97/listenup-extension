@@ -51,17 +51,18 @@ let currentVideoId: string | null = null;
 let isOnVideoPage: boolean = false;
 
 // 尝试直接获取字幕
-const tryDirectSubtitleFetch = async (videoId: string) => {
+const tryDirectSubtitleFetch = async (
+  videoId: string,
+  reason = "video_change"
+) => {
   try {
-    console.log("🚀 尝试直接获取字幕，视频ID:", videoId);
-
-    // 等待页面加载完成
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // 根据触发原因决定等待时间
+    const waitTime = reason === "subtitle_request_detected" ? 500 : 2000;
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
 
     // 检查是否可以直接获取
     if (!subtitleDirectFetcher.canFetchDirectly()) {
-      console.log("⚠️ 无法直接获取字幕，使用背景脚本方式");
-      return;
+      return false; // 返回false表示获取失败
     }
 
     // 直接获取字幕
@@ -75,15 +76,22 @@ const tryDirectSubtitleFetch = async (videoId: string) => {
         videoId: videoId,
         timestamp: Date.now(),
         source: "direct",
+        reason: reason,
       },
     });
     window.dispatchEvent(messageEvent);
 
-    console.log("✅ 直接获取字幕成功，数量:", subtitles.length);
+    return true; // 返回true表示获取成功
   } catch (error) {
-    console.log("❌ 直接获取字幕失败，回退到背景脚本方式:", error);
-    // 不抛出错误，让背景脚本方式作为备用
+    return false; // 返回false表示获取失败
   }
+};
+
+// 跟踪字幕获取状态
+let subtitleFetchStatus = {
+  lastVideoId: null as string | null,
+  directFetchSucceeded: false,
+  lastAttemptTime: 0,
 };
 
 const detectVideoChange = () => {
@@ -94,16 +102,10 @@ const detectVideoChange = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const videoId = isWatchPage ? urlParams.get("v") : null;
 
-  // console.log('🔍 视频检测:', {
-  //   pathname: window.location.pathname,
-  //   search: window.location.search,
-  //   isWatchPage,
-  //   videoId
-  // });
+  //
 
   // 检查是否从视频页面离开
   if (isOnVideoPage && !isWatchPage) {
-    console.log("🚪 离开视频页面，清理字幕");
     currentVideoId = null;
     isOnVideoPage = false;
 
@@ -117,16 +119,13 @@ const detectVideoChange = () => {
         pageType: "non-video",
         timestamp: Date.now(),
       })
-      .catch((err) => {
-        console.log("发送页面变化消息失败:", err.message);
-      });
+      .catch((err) => {});
     return;
   }
 
   // 检查视频ID变化
   if (isWatchPage && videoId) {
     if (videoId !== currentVideoId) {
-      console.log("🎬 检测到视频变化:", currentVideoId, "→", videoId);
       currentVideoId = videoId;
       isOnVideoPage = true;
 
@@ -140,15 +139,22 @@ const detectVideoChange = () => {
           videoId: videoId,
           timestamp: Date.now(),
         })
-        .catch((err) => {
-          console.log("发送视频变化消息失败:", err.message);
-        });
+        .catch((err) => {});
+
+      // 重置字幕获取状态
+      subtitleFetchStatus = {
+        lastVideoId: videoId,
+        directFetchSucceeded: false,
+        lastAttemptTime: Date.now(),
+      };
 
       // 尝试直接获取字幕
-      tryDirectSubtitleFetch(videoId);
+      tryDirectSubtitleFetch(videoId, "video_change").then((success) => {
+        subtitleFetchStatus.directFetchSucceeded = success;
+      });
     } else if (!isOnVideoPage) {
       // 进入视频页面但视频ID相同
-      console.log("🎬 进入视频页面:", videoId);
+
       isOnVideoPage = true;
 
       // 也清理缓存，确保获取当前的视频元素
@@ -157,7 +163,6 @@ const detectVideoChange = () => {
   } else if (isWatchPage && !videoId) {
     // 在watch页面但没有视频ID，清理状态
     if (currentVideoId) {
-      console.log("🚪 视频页面但无视频ID，清理字幕");
       currentVideoId = null;
       isOnVideoPage = false;
 
@@ -170,9 +175,7 @@ const detectVideoChange = () => {
           pageType: "non-video",
           timestamp: Date.now(),
         })
-        .catch((err) => {
-          console.log("发送页面变化消息失败:", err.message);
-        });
+        .catch((err) => {});
     }
   }
 };
@@ -204,11 +207,40 @@ const observeNavigation = () => {
   });
 };
 
+// 监听来自background script的消息
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "SUBTITLE_REQUEST_DETECTED") {
+    // 检查是否是当前视频的字幕请求
+    if (
+      message.videoId === currentVideoId &&
+      !subtitleFetchStatus.directFetchSucceeded
+    ) {
+      // 避免频繁重试
+      const timeSinceLastAttempt =
+        Date.now() - subtitleFetchStatus.lastAttemptTime;
+      if (timeSinceLastAttempt > 1000) {
+        // 至少间隔1秒
+        subtitleFetchStatus.lastAttemptTime = Date.now();
+
+        tryDirectSubtitleFetch(
+          currentVideoId,
+          "subtitle_request_detected"
+        ).then((success) => {
+          subtitleFetchStatus.directFetchSucceeded = success;
+          if (success) {
+          }
+        });
+      }
+    }
+  }
+
+  return true;
+});
+
 // 启动导航监听
 observeNavigation();
 
 try {
-  console.log("content script loaded");
 } catch (e) {
   console.error(e);
 }

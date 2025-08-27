@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import { SubtitleItem } from '@src/lib/subtitleTypes';
-import { subtitleFetcher } from '@src/lib/subtitleFetcher';
-import { SubtitleMerger } from '@src/lib/subtitleMerger';
-import { SubtitleCleaner } from '@src/lib/subtitleCleaner';
-import { subtitleConfig } from '@src/lib/subtitleConfig';
+import { useState, useEffect, useCallback } from "react";
+import { SubtitleItem } from "@src/lib/subtitleTypes";
+import { subtitleFetcher } from "@src/lib/subtitleFetcher";
+import { SubtitleMerger } from "@src/lib/subtitleMerger";
+import { SubtitleCleaner } from "@src/lib/subtitleCleaner";
+import { subtitleConfig } from "@src/lib/subtitleConfig";
 
 /**
  * 字幕内容管理钩子
@@ -19,28 +19,17 @@ export const useSubtitleContent = () => {
     await subtitleFetcher.processSubtitleContent(
       content,
       (parsedSubs) => {
-        console.log('📥 原始字幕数量:', parsedSubs.length);
-        
         // 第一步：清理字幕内容
         const cleanConfig = subtitleConfig.getCleanConfig();
         const cleaner = new SubtitleCleaner(cleanConfig);
         const cleanedSubs = cleaner.cleanSubtitles(parsedSubs);
-        
+
         // 输出清理统计信息
         const cleanStats = cleaner.getCleanStats(parsedSubs, cleanedSubs);
-        console.log('🧹 字幕清理统计:', {
-          原始数量: cleanStats.originalCount,
-          清理后数量: cleanStats.cleanedCount,
-          移除数量: cleanStats.removedCount,
-          移除百分比: `${cleanStats.removalPercentage}%`,
-          文本减少: `${cleanStats.textReductionPercentage}%`
-        });
-        
+
         // 暂时禁用合并功能，专注解决点击overlap问题
         // TODO: 稍后重新启用合并功能
-        
-        console.log('✅ 最终处理结果:', `${parsedSubs.length} → ${cleanedSubs.length} (减少${Math.round((1 - cleanedSubs.length / parsedSubs.length) * 100)}%)`);
-        
+
         setSubtitles(cleanedSubs);
         setError(null);
       },
@@ -52,52 +41,51 @@ export const useSubtitleContent = () => {
 
   // 清理字幕状态的函数
   const clearSubtitles = useCallback(() => {
-    console.log("🧹 清理字幕状态");
     setSubtitles([]);
     setLoading(false);
     setError(null);
   }, []);
 
   // 处理直接获取的字幕数据
-  const handleDirectSubtitles = useCallback((subtitles: SubtitleItem[]) => {
-    console.log('🚀 收到直接获取的字幕数据:', subtitles.length);
-    
-    // 第一步：清理字幕内容
-    const cleanConfig = subtitleConfig.getCleanConfig();
-    const cleaner = new SubtitleCleaner(cleanConfig);
-    const cleanedSubs = cleaner.cleanSubtitles(subtitles);
-    
-    // 输出清理统计信息
-    const cleanStats = cleaner.getCleanStats(subtitles, cleanedSubs);
-    console.log('🧹 字幕清理统计:', {
-      原始数量: cleanStats.originalCount,
-      清理后数量: cleanStats.cleanedCount,
-      移除数量: cleanStats.removedCount,
-      移除百分比: `${cleanStats.removalPercentage}%`,
-      文本减少: `${cleanStats.textReductionPercentage}%`
-    });
-    
-    console.log('✅ 直接获取最终处理结果:', `${subtitles.length} → ${cleanedSubs.length} (减少${Math.round((1 - cleanedSubs.length / subtitles.length) * 100)}%)`);
-    
-    setSubtitles(cleanedSubs);
-    setError(null);
-    setLoading(false);
-  }, []);
+  const handleDirectSubtitles = useCallback(
+    (subtitles: SubtitleItem[], reason?: string) => {
+      // 第一步：清理字幕内容
+      const cleanConfig = subtitleConfig.getCleanConfig();
+      const cleaner = new SubtitleCleaner(cleanConfig);
+      const cleanedSubs = cleaner.cleanSubtitles(subtitles);
+
+      // 输出清理统计信息
+      const cleanStats = cleaner.getCleanStats(subtitles, cleanedSubs);
+
+      setSubtitles(cleanedSubs);
+      setError(null);
+      setLoading(false);
+    },
+    []
+  );
 
   // 监听来自content script的直接字幕事件
   useEffect(() => {
     const handleDirectSubtitleEvent = (event: CustomEvent) => {
       const { detail } = event;
-      if (detail.type === 'SUBTITLE_CONTENT_READY' && detail.source === 'direct') {
-        console.log("🚀 收到直接获取的字幕:", detail.subtitles.length, "条");
-        handleDirectSubtitles(detail.subtitles);
+      if (
+        detail.type === "SUBTITLE_CONTENT_READY" &&
+        detail.source === "direct"
+      ) {
+        handleDirectSubtitles(detail.subtitles, detail.reason);
       }
     };
 
-    window.addEventListener('subtitle-content-ready', handleDirectSubtitleEvent as EventListener);
-    
+    window.addEventListener(
+      "subtitle-content-ready",
+      handleDirectSubtitleEvent as EventListener
+    );
+
     return () => {
-      window.removeEventListener('subtitle-content-ready', handleDirectSubtitleEvent as EventListener);
+      window.removeEventListener(
+        "subtitle-content-ready",
+        handleDirectSubtitleEvent as EventListener
+      );
     };
   }, [handleDirectSubtitles]);
 
@@ -105,25 +93,23 @@ export const useSubtitleContent = () => {
   useEffect(() => {
     const messageListener = (message: any, sender: any, sendResponse: any) => {
       if (message.type === "SUBTITLE_REQUEST_START") {
-        console.log("🎯 开始请求字幕...");
         setLoading(true);
         setError(null);
       } else if (message.type === "SUBTITLE_CONTENT_READY") {
-        console.log(
-          "🎯 收到Background字幕内容:",
-          message.content.length,
-          "字符"
-        );
-
         setLoading(false);
         // 直接处理字幕内容
         processSubtitleContent(message.content);
+      } else if (message.type === "SUBTITLE_CONTENT_FALLBACK") {
+        // 检查是否已经有字幕数据（直接获取成功）
+        if (subtitles.length === 0) {
+          setLoading(false);
+          processSubtitleContent(message.content);
+        } else {
+        }
       } else if (message.type === "SUBTITLE_REQUEST_ERROR") {
-        console.log("❌ 字幕请求失败:", message.error);
         setLoading(false);
         setError(message.error || "获取字幕失败");
       } else if (message.type === "CLEAR_SUBTITLES") {
-        console.log("🎬 收到清理字幕指令，视频ID:", message.videoId);
         clearSubtitles();
       }
 
@@ -131,7 +117,7 @@ export const useSubtitleContent = () => {
     };
 
     chrome.runtime.onMessage.addListener(messageListener);
-    
+
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
     };

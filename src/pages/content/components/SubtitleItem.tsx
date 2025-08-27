@@ -71,7 +71,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
       const copyText = `${timeText}\n${subtitle.text}`;
 
       await navigator.clipboard.writeText(copyText);
-      console.log("已复制字幕:", copyText);
+
       showCopySuccess();
     } catch (error) {
       console.error("复制失败:", error);
@@ -83,7 +83,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
       const explainText = `Explain this sentence to me in the context of the whole subtitle: ${subtitle.text}`;
 
       await navigator.clipboard.writeText(explainText);
-      console.log("已复制解释请求:", explainText);
+
       showExplainSuccess();
     } catch (error) {
       console.error("复制失败:", error);
@@ -96,12 +96,6 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
     fullText: string,
     isShiftKey: boolean
   ) => {
-    console.log("handleWordClick:", {
-      wordIndex,
-      word,
-      isShiftKey,
-      lastClickedIndex,
-    });
     try {
       if (isShiftKey && lastClickedIndex !== null) {
         // Shift+click: 选择范围
@@ -121,8 +115,6 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
         setTimeout(() => {
           setWordCopyStatus(null);
         }, 1500);
-
-        console.log("已复制词组解释请求:", copyText);
       } else {
         // 普通点击: 单个单词
         setSelectedRange(null); // 清除之前的选中范围
@@ -136,8 +128,6 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
         setTimeout(() => {
           setWordCopyStatus(null);
         }, 1500);
-
-        console.log("已复制单词解释请求:", copyText);
       }
     } catch (error) {
       console.error("复制失败:", error);
@@ -190,7 +180,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
               (e as any)?.shiftKey ||
               (e as any)?.nativeEvent?.shiftKey ||
               false;
-            console.log("Shift key detected:", isShiftKey, "Event:", e);
+
             handleWordClick(index, cleanWord, text, isShiftKey);
           }}
         >

@@ -35,13 +35,9 @@ export const useSubtitleNavigation = (subtitles: SubtitleItem[]) => {
         if (Math.abs(timeDiff) <= 0.001) {
           // 跳转到当前字幕开始后的安全位置，确保不会匹配到上一个字幕
           targetTime = subtitle.startTime + 0.01;
-          console.log(
-            `🔄 检测到时间重叠: 上一条[${prevSubtitle.endTime}s] 当前[${subtitle.startTime}s], 调整到 ${targetTime}s`
-          );
         } else if (timeDiff < 0.1 && timeDiff > 0) {
           // 如果间隔很小但不为0，跳转到中间位置
           targetTime = subtitle.startTime + timeDiff / 2 + 0.01;
-          console.log(`🔄 检测到小间隔: ${timeDiff}s, 调整到 ${targetTime}s`);
         } else {
           // 正常情况，跳转到开始时间稍后
           targetTime = subtitle.startTime + 0.01;
@@ -55,8 +51,6 @@ export const useSubtitleNavigation = (subtitles: SubtitleItem[]) => {
       const success = youtubeController.seekToTime(targetTime, 0);
 
       if (success) {
-        console.log("成功跳转到时间:", targetTime);
-
         // 恢复播放状态
         if (wasPlaying) {
           setTimeout(() => {

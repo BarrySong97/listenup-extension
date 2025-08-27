@@ -1,5 +1,5 @@
-import { SubtitleItem } from './subtitleTypes';
-import { parseSubtitleContent } from './subtitleParser';
+import { SubtitleItem } from "./subtitleTypes";
+import { parseSubtitleContent } from "./subtitleParser";
 
 /**
  * 字幕获取和管理类
@@ -12,11 +12,9 @@ export class SubtitleFetcher {
    */
   public setupBackgroundListener(): void {
     if (this.messageListenerSetup) {
-      console.log("🎵 Background消息监听器已存在，跳过设置");
       return;
     }
 
-    console.log("🎵 设置Background消息监听器...");
     this.messageListenerSetup = true;
   }
 
@@ -29,12 +27,9 @@ export class SubtitleFetcher {
     onError: (error: string) => void
   ): Promise<void> {
     try {
-      console.log("📄 内容预览:", JSON.parse(content));
-
       if (content.trim()) {
         const parsedSubs = await parseSubtitleContent(content);
         onSuccess(parsedSubs);
-        console.log("✅ 成功解析字幕数量:", parsedSubs.length);
       }
     } catch (err) {
       console.error("❌ 处理字幕失败:", err);
@@ -47,7 +42,6 @@ export class SubtitleFetcher {
    */
   public async getFullSubtitles(): Promise<void> {
     this.setupBackgroundListener();
-    console.log("✅ Background监听器已设置，等待字幕请求...");
   }
 
   /**
