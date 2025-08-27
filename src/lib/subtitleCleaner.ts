@@ -59,7 +59,8 @@ export class SubtitleCleaner {
   private readonly dashPatterns = [
     /^-+\s*/,  // 开头的破折号
     /^—+\s*/,  // 开头的em dash
-    /^–+\s*/   // 开头的en dash
+    /^–+\s*/,  // 开头的en dash
+    /^>+\s*/   // 开头的箭头
   ];
 
   constructor(config: Partial<CleanConfig> = {}) {

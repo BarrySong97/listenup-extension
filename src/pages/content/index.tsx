@@ -3,6 +3,7 @@ import { HeroUIProvider } from "@heroui/react";
 import styleText from "./style.css?inline";
 import Subtitles from "./components/subtitles";
 import { youtubeController } from "@src/lib/youtubeController";
+import { subtitleDirectFetcher } from "@src/lib/subtitleDirectFetcher";
 
 // 创建Shadow DOM容器
 const hostDiv = document.createElement("div");
@@ -49,63 +50,107 @@ root.render(
 let currentVideoId: string | null = null;
 let isOnVideoPage: boolean = false;
 
+// 尝试直接获取字幕
+const tryDirectSubtitleFetch = async (videoId: string) => {
+  try {
+    console.log("🚀 尝试直接获取字幕，视频ID:", videoId);
+
+    // 等待页面加载完成
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // 检查是否可以直接获取
+    if (!subtitleDirectFetcher.canFetchDirectly()) {
+      console.log("⚠️ 无法直接获取字幕，使用背景脚本方式");
+      return;
+    }
+
+    // 直接获取字幕
+    const subtitles = await subtitleDirectFetcher.fetchSubtitles(["en"]);
+
+    // 发送字幕内容到应用
+    const messageEvent = new CustomEvent("subtitle-content-ready", {
+      detail: {
+        type: "SUBTITLE_CONTENT_READY",
+        subtitles: subtitles,
+        videoId: videoId,
+        timestamp: Date.now(),
+        source: "direct",
+      },
+    });
+    window.dispatchEvent(messageEvent);
+
+    console.log("✅ 直接获取字幕成功，数量:", subtitles.length);
+  } catch (error) {
+    console.log("❌ 直接获取字幕失败，回退到背景脚本方式:", error);
+    // 不抛出错误，让背景脚本方式作为备用
+  }
+};
+
 const detectVideoChange = () => {
-  const isWatchPage = window.location.pathname === '/watch' || 
-                     window.location.pathname.startsWith('/watch') ||
-                     window.location.search.includes('v=');
+  const isWatchPage =
+    window.location.pathname === "/watch" ||
+    window.location.pathname.startsWith("/watch") ||
+    window.location.search.includes("v=");
   const urlParams = new URLSearchParams(window.location.search);
-  const videoId = isWatchPage ? urlParams.get('v') : null;
-  
+  const videoId = isWatchPage ? urlParams.get("v") : null;
+
   // console.log('🔍 视频检测:', {
   //   pathname: window.location.pathname,
   //   search: window.location.search,
   //   isWatchPage,
   //   videoId
   // });
-  
+
   // 检查是否从视频页面离开
   if (isOnVideoPage && !isWatchPage) {
     console.log("🚪 离开视频页面，清理字幕");
     currentVideoId = null;
     isOnVideoPage = false;
-    
+
     // 清理视频元素缓存
     youtubeController.clearCache();
-    
+
     // 通知清理字幕
-    chrome.runtime.sendMessage({
-      type: "PAGE_CHANGED",
-      pageType: "non-video",
-      timestamp: Date.now()
-    }).catch(err => {
-      console.log("发送页面变化消息失败:", err.message);
-    });
+    chrome.runtime
+      .sendMessage({
+        type: "PAGE_CHANGED",
+        pageType: "non-video",
+        timestamp: Date.now(),
+      })
+      .catch((err) => {
+        console.log("发送页面变化消息失败:", err.message);
+      });
     return;
   }
-  
+
   // 检查视频ID变化
   if (isWatchPage && videoId) {
     if (videoId !== currentVideoId) {
       console.log("🎬 检测到视频变化:", currentVideoId, "→", videoId);
       currentVideoId = videoId;
       isOnVideoPage = true;
-      
+
       // 清理视频元素缓存，强制重新获取
       youtubeController.clearCache();
-      
+
       // 通知background script
-      chrome.runtime.sendMessage({
-        type: "VIDEO_CHANGED",
-        videoId: videoId,
-        timestamp: Date.now()
-      }).catch(err => {
-        console.log("发送视频变化消息失败:", err.message);
-      });
+      chrome.runtime
+        .sendMessage({
+          type: "VIDEO_CHANGED",
+          videoId: videoId,
+          timestamp: Date.now(),
+        })
+        .catch((err) => {
+          console.log("发送视频变化消息失败:", err.message);
+        });
+
+      // 尝试直接获取字幕
+      tryDirectSubtitleFetch(videoId);
     } else if (!isOnVideoPage) {
       // 进入视频页面但视频ID相同
       console.log("🎬 进入视频页面:", videoId);
       isOnVideoPage = true;
-      
+
       // 也清理缓存，确保获取当前的视频元素
       youtubeController.clearCache();
     }
@@ -115,17 +160,19 @@ const detectVideoChange = () => {
       console.log("🚪 视频页面但无视频ID，清理字幕");
       currentVideoId = null;
       isOnVideoPage = false;
-      
+
       // 清理视频元素缓存
       youtubeController.clearCache();
-      
-      chrome.runtime.sendMessage({
-        type: "PAGE_CHANGED",
-        pageType: "non-video",
-        timestamp: Date.now()
-      }).catch(err => {
-        console.log("发送页面变化消息失败:", err.message);
-      });
+
+      chrome.runtime
+        .sendMessage({
+          type: "PAGE_CHANGED",
+          pageType: "non-video",
+          timestamp: Date.now(),
+        })
+        .catch((err) => {
+          console.log("发送页面变化消息失败:", err.message);
+        });
     }
   }
 };
@@ -134,7 +181,7 @@ const detectVideoChange = () => {
 const observeNavigation = () => {
   // 初始检测
   detectVideoChange();
-  
+
   // 监听URL变化（用于SPA导航）
   let lastUrl = location.href;
   new MutationObserver(() => {
@@ -145,14 +192,14 @@ const observeNavigation = () => {
       setTimeout(detectVideoChange, 1000);
     }
   }).observe(document, { subtree: true, childList: true });
-  
+
   // 监听popstate事件（浏览器前进后退）
-  window.addEventListener('popstate', () => {
+  window.addEventListener("popstate", () => {
     setTimeout(detectVideoChange, 1000);
   });
-  
+
   // 监听YouTube特有的导航事件
-  window.addEventListener('yt-navigate-finish', () => {
+  window.addEventListener("yt-navigate-finish", () => {
     setTimeout(detectVideoChange, 1000);
   });
 };

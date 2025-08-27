@@ -58,7 +58,50 @@ export const useSubtitleContent = () => {
     setError(null);
   }, []);
 
-  // 监听来自background的字幕消息
+  // 处理直接获取的字幕数据
+  const handleDirectSubtitles = useCallback((subtitles: SubtitleItem[]) => {
+    console.log('🚀 收到直接获取的字幕数据:', subtitles.length);
+    
+    // 第一步：清理字幕内容
+    const cleanConfig = subtitleConfig.getCleanConfig();
+    const cleaner = new SubtitleCleaner(cleanConfig);
+    const cleanedSubs = cleaner.cleanSubtitles(subtitles);
+    
+    // 输出清理统计信息
+    const cleanStats = cleaner.getCleanStats(subtitles, cleanedSubs);
+    console.log('🧹 字幕清理统计:', {
+      原始数量: cleanStats.originalCount,
+      清理后数量: cleanStats.cleanedCount,
+      移除数量: cleanStats.removedCount,
+      移除百分比: `${cleanStats.removalPercentage}%`,
+      文本减少: `${cleanStats.textReductionPercentage}%`
+    });
+    
+    console.log('✅ 直接获取最终处理结果:', `${subtitles.length} → ${cleanedSubs.length} (减少${Math.round((1 - cleanedSubs.length / subtitles.length) * 100)}%)`);
+    
+    setSubtitles(cleanedSubs);
+    setError(null);
+    setLoading(false);
+  }, []);
+
+  // 监听来自content script的直接字幕事件
+  useEffect(() => {
+    const handleDirectSubtitleEvent = (event: CustomEvent) => {
+      const { detail } = event;
+      if (detail.type === 'SUBTITLE_CONTENT_READY' && detail.source === 'direct') {
+        console.log("🚀 收到直接获取的字幕:", detail.subtitles.length, "条");
+        handleDirectSubtitles(detail.subtitles);
+      }
+    };
+
+    window.addEventListener('subtitle-content-ready', handleDirectSubtitleEvent as EventListener);
+    
+    return () => {
+      window.removeEventListener('subtitle-content-ready', handleDirectSubtitleEvent as EventListener);
+    };
+  }, [handleDirectSubtitles]);
+
+  // 监听来自background的字幕消息（保留作为备用）
   useEffect(() => {
     const messageListener = (message: any, sender: any, sendResponse: any) => {
       if (message.type === "SUBTITLE_REQUEST_START") {
