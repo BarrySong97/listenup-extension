@@ -1,87 +1,30 @@
 import { useState, useEffect } from "react";
-
-export type YouTubeTheme = "dark" | "light";
+import { youtubeSDK, YouTubeTheme } from "@src/lib/youtube-sdk";
 
 /**
- * 检测YouTube当前主题模式的Hook
+ * React hook for YouTube theme detection using the YouTube SDK
  */
 export const useYouTubeTheme = () => {
   const [theme, setTheme] = useState<YouTubeTheme>("light");
 
-  // 检测YouTube主题的函数
-  const detectYouTubeTheme = (): YouTubeTheme => {
-    // 方法1: 检查html标签的dark属性
-    const htmlElement = document.documentElement;
-    if (htmlElement.hasAttribute("dark")) {
-      return "dark";
-    }
-
-    // 默认返回dark（YouTube默认主题）
-    return "light";
-  };
-
-  // 初始化和监听主题变化
   useEffect(() => {
-    const updateTheme = () => {
-      const detectedTheme = detectYouTubeTheme();
-      setTheme(detectedTheme);
-    };
+    // Get initial theme
+    const themeDetector = youtubeSDK.getThemeDetector();
+    setTheme(themeDetector.getCurrentTheme());
 
-    // 初始检测
-    updateTheme();
+    // Start monitoring if not already started
+    themeDetector.startMonitoring();
 
-    // 创建MutationObserver监听DOM变化
-    const observer = new MutationObserver((mutations) => {
-      let shouldUpdate = false;
-
-      mutations.forEach((mutation) => {
-        // 监听html标签的属性变化
-        if (
-          mutation.type === "attributes" &&
-          (mutation.target as Element).tagName === "HTML"
-        ) {
-          shouldUpdate = true;
-        }
-
-        // 监听YouTube app元素的变化
-        if (
-          mutation.type === "attributes" &&
-          (mutation.target as Element).tagName === "YTD-APP"
-        ) {
-          shouldUpdate = true;
-        }
-      });
-
-      if (shouldUpdate) {
-        setTimeout(updateTheme, 100); // 稍微延迟以确保DOM完全更新
-      }
+    // Set callback for theme changes
+    themeDetector.setCallback((newTheme) => {
+      setTheme(newTheme);
     });
 
-    // 监听html和ytd-app元素
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["dark"],
-    });
-
-    const ytdApp = document.querySelector("ytd-app");
-    if (ytdApp) {
-      observer.observe(ytdApp, {
-        attributes: true,
-        attributeFilter: ["class", "style"],
-      });
-    }
-
-    // 监听系统主题变化
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleSystemThemeChange = () => {
-      setTimeout(updateTheme, 100);
-    };
-
-    mediaQuery.addEventListener("change", handleSystemThemeChange);
-
+    // Cleanup
     return () => {
-      observer.disconnect();
-      mediaQuery.removeEventListener("change", handleSystemThemeChange);
+      // Don't stop monitoring as other components might be using it
+      // Just clear our callback
+      themeDetector.setCallback(null);
     };
   }, []);
 
