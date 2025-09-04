@@ -3,6 +3,7 @@ import { HeroUIProvider } from "@heroui/react";
 import { Provider } from "jotai";
 import styleText from "./style.css?inline";
 import Subtitles from "./components/subtitles";
+import App from "./app";
 const init = () => {
   // 创建Shadow DOM容器
   const hostDiv = document.createElement("div");
@@ -42,7 +43,7 @@ const init = () => {
   root.render(
     <Provider>
       <HeroUIProvider>
-        <Subtitles />
+        <App />
       </HeroUIProvider>
     </Provider>
   );
@@ -51,12 +52,8 @@ const init = () => {
 };
 const isYoutube = () => {
   const isYoutube = window.location.hostname.includes("youtube.com");
-  const isVideoPage =
-    isYoutube &&
-    (window.location.pathname === "/watch" ||
-      window.location.search.includes("v=") ||
-      window.location.pathname.startsWith("/watch"));
-  return isYoutube && isVideoPage;
+
+  return isYoutube;
 };
 if (isYoutube()) {
   init();

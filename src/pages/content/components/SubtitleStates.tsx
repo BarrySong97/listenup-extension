@@ -1,22 +1,32 @@
 import { memo } from "react";
 
 interface SubtitleStatesProps {
-  loading: boolean;
+  loading?: boolean;
   error: string | null;
   isEmpty: boolean;
+  isAd: boolean;
 }
 
 export const SubtitleStates = memo(function SubtitleStates({
-  loading,
+  loading = false,
   error,
   isEmpty,
+  isAd,
 }: SubtitleStatesProps) {
+  if (isAd) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+        <p className="text-sm ml-3">ad...</p>
+      </div>
+    );
+  }
   // Loading状态
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
-        <p className="text-sm ml-3">正在加载字幕...</p>
+        <p className="text-sm ml-3">loading...</p>
       </div>
     );
   }
@@ -26,7 +36,7 @@ export const SubtitleStates = memo(function SubtitleStates({
     return (
       <div className="p-4 flex items-center justify-center h-full">
         {/* <p className="text-sm text-warning">{error}</p> */}
-        <p className="text-xs mt-1 ">请确保视频有字幕且已加载</p>
+        <p className="text-xs mt-1 ">error</p>
       </div>
     );
   }
@@ -36,8 +46,7 @@ export const SubtitleStates = memo(function SubtitleStates({
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-sm">暂无字幕数据</p>
-          <p className="text-xs mt-1">请尝试播放有字幕的视频</p>
+          <p className="text-sm">empty</p>
         </div>
       </div>
     );
