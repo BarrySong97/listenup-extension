@@ -8,7 +8,7 @@ const init = () => {
   const hostDiv = document.createElement("div");
   hostDiv.id = "__listenup-extension-host";
   hostDiv.style.position = "relative";
-  hostDiv.style.zIndex = "999";
+  hostDiv.style.zIndex = "99999999";
 
   // 创建Shadow Root
   const shadowRoot = hostDiv.attachShadow({ mode: "open" });

@@ -1,14 +1,27 @@
 import { Button, Card } from "@heroui/react";
 import { FC, useEffect, useState } from "react";
-import { useYouTubeLayout } from "@src/hooks/useYouTubeLayout";
 import { youtubeSDK, YouTubeTheme } from "@src/lib/youtube-sdk";
 import { motion, AnimatePresence } from "framer-motion";
+import { Icon } from "@iconify/react";
+import {
+  MaterialSymbolsSubtitlesGearOutlineSharp,
+  MaterialSymbolsSubtitlesGearRounded,
+} from "../icon";
 
 export interface SubtitlesProps {}
 const Subtitles: FC<SubtitlesProps> = () => {
   // 使用各种专门的hooks
   const [youtbeTheme, setYoutbeTheme] = useState<YouTubeTheme | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [headerHeig, setheaderHeig] = useState(0);
+  useEffect(() => {
+    const header = document.querySelector("#masthead");
+    if (header) {
+      setheaderHeig(header.clientHeight);
+    }
+
+    return () => {};
+  }, []);
 
   useEffect(() => {
     youtubeSDK.start({
@@ -26,43 +39,51 @@ const Subtitles: FC<SubtitlesProps> = () => {
       youtubeSDK.stop();
     };
   }, []);
+  const variant = {
+    initial: { x: 480 },
+    animate: { x: 0 },
+    exit: { x: 480 },
+  };
 
   return (
-    <div>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            id="listenup"
-            className={`${youtbeTheme === "dark" ? "dark" : "light"}`}
-            style={{
-              height: "774px",
-              width: "454px",
-              display: "block",
-              zIndex: 100,
-              position: "fixed",
-              top: 0,
-              right: 0,
-            }}
-            initial={{ opacity: 0, x: 454 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 454 }}
-            transition={{
-              type: "spring",
-              stiffness: 300,
-              damping: 30,
-              duration: 0.3,
-            }}
-          >
-            <Card shadow="lg"></Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <Button
-        className="absolute top-20 left-0 right-0 z-30"
-        onPressStart={() => setIsOpen(!isOpen)}
+    <div className={`${youtbeTheme === "dark" ? "dark" : "light"}`}>
+      <motion.div
+        id="listenup"
+        style={{
+          height: "774px",
+          width: "454px",
+          top: headerHeig,
+          display: "block",
+          zIndex: 9999,
+          position: "fixed",
+          right: 16,
+        }}
+        initial="initial"
+        animate={isOpen ? "animate" : "exit"}
+        variants={variant}
+        transition={{
+          type: "spring",
+          stiffness: 300,
+          damping: 30,
+          duration: 0.3,
+        }}
       >
-        {isOpen ? "Close" : "Open"}
-      </Button>
+        <Card shadow="lg" className="h-full w-full"></Card>
+      </motion.div>
+      <div className="fixed bottom-8 right-6 z-30 ">
+        <Button
+          radius="full"
+          isIconOnly
+          onPressStart={() => setIsOpen(!isOpen)}
+          color="primary"
+        >
+          {isOpen ? (
+            <MaterialSymbolsSubtitlesGearOutlineSharp />
+          ) : (
+            <MaterialSymbolsSubtitlesGearRounded />
+          )}
+        </Button>
+      </div>
     </div>
   );
 };
