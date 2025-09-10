@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { SubtitleItem } from "@src/lib/subtitleTypes";
-import { youtubeController } from "@src/lib/youtubeController";
+import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { youtubeController } from "../lib/youtubeController";
 
 /**
  * 字幕导航逻辑钩子

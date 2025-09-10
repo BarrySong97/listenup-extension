@@ -1,9 +1,9 @@
 import { Button, Divider } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import React, { FC, useState, useCallback, useEffect, useRef } from "react";
-import { useAudioRecording } from "@src/hooks/useAudioRecording";
-import { SubtitleItem } from "@src/lib/subtitleTypes";
-import { youtubeController } from "@src/lib/youtubeController";
+import { useAudioRecording } from "../hooks/useAudioRecording";
+import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { youtubeController } from "../lib/youtubeController";
 
 interface SubtitleFooterProps {
   currentSubtitle: SubtitleItem | null;
@@ -18,7 +18,6 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
   isLooping,
   onToggleLoop,
 }) => {
-  
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const playStateCleanup = useRef<(() => void) | null>(null);
   const {
@@ -85,7 +84,6 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
     onToggleLoop();
   }, [onToggleLoop]);
 
-
   // 录音按钮点击处理
   const handleRecordingToggle = useCallback(() => {
     if (isRecording) {
@@ -119,7 +117,10 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
   }
 
   return (
-    <div className="w-full bg-content1 border-t border-default-200" data-loop-state={isLooping}>
+    <div
+      className="w-full bg-content1 border-t border-default-200"
+      data-loop-state={isLooping}
+    >
       <Divider />
       <div className="p-4 space-y-3">
         {/* 字幕信息 */}
