@@ -37,328 +37,178 @@ export interface SubtitleInfo {
   isDefault: boolean;
 }
 
+export interface SubtitleTrack {
+  languageCode: string;
+  kind?: "asr" | "default" | "manual";
+  name?: string;
+  params: Map<string, string>;
+}
+
+export interface YouTubeCaptionTrack {
+  languageCode: string;
+  languageName: string;
+  kind: string;
+  name: string;
+  displayName: string;
+  id: string | null;
+  W: boolean;
+  isTranslateable: boolean;
+  url: string;
+  vssId: string;
+  isDefault: boolean;
+  translationLanguage: string | null;
+  xtags: string;
+  captionId: string;
+}
+
+export interface YouTubeSubtitleTrackData {
+  id: string;
+  d7: {
+    name: string;
+    id: string;
+    isDefault: boolean;
+  };
+  captionTracks: YouTubeCaptionTrack[];
+  J: any;
+  B: YouTubeCaptionTrack;
+  xtags: string;
+  N: boolean;
+  W: any;
+  Z: string;
+  captionsInitialState: string;
+}
+export interface YouTubeYtcfg {
+  INNERTUBE_CLIENT_VERSION: string;
+}
+
 export class YouTubeSubtitleExtractor {
-  private cachedPlayerResponse: any = null;
-  private lastVideoId: string | null = null;
-
   /**
-   * Get ytInitialPlayerResponse from the page
+   * 动态加载扩展内的脚本，并等待脚本触发指定事件返回结果
+   * @param scriptName 脚本文件名，例如 "youtube_meta.js"
+   * @returns Promise<any> 脚本返回的数据
    */
-  private getYtInitialPlayerResponse(): any {
-    try {
-      // Check if video ID has changed
-      const currentVideoId = this.getCurrentVideoId();
-      if (currentVideoId !== this.lastVideoId) {
-        this.cachedPlayerResponse = null;
-        this.lastVideoId = currentVideoId;
-      }
+  public loadExtensionScript(scriptName: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // 自定义事件名称
+      const eventName = "grab_youtube_metacontext_youmind";
 
-      // Return cached if available
-      if (this.cachedPlayerResponse) {
-        return this.cachedPlayerResponse;
-      }
+      // 事件处理函数
+      const handler = (event: CustomEvent) => {
+        window.removeEventListener(eventName, handler as EventListener);
+        resolve(event.detail); // 脚本通过 event.detail 传递结果
+      };
 
-      // Try to get from window object
-      const ytInitialPlayerResponse = (window as any).ytInitialPlayerResponse;
-      if (ytInitialPlayerResponse) {
-        console.log("📊 Found ytInitialPlayerResponse in window");
-        this.cachedPlayerResponse = ytInitialPlayerResponse;
-        return ytInitialPlayerResponse;
-      }
+      // 监听事件
+      window.addEventListener(eventName, handler as EventListener);
 
-      // Try to parse from page scripts
-      const scripts = document.getElementsByTagName("script");
-      for (const script of scripts) {
-        const content = script.textContent || script.innerText;
-        if (content.includes("ytInitialPlayerResponse")) {
-          const match = content.match(
-            /ytInitialPlayerResponse\s*[:=]\s*({.+?});/
-          );
-          if (match) {
-            console.log("📊 Parsed ytInitialPlayerResponse from script");
-            const parsed = JSON.parse(match[1]);
-            this.cachedPlayerResponse = parsed;
-            return parsed;
-          }
-        }
-      }
-
-      console.log("⚠️ ytInitialPlayerResponse not found");
-      return null;
-    } catch (error) {
-      console.error("❌ Failed to get ytInitialPlayerResponse:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Get current video ID from URL
-   */
-  public getCurrentVideoId(): string | null {
-    const urlParams = new URLSearchParams(window.location.search);
-    const videoId = urlParams.get('v');
-    
-    if (!videoId) {
-      // Try to get from player response as fallback
       try {
-        const playerResponse = (window as any).ytInitialPlayerResponse;
-        return playerResponse?.videoDetails?.videoId || null;
-      } catch {
-        return null;
+        // 创建 <script> 标签
+        const script = document.createElement("script");
+
+        // 扩展内部文件完整 URL
+        script.src = chrome.runtime.getURL(`./scripts/${scriptName}`);
+        console.log(script.src);
+        // 加载完成后删除 <script>
+        script.onload = () => script.remove();
+
+        // 加载失败回调
+        script.onerror = (err) => reject(err);
+
+        // 插入 DOM 触发浏览器加载
+        (document.head || document.documentElement).appendChild(script);
+      } catch (err) {
+        reject(err);
       }
-    }
-    
-    return videoId;
+    });
   }
-
   /**
-   * Get all available caption tracks
+   * Get subtitle track data using extension script
    */
-  public getCaptionTracks(): CaptionTrack[] {
-    const playerResponse = this.getYtInitialPlayerResponse();
-    if (!playerResponse || !playerResponse.captions) {
-      console.log("No captions data found");
-      return [];
+  public async getSubtitleTrack(): Promise<{
+    currentTrack: YouTubeSubtitleTrackData;
+    ytcfg: YouTubeYtcfg;
+  } | null> {
+    try {
+      const trackData = (await this.loadExtensionScript(
+        "inject-youtube.js"
+      )) as { currentTrack: YouTubeSubtitleTrackData; ytcfg: YouTubeYtcfg };
+      return trackData;
+    } catch (error) {
+      console.error("Failed to get subtitle track data:", error);
+      return null;
     }
-
-    const captionsData: CaptionsData =
-      playerResponse.captions.playerCaptionsTracklistRenderer;
-    
-    if (!captionsData || !captionsData.captionTracks) {
-      console.log("No caption tracks found");
-      return [];
-    }
-
-    console.log(`Found ${captionsData.captionTracks.length} caption tracks`);
-    
-    // Log caption initial state if available
-    if (captionsData.audioTracks && captionsData.audioTracks.length > 0) {
-      const audioTrack = captionsData.audioTracks[0];
-      console.log("Caption initial state:", audioTrack.captionsInitialState);
-      console.log("Default caption track index:", audioTrack.defaultCaptionTrackIndex);
-    }
-
-    return captionsData.captionTracks;
-  }
-
-  /**
-   * Get all available subtitle information
-   */
-  public getAllSubtitles(): SubtitleInfo[] {
-    const captionTracks = this.getCaptionTracks();
-    const playerResponse = this.getYtInitialPlayerResponse();
-    
-    // Get default track index
-    let defaultIndex = -1;
-    if (playerResponse?.captions?.playerCaptionsTracklistRenderer?.audioTracks?.[0]) {
-      defaultIndex = playerResponse.captions.playerCaptionsTracklistRenderer
-        .audioTracks[0].defaultCaptionTrackIndex;
-    }
-
-    return captionTracks.map((track, index) => ({
-      url: track.baseUrl,
-      languageCode: track.languageCode,
-      languageName: track.name.simpleText,
-      isAutoGenerated: track.kind === 'asr' || track.vssId?.includes('.asr'),
-      isTranslatable: track.isTranslatable || false,
-      isDefault: index === defaultIndex
-    }));
   }
 
   /**
    * Get subtitle URL for specific language
    */
-  public getSubtitleUrl(
+  public async getSubtitleUrl(
     languageCode: string,
     options: {
       preferAutoGenerated?: boolean;
       includeTranslations?: boolean;
     } = {}
-  ): string | null {
-    const captionTracks = this.getCaptionTracks();
-    
-    if (captionTracks.length === 0) {
-      console.log("⚠️ No subtitle tracks available");
-      return null;
-    }
-
-    // Find exact match
-    let track = captionTracks.find(t => 
-      t.languageCode === languageCode ||
-      t.languageCode.startsWith(languageCode + '-')
-    );
-
-    // If no exact match and translations allowed, check translatable tracks
-    if (!track && options.includeTranslations) {
-      const translatableTrack = captionTracks.find(t => t.isTranslatable);
-      if (translatableTrack) {
-        // Add translation parameter to URL
-        const url = new URL(translatableTrack.baseUrl);
-        url.searchParams.set('tlang', languageCode);
-        return url.toString();
+  ): Promise<string | null> {
+    try {
+      const trackData = await this.getSubtitleTrack();
+      console.log(trackData);
+      if (!trackData || !trackData.currentTrack?.captionTracks) {
+        return null;
       }
-    }
 
-    if (track) {
-      console.log(`✅ Found subtitle: ${track.name.simpleText} (${track.languageCode})`);
-      return track.baseUrl;
-    }
-
-    console.log(`❌ No subtitle found for language: ${languageCode}`);
-    return null;
-  }
-
-  /**
-   * Get subtitle URLs for multiple languages with priority
-   */
-  public getSubtitleUrlByPriority(
-    preferredLanguages: string[] = ["en", "zh", "zh-CN"]
-  ): string | null {
-    const captionTracks = this.getCaptionTracks();
-    
-    if (captionTracks.length === 0) {
-      console.log("⚠️ No subtitle tracks available");
-      return null;
-    }
-
-    // Log all available tracks
-    console.log("📋 Available subtitle tracks:", captionTracks.map(track => ({
-      language: track.languageCode,
-      name: track.name.simpleText,
-      vssId: track.vssId,
-      isTranslatable: track.isTranslatable
-    })));
-
-    // Try to find subtitle by priority
-    for (const preferredLang of preferredLanguages) {
-      const track = captionTracks.find(
-        (track) =>
-          track.languageCode === preferredLang ||
-          track.languageCode.startsWith(preferredLang + "-") ||
-          track.vssId?.includes(preferredLang)
+      const matchingTracks = trackData.currentTrack.captionTracks.filter(
+        (track) => track.languageCode === languageCode
       );
 
-      if (track) {
-        console.log(`✅ Selected subtitle: ${track.name.simpleText} (${track.languageCode})`);
-        return track.baseUrl;
+      if (matchingTracks.length === 0) {
+        return null;
       }
-    }
 
-    // Fallback to first available subtitle
-    const firstTrack = captionTracks[0];
-    console.log(`🔄 Using default subtitle: ${firstTrack.name.simpleText} (${firstTrack.languageCode})`);
-    return firstTrack.baseUrl;
-  }
+      let selectedTrack: YouTubeCaptionTrack | null = null;
 
-  /**
-   * Check if subtitles are available
-   */
-  public hasSubtitles(): boolean {
-    const playerResponse = this.getYtInitialPlayerResponse();
-    return !!(
-      playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.length
-    );
-  }
+      // Priority 1: name="Default" and empty kind
+      const defaultTrack = matchingTracks.find(
+        (track) => track.name === "Default" && track.kind === ""
+      );
+      if (defaultTrack) {
+        selectedTrack = defaultTrack;
+      } else {
+        // Priority 2: kind="asr" (auto-generated)
+        const asrTrack = matchingTracks.find((track) => track.kind === "asr");
+        if (asrTrack) {
+          selectedTrack = asrTrack;
+        } else {
+          // Fallback: first matching track
+          selectedTrack = matchingTracks[0];
+        }
+      }
 
-  /**
-   * Get available translation languages
-   */
-  public getTranslationLanguages(): Array<{ code: string; name: string }> {
-    const playerResponse = this.getYtInitialPlayerResponse();
-    const translationLanguages = 
-      playerResponse?.captions?.playerCaptionsTracklistRenderer?.translationLanguages;
-    
-    if (!translationLanguages) {
-      return [];
-    }
+      if (!selectedTrack) {
+        return null;
+      }
 
-    return translationLanguages.map((lang: any) => ({
-      code: lang.languageCode,
-      name: lang.languageName.simpleText
-    }));
-  }
+      // Append required parameters to the URL
+      const baseUrl = selectedTrack.url;
+      const additionalParams = new URLSearchParams({
+        fmt: "json3",
+        xorb: "2",
+        xobt: "3",
+        xovt: "3",
+        cbr: "Chrome",
+        cbrver: "131.0.0.0",
+        c: "WEB",
+        cver: trackData.ytcfg?.INNERTUBE_CLIENT_VERSION || "2.20250908.02.00",
+        cplayer: "UNIPLAYER",
+        cos: "Windows",
+        cosver: "10.0",
+        cplatform: "DESKTOP",
+      });
 
-  /**
-   * Get video metadata
-   */
-  public getVideoMetadata() {
-    const playerResponse = this.getYtInitialPlayerResponse();
-    if (!playerResponse?.videoDetails) {
+      const separator = baseUrl.includes("?") ? "&" : "?";
+      return `${baseUrl}${separator}${additionalParams.toString()}`;
+    } catch (error) {
+      console.error("Failed to get subtitle URL:", error);
       return null;
     }
-
-    const details = playerResponse.videoDetails;
-    return {
-      videoId: details.videoId,
-      title: details.title,
-      author: details.author,
-      channelId: details.channelId,
-      duration: parseInt(details.lengthSeconds || '0'),
-      viewCount: parseInt(details.viewCount || '0'),
-      isLive: details.isLiveContent || false,
-      isPrivate: details.isPrivate || false
-    };
-  }
-
-  /**
-   * Generate subtitle URL with custom parameters
-   */
-  public buildSubtitleUrl(
-    baseUrl: string,
-    params: {
-      format?: 'json3' | 'srv1' | 'srv2' | 'srv3' | 'ttml' | 'vtt';
-      translateTo?: string;
-      includeTimestamps?: boolean;
-    } = {}
-  ): string {
-    const url = new URL(baseUrl);
-    
-    // Set format
-    if (params.format) {
-      url.searchParams.set('fmt', params.format);
-    }
-    
-    // Set translation
-    if (params.translateTo) {
-      url.searchParams.set('tlang', params.translateTo);
-    }
-    
-    // Include timestamps (for some formats)
-    if (params.includeTimestamps !== undefined) {
-      url.searchParams.set('ts', params.includeTimestamps ? '1' : '0');
-    }
-    
-    return url.toString();
-  }
-
-  /**
-   * Reset cache (useful when navigating to new video)
-   */
-  public resetCache(): void {
-    this.cachedPlayerResponse = null;
-    this.lastVideoId = null;
-  }
-
-  /**
-   * Get all subtitle data as a structured object
-   */
-  public getSubtitleData() {
-    const hasSubtitles = this.hasSubtitles();
-    
-    if (!hasSubtitles) {
-      return {
-        available: false,
-        subtitles: [],
-        translationLanguages: [],
-        metadata: this.getVideoMetadata()
-      };
-    }
-
-    return {
-      available: true,
-      subtitles: this.getAllSubtitles(),
-      translationLanguages: this.getTranslationLanguages(),
-      metadata: this.getVideoMetadata()
-    };
   }
 }

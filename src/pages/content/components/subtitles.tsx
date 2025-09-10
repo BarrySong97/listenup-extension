@@ -1,6 +1,10 @@
 import { Button, Card } from "@heroui/react";
 import { FC, useEffect, useRef, useState } from "react";
-import { YouTubeSDK, youtubeSDK, YouTubeTheme } from "@src/lib/youtube-sdk";
+import {
+  YouTubeSDK,
+  youtubeSDK,
+  YouTubeTheme,
+} from "@pages/content/lib/youtube-sdk";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import {
@@ -8,17 +12,24 @@ import {
   MaterialSymbolsSubtitlesGearRounded,
 } from "../icon";
 import { SubtitleStates } from "./SubtitleStates";
+import { useSubtitleContent } from "../hooks/useSubtitleContent";
+import { useSubtitleSync } from "../hooks/useSubtitleSync";
+type CaptionMessage = {
+  type: "YT_CAPTION_URL";
+  url: string | null;
+};
 
 export interface SubtitlesProps {}
 const Subtitles: FC<SubtitlesProps> = () => {
   // 使用各种专门的hooks
   const [youtbeTheme, setYoutbeTheme] = useState<YouTubeTheme | null>(null);
-  const [isSubtitleEmpty, setIsSubtitleEmpty] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [headerHeight, setheaderHeig] = useState(0);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
   const YoutubeSDK = useRef<YouTubeSDK>(youtubeSDK);
-
+  const [url, setUrl] = useState<string | undefined>(undefined);
+  const { subtitles, loading, error } = useSubtitleContent(url);
+  const { currentSubtitleIndex, setCurrentTime } = useSubtitleSync(subtitles);
   // 获取header高度
   useEffect(() => {
     const header = document.querySelector("#masthead");
@@ -38,6 +49,9 @@ const Subtitles: FC<SubtitlesProps> = () => {
       onAdStateChange: (adState) => {
         setIsAdPlaying(adState.isAdPlaying);
       },
+      onPlayerStateChange: (playerState) => {
+        setCurrentTime(playerState.currentTime);
+      },
     });
     return () => {
       youtubeSDK.stop();
@@ -46,19 +60,17 @@ const Subtitles: FC<SubtitlesProps> = () => {
 
   // 获取字幕
   useEffect(() => {
-    if (isAdPlaying) {
+    if (isAdPlaying || subtitles.length > 0) {
       return;
     }
-    const subtitle = YoutubeSDK.current.getSubtitleData();
-    // 找到第一个为en的字幕，或者en-US的字幕
 
-    const enSubtitle = subtitle.subtitles.find(
-      (item) => item.languageCode === "en" || item.languageCode === "en-US"
-    );
-    if (!subtitle.available) {
-      setIsSubtitleEmpty(true);
-    }
-  }, [isAdPlaying]);
+    YoutubeSDK.current.getSubtitleUrl("en").then((res) => {
+      if (res) {
+        setUrl(res);
+      }
+    });
+    // 找到第一个为en的字幕，或者en-US的字幕
+  }, [isAdPlaying, subtitles]);
 
   const variant = {
     initial: { x: 480 },
@@ -92,8 +104,9 @@ const Subtitles: FC<SubtitlesProps> = () => {
         <Card shadow="lg" className="h-full w-full">
           <SubtitleStates
             isAd={isAdPlaying}
-            error="error"
-            isEmpty={isSubtitleEmpty}
+            error={error}
+            loading={loading}
+            isEmpty={subtitles.length === 0}
           />
         </Card>
       </motion.div>

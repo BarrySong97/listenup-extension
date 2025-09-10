@@ -4,7 +4,10 @@
       "WebFetch(domain:github.com)",
       "Bash(rg:*)",
       "Bash(git add:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(mkdir:*)",
+      "Bash(copy \"E:\\code\\listenup-extension\\src\\pages\\content\\script\\inject-youtube.js\" \"E:\\code\\listenup-extension\\public\\scripts\\inject-youtube.js\")",
+      "Bash(cp:*)"
     ],
     "deny": [],
     "additionalDirectories": [

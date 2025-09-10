@@ -2,7 +2,6 @@ import { createRoot } from "react-dom/client";
 import { HeroUIProvider } from "@heroui/react";
 import { Provider } from "jotai";
 import styleText from "./style.css?inline";
-import Subtitles from "./components/subtitles";
 import App from "./app";
 const init = () => {
   // 创建Shadow DOM容器

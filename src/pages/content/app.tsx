@@ -1,6 +1,7 @@
 import { FC, useEffect, useState } from "react";
 import Subtitles from "./components/subtitles";
 export interface AppProps {}
+
 const App: FC<AppProps> = () => {
   const [isYoutube, setIsYoutube] = useState(false);
   useEffect(() => {

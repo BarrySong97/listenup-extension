@@ -1,43 +1,57 @@
 import { useState, useEffect, useCallback } from "react";
-import { SubtitleItem } from "@src/lib/subtitleTypes";
-import { subtitleFetcher } from "@src/lib/subtitleFetcher";
-import { SubtitleMerger } from "@src/lib/subtitleMerger";
-import { SubtitleCleaner } from "@src/lib/subtitleCleaner";
-import { subtitleConfig } from "@src/lib/subtitleConfig";
+import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { subtitleFetcher } from "../lib/subtitles/subtitleFetcher";
+import { SubtitleMerger } from "../lib/subtitles/subtitleMerger";
+import { SubtitleCleaner } from "../lib/subtitles/subtitleCleaner";
+import { subtitleConfig } from "../lib/subtitles/subtitleConfig";
+import { YouTubeSDK } from "../lib/youtube-sdk/YouTubeSDK";
 
 /**
  * 字幕内容管理钩子
  * 处理字幕数据的加载、解析和状态管理
  */
-export const useSubtitleContent = () => {
+export const useSubtitleContent = (url?: string) => {
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const youtubeSDK = new YouTubeSDK();
 
   // 处理字幕内容
-  const processSubtitleContent = useCallback(async (content: string) => {
-    await subtitleFetcher.processSubtitleContent(
-      content,
-      (parsedSubs) => {
-        // 第一步：清理字幕内容
-        const cleanConfig = subtitleConfig.getCleanConfig();
-        const cleaner = new SubtitleCleaner(cleanConfig);
-        const cleanedSubs = cleaner.cleanSubtitles(parsedSubs);
+  const processSubtitleContent = useCallback(
+    async (content: string) => {
+      await subtitleFetcher.processSubtitleContent(
+        content,
+        async (parsedSubs) => {
+          // 第一步：清理字幕内容
+          const cleanConfig = subtitleConfig.getCleanConfig();
+          const cleaner = new SubtitleCleaner(cleanConfig);
+          const cleanedSubs = cleaner.cleanSubtitles(parsedSubs);
 
-        // 输出清理统计信息
-        const cleanStats = cleaner.getCleanStats(parsedSubs, cleanedSubs);
+          setSubtitles(cleanedSubs);
+          setError(null);
 
-        // 暂时禁用合并功能，专注解决点击overlap问题
-        // TODO: 稍后重新启用合并功能
-
-        setSubtitles(cleanedSubs);
-        setError(null);
-      },
-      (errorMsg) => {
-        setError(errorMsg);
-      }
-    );
-  }, []);
+          // 缓存字幕到 storage
+          const videoId = youtubeSDK.getVideoId();
+          if (videoId && cleanedSubs.length > 0) {
+            try {
+              await chrome.storage.local.set({
+                [`subtitle_${videoId}`]: {
+                  subtitles: cleanedSubs,
+                  timestamp: Date.now(),
+                },
+              });
+            } catch (error) {
+              console.error("Failed to cache subtitles:", error);
+            }
+          }
+        },
+        (errorMsg) => {
+          setError(errorMsg);
+        }
+      );
+    },
+    [youtubeSDK]
+  );
 
   // 清理字幕状态的函数
   const clearSubtitles = useCallback(() => {
@@ -46,82 +60,49 @@ export const useSubtitleContent = () => {
     setError(null);
   }, []);
 
-  // 处理直接获取的字幕数据
-  const handleDirectSubtitles = useCallback(
-    (subtitles: SubtitleItem[], reason?: string) => {
-      // 第一步：清理字幕内容
-      const cleanConfig = subtitleConfig.getCleanConfig();
-      const cleaner = new SubtitleCleaner(cleanConfig);
-      const cleanedSubs = cleaner.cleanSubtitles(subtitles);
+  const fetchSubtitleContent = async (url: string) => {
+    const videoId = youtubeSDK.getVideoId();
 
-      // 输出清理统计信息
-      const cleanStats = cleaner.getCleanStats(subtitles, cleanedSubs);
+    // 首先检查缓存
+    if (videoId) {
+      try {
+        setLoading(true);
+        const cache = await chrome.storage.local.get(`subtitle_${videoId}`);
+        const cachedData = cache[`subtitle_${videoId}`];
 
-      setSubtitles(cleanedSubs);
-      setError(null);
-      setLoading(false);
-    },
-    []
-  );
-
-  // 监听来自content script的直接字幕事件
-  useEffect(() => {
-    const handleDirectSubtitleEvent = (event: CustomEvent) => {
-      const { detail } = event;
-      if (
-        detail.type === "SUBTITLE_CONTENT_READY" &&
-        detail.source === "direct"
-      ) {
-        handleDirectSubtitles(detail.subtitles, detail.reason);
+        if (cachedData && cachedData.subtitles) {
+          // 使用缓存的字幕
+          setSubtitles(cachedData.subtitles);
+          setError(null);
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to get cached subtitles:", error);
+        setError("Failed to get cached subtitles");
+      } finally {
+        setLoading(false);
       }
-    };
+    }
 
-    window.addEventListener(
-      "subtitle-content-ready",
-      handleDirectSubtitleEvent as EventListener
-    );
-
-    return () => {
-      window.removeEventListener(
-        "subtitle-content-ready",
-        handleDirectSubtitleEvent as EventListener
-      );
-    };
-  }, [handleDirectSubtitles]);
+    // 如果没有缓存，从URL获取
+    try {
+      setLoading(true);
+      const subtitleContents = await fetch(url);
+      const text = await subtitleContents.text();
+      processSubtitleContent(text);
+    } catch (error) {
+      setError("Failed to fetch subtitles");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 监听来自background的字幕消息（保留作为备用）
   useEffect(() => {
-    const messageListener = (message: any, sender: any, sendResponse: any) => {
-      if (message.type === "SUBTITLE_REQUEST_START") {
-        setLoading(true);
-        setError(null);
-      } else if (message.type === "SUBTITLE_CONTENT_READY") {
-        setLoading(false);
-        // 直接处理字幕内容
-        processSubtitleContent(message.content);
-      } else if (message.type === "SUBTITLE_CONTENT_FALLBACK") {
-        // 检查是否已经有字幕数据（直接获取成功）
-        if (subtitles.length === 0) {
-          setLoading(false);
-          processSubtitleContent(message.content);
-        } else {
-        }
-      } else if (message.type === "SUBTITLE_REQUEST_ERROR") {
-        setLoading(false);
-        setError(message.error || "获取字幕失败");
-      } else if (message.type === "CLEAR_SUBTITLES") {
-        clearSubtitles();
-      }
-
-      return true;
-    };
-
-    chrome.runtime.onMessage.addListener(messageListener);
-
-    return () => {
-      chrome.runtime.onMessage.removeListener(messageListener);
-    };
-  }, [processSubtitleContent, clearSubtitles]);
+    if (url) {
+      fetchSubtitleContent(url);
+    }
+  }, [url]);
 
   return {
     subtitles,

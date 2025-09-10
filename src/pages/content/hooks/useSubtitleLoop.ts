@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
-import { SubtitleItem } from '@src/lib/subtitleTypes';
-import { youtubeController } from '@src/lib/youtubeController';
+import { useCallback, useRef, useState } from "react";
+import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { youtubeController } from "../lib/youtubeController";
 
 export const useSubtitleLoop = () => {
   const [isLooping, setIsLooping] = useState(false);
@@ -10,11 +10,10 @@ export const useSubtitleLoop = () => {
   // 检查视频是否播放超出字幕范围
   const checkVideoTime = useCallback(() => {
     if (!loopTargetSubtitle.current) return;
-    
+
     const currentTime = youtubeController.getCurrentTime();
     const subtitle = loopTargetSubtitle.current;
-    
-    
+
     // 如果视频播放超出字幕结束时间，立即跳回字幕开始
     if (currentTime >= subtitle.endTime) {
       youtubeController.seekToTime(subtitle.startTime);
@@ -23,26 +22,27 @@ export const useSubtitleLoop = () => {
   }, []);
 
   // 启动循环播放监控
-  const startLoopMonitoring = useCallback((subtitle: SubtitleItem) => {
-    
-    // 设置循环目标字幕
-    loopTargetSubtitle.current = subtitle;
-    
-    // 清理现有监控
-    if (loopCheckInterval.current) {
-      clearInterval(loopCheckInterval.current);
-    }
-    
-    // 每100ms检查一次视频时间
-    loopCheckInterval.current = setInterval(() => {
-      const videoPlaying = youtubeController.isPlaying();
-      
-      
-      if (videoPlaying) {
-        checkVideoTime();
+  const startLoopMonitoring = useCallback(
+    (subtitle: SubtitleItem) => {
+      // 设置循环目标字幕
+      loopTargetSubtitle.current = subtitle;
+
+      // 清理现有监控
+      if (loopCheckInterval.current) {
+        clearInterval(loopCheckInterval.current);
       }
-    }, 100);
-  }, [checkVideoTime]);
+
+      // 每100ms检查一次视频时间
+      loopCheckInterval.current = setInterval(() => {
+        const videoPlaying = youtubeController.isPlaying();
+
+        if (videoPlaying) {
+          checkVideoTime();
+        }
+      }, 100);
+    },
+    [checkVideoTime]
+  );
 
   // 停止循环播放监控
   const stopLoopMonitoring = useCallback(() => {
@@ -54,17 +54,19 @@ export const useSubtitleLoop = () => {
   }, []);
 
   // 开始循环播放
-  const startLooping = useCallback((subtitle: SubtitleItem) => {
+  const startLooping = useCallback(
+    (subtitle: SubtitleItem) => {
+      setIsLooping(true);
 
-    setIsLooping(true);
-    
-    // 立即播放一次
-    youtubeController.seekToTime(subtitle.startTime);
-    youtubeController.play();
+      // 立即播放一次
+      youtubeController.seekToTime(subtitle.startTime);
+      youtubeController.play();
 
-    // 开始循环监控
-    startLoopMonitoring(subtitle);
-  }, [startLoopMonitoring]);
+      // 开始循环监控
+      startLoopMonitoring(subtitle);
+    },
+    [startLoopMonitoring]
+  );
 
   // 停止循环播放
   const stopLooping = useCallback(() => {
@@ -74,16 +76,18 @@ export const useSubtitleLoop = () => {
   }, [stopLoopMonitoring]);
 
   // 切换循环播放状态
-  const toggleLooping = useCallback((currentSubtitle: SubtitleItem | null) => {
-    if (!currentSubtitle) return;
+  const toggleLooping = useCallback(
+    (currentSubtitle: SubtitleItem | null) => {
+      if (!currentSubtitle) return;
 
-
-    if (isLooping) {
-      stopLooping();
-    } else {
-      startLooping(currentSubtitle);
-    }
-  }, [isLooping, startLooping, stopLooping]);
+      if (isLooping) {
+        stopLooping();
+      } else {
+        startLooping(currentSubtitle);
+      }
+    },
+    [isLooping, startLooping, stopLooping]
+  );
 
   // 清理函数
   const cleanup = useCallback(() => {
@@ -93,6 +97,6 @@ export const useSubtitleLoop = () => {
   return {
     isLooping,
     toggleLooping,
-    cleanup
+    cleanup,
   };
 };

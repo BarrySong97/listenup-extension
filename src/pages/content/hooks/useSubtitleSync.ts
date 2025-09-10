@@ -1,29 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { SubtitleItem } from "@src/lib/subtitleTypes";
-import { youtubeController } from "@src/lib/youtubeController";
+import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { youtubeController } from "../lib/youtubeController";
 
 /**
  * 字幕同步逻辑钩子
  * 处理视频时间跟踪和当前字幕高亮
  */
-export const useSubtitleSync = (
-  isYoutube: boolean,
-  subtitles: SubtitleItem[]
-) => {
+export const useSubtitleSync = (subtitles: SubtitleItem[]) => {
   const [currentTime, setCurrentTime] = useState(0);
-  const [isAdPlaying, setIsAdPlaying] = useState(false);
-  const timeUpdateCleanupRef = useRef<(() => void) | null>(null);
-
-  //
-
-  // 检测是否有广告播放
-  const checkAdStatus = () => {
-    const adOverlay = document.querySelector(
-      ".ytp-ad-player-overlay, .ytp-ad-module, .ytp-ad-overlay-slot"
-    );
-    const adText = document.querySelector(".ytp-ad-text, .ytp-ad-skip-button");
-    return !!(adOverlay || adText);
-  };
 
   // 计算当前活跃字幕索引 - 优化重叠处理
   const currentSubtitleIndex = useMemo(() => {
@@ -71,38 +55,13 @@ export const useSubtitleSync = (
     }
 
     return -1;
-  }, [currentTime, subtitles, isAdPlaying]);
+  }, [currentTime, subtitles]);
 
   // 设置视频时间监听
-  useEffect(() => {
-    if (!isYoutube) {
-      return;
-    }
-
-    // 清理之前的监听器
-    if (timeUpdateCleanupRef.current) {
-      timeUpdateCleanupRef.current();
-    }
-
-    // 设置新的时间更新监听器
-    const cleanup = youtubeController.setupTimeUpdateListener((time) => {
-      setCurrentTime(time);
-      // 每次时间更新时检查广告状态
-      setIsAdPlaying(checkAdStatus());
-    });
-
-    timeUpdateCleanupRef.current = cleanup;
-
-    return () => {
-      if (timeUpdateCleanupRef.current) {
-        timeUpdateCleanupRef.current();
-        timeUpdateCleanupRef.current = null;
-      }
-    };
-  }, [isYoutube]);
 
   return {
     currentTime,
     currentSubtitleIndex,
+    setCurrentTime,
   };
 };

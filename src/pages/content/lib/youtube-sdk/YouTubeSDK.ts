@@ -3,11 +3,15 @@
  * Main orchestrator for YouTube interaction
  */
 
-import { YouTubeAdDetector } from './YouTubeAdDetector';
-import { YouTubeVideoController } from './YouTubeVideoController';
-import { YouTubeSubtitleExtractor } from './YouTubeSubtitleExtractor';
-import { YouTubeThemeDetector } from './YouTubeThemeDetector';
-import { AdStateCallback, PlayerStateCallback, ThemeChangeCallback } from './types';
+import { YouTubeAdDetector } from "./YouTubeAdDetector";
+import { YouTubeVideoController } from "./YouTubeVideoController";
+import { YouTubeSubtitleExtractor } from "./YouTubeSubtitleExtractor";
+import { YouTubeThemeDetector } from "./YouTubeThemeDetector";
+import {
+  AdStateCallback,
+  PlayerStateCallback,
+  ThemeChangeCallback,
+} from "./types";
 
 export class YouTubeSDK {
   private adDetector: YouTubeAdDetector;
@@ -15,6 +19,7 @@ export class YouTubeSDK {
   private subtitleExtractor: YouTubeSubtitleExtractor;
   private themeDetector: YouTubeThemeDetector;
   private observer: MutationObserver | null = null;
+  private videoId: string | null = null;
   private originalPushState = history.pushState;
   private originalReplaceState = history.replaceState;
 
@@ -23,9 +28,23 @@ export class YouTubeSDK {
     this.videoController = new YouTubeVideoController();
     this.subtitleExtractor = new YouTubeSubtitleExtractor();
     this.themeDetector = new YouTubeThemeDetector();
-    
+
     // Connect the video controller with ad detector
     this.videoController.setAdDetector(this.adDetector);
+  }
+
+  public getVideoId(): string | null {
+    if (this.videoId) {
+      return this.videoId;
+    }
+    // 使用正则表达式提取 v 参数，兼容后续还有其他参数的情况
+    const match = window.location.search.match(/[?&]v=([^&]+)/);
+    const videoId = match ? match[1] : null;
+    if (videoId) {
+      this.videoId = videoId;
+      return videoId;
+    }
+    return null;
   }
 
   /**
@@ -75,18 +94,18 @@ export class YouTubeSDK {
    */
   private handleUrlChange = (): void => {
     // Reset subtitle cache on navigation
-    this.subtitleExtractor.resetCache();
-    this.setupObserver();
   };
 
   /**
    * Start monitoring
    */
-  public start(options: {
-    onAdStateChange?: AdStateCallback;
-    onPlayerStateChange?: PlayerStateCallback;
-    onThemeChange?: ThemeChangeCallback;
-  } = {}): void {
+  public start(
+    options: {
+      onAdStateChange?: AdStateCallback;
+      onPlayerStateChange?: PlayerStateCallback;
+      onThemeChange?: ThemeChangeCallback;
+    } = {}
+  ): void {
     // Set callbacks
     if (options.onAdStateChange) {
       this.adDetector.setCallback(options.onAdStateChange);
@@ -106,12 +125,12 @@ export class YouTubeSDK {
 
     // Intercept History API for SPA navigation
     const self = this;
-    history.pushState = function(...args) {
+    history.pushState = function (...args) {
       self.originalPushState.apply(history, args);
       self.handleUrlChange();
     };
 
-    history.replaceState = function(...args) {
+    history.replaceState = function (...args) {
       self.originalReplaceState.apply(history, args);
       self.handleUrlChange();
     };
@@ -125,15 +144,15 @@ export class YouTubeSDK {
   public stop(): void {
     this.observer?.disconnect();
     this.observer = null;
-    
+
     // Clear callbacks
     this.adDetector.setCallback(null);
     this.videoController.setCallback(null);
     this.themeDetector.setCallback(null);
-    
+
     // Stop theme monitoring
     this.themeDetector.stopMonitoring();
-    
+
     // Reset states
     this.adDetector.reset();
     this.videoController.reset();
@@ -176,7 +195,7 @@ export class YouTubeSDK {
   /**
    * Convenience methods - delegate to appropriate component
    */
-  
+
   // Ad-related methods
   public isAdPlaying(): boolean {
     return this.adDetector.isAdPlaying();
@@ -223,21 +242,8 @@ export class YouTubeSDK {
     return this.videoController.detectPlayerState();
   }
 
-  // Subtitle-related methods
-  public hasSubtitles(): boolean {
-    return this.subtitleExtractor.hasSubtitles();
-  }
-
-  public getSubtitleUrl(languageCode: string): string | null {
-    return this.subtitleExtractor.getSubtitleUrl(languageCode);
-  }
-
-  public getAllSubtitles() {
-    return this.subtitleExtractor.getAllSubtitles();
-  }
-
-  public getSubtitleData() {
-    return this.subtitleExtractor.getSubtitleData();
+  public async getSubtitleUrl(languageCode: string): Promise<string | null> {
+    return await this.subtitleExtractor.getSubtitleUrl(languageCode);
   }
 
   // Theme-related methods

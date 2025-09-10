@@ -20,7 +20,9 @@
   "permissions": [
     "activeTab",
     "webRequest",
-    "sidePanel"
+    "sidePanel",
+    "storage",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "*://*.youtube.com/*"
@@ -50,9 +52,12 @@
       "resources": [
         "contentStyle.css",
         "icon-128.png",
-        "icon-32.png"
+        "icon-32.png",
+        "scripts/*.js"
       ],
-      "matches": []
+      "matches": [
+        "*://*.youtube.com/*"
+      ]
     }
   ]
 }
