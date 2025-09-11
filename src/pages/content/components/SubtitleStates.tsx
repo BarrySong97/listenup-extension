@@ -1,10 +1,11 @@
-import { memo } from "react";
+import React, { memo } from "react";
 
 interface SubtitleStatesProps {
   loading?: boolean;
   error: string | null;
   isEmpty: boolean;
   isAd: boolean;
+  children?: React.ReactNode;
 }
 
 export const SubtitleStates = memo(function SubtitleStates({
@@ -12,11 +13,11 @@ export const SubtitleStates = memo(function SubtitleStates({
   error,
   isEmpty,
   isAd,
+  children,
 }: SubtitleStatesProps) {
   if (isAd) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
         <p className="text-sm ml-3">ad...</p>
       </div>
     );
@@ -25,7 +26,6 @@ export const SubtitleStates = memo(function SubtitleStates({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
         <p className="text-sm ml-3">loading...</p>
       </div>
     );
@@ -53,5 +53,5 @@ export const SubtitleStates = memo(function SubtitleStates({
   }
 
   // 如果都不是以上状态，返回null（不渲染任何内容）
-  return null;
+  return children;
 });

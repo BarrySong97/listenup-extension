@@ -1,10 +1,6 @@
-// 存储字幕数据
-let subtitleCache: { [tabId: number]: any[] } = {};
-
-// 记录已处理的URL，避免重复处理
-interface ProcessedUrlEntry {
-  url: string;
-  tabId: number;
-  timestamp: number;
-  videoId?: string;
-}
+// 监听来自content script的消息
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "openSidePanel" && sender.tab?.id) {
+    chrome.sidePanel.open({ tabId: sender.tab.id });
+  }
+});

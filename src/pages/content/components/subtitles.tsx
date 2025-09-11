@@ -131,25 +131,26 @@ const Subtitles: FC<SubtitlesProps> = () => {
               error={error}
               loading={loading}
               isEmpty={subtitles.length === 0}
-            />
-            {!loading && !error && subtitles.length > 0 && (
-              <VList
-                ref={vListRef}
-                style={{ height: "100%" }}
-                className="px-4 py-2"
-              >
-                {subtitles.map((subtitle, index) => (
-                  <div key={subtitle.id} className="py-1">
-                    <SubtitleItemComponent
-                      subtitle={subtitle}
-                      index={index}
-                      isActive={index === currentSubtitleIndex}
-                      onSubtitleClick={handleSubtitleClick}
-                    />
-                  </div>
-                ))}
-              </VList>
-            )}
+            >
+              {!loading && !error && subtitles.length > 0 && (
+                <VList
+                  ref={vListRef}
+                  style={{ height: "100%" }}
+                  className="px-4 py-2"
+                >
+                  {subtitles.map((subtitle, index) => (
+                    <div key={subtitle.id} className="py-1">
+                      <SubtitleItemComponent
+                        subtitle={subtitle}
+                        index={index}
+                        isActive={index === currentSubtitleIndex}
+                        onSubtitleClick={handleSubtitleClick}
+                      />
+                    </div>
+                  ))}
+                </VList>
+              )}
+            </SubtitleStates>
           </CardBody>
 
           {/* 字幕底部控制组件 */}
