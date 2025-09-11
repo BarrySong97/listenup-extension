@@ -22,10 +22,13 @@
     "webRequest",
     "sidePanel",
     "storage",
+    "declarativeNetRequest",
     "unlimitedStorage"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*"
+    "*://*.youtube.com/*",
+    "*://*.openai.com/*",
+    "*://chatgpt.com/*"
   ],
   "background": {
     "service_worker": "src/pages/background/index.ts",
@@ -46,6 +49,9 @@
       ]
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://*.openai.com https://*.chatgpt.com https://chatgpt.com; style-src 'self' 'unsafe-inline';"
+  },
   "devtools_page": "src/pages/devtools/index.html",
   "web_accessible_resources": [
     {
