@@ -41,8 +41,6 @@ Package manager: **pnpm** (see `pnpm-lock.yaml`)
 | Page | Path | Purpose |
 |------|------|---------|
 | **content** | `src/pages/content/` | Core functionality - injected into YouTube pages, renders subtitle panel in Shadow DOM |
-| **background** | `src/pages/background/index.ts` | Service worker - handles side panel opening and `declarativeNetRequest` rules to strip CSP headers for ChatGPT iframe |
-| **panel** | `src/pages/panel/Panel.tsx` | Side panel - embeds ChatGPT iframe |
 | **popup** | `src/pages/popup/Popup.tsx` | Extension popup (currently template placeholder) |
 | **options** | `src/pages/options/` | Settings page (currently template placeholder) |
 | **newtab** | `src/pages/newtab/` | New tab override (currently template placeholder) |
@@ -91,7 +89,7 @@ There is also a legacy `youtubeController.ts` which provides a simpler interface
 
 **UI Components** (`components/`):
 - `subtitles.tsx` - Main container: floating card (454x774px, fixed position), slide-in animation, toggle button
-- `SubtitleHeader.tsx` - Title bar with copy (all/LLM format) and download (SRT/TXT) dropdown menus, side panel open button
+- `SubtitleHeader.tsx` - Title bar with copy (all/LLM format) and download (SRT/TXT) dropdown menus
 - `SubtitleItem.tsx` - Individual subtitle row: time display, word-level buttons (click copies explain prompt, shift+click selects phrase), copy/explain action buttons
 - `SubtitleFooter.tsx` - Playback controls: play/pause segment, loop toggle, audio recording controls
 - `SubtitleStates.tsx` - Loading/error/empty/ad state displays
@@ -109,11 +107,9 @@ There is also a legacy `youtubeController.ts` which provides a simpler interface
 ### Permissions & Host Access
 
 ```
-permissions: activeTab, webRequest, sidePanel, storage, declarativeNetRequest, unlimitedStorage
-host_permissions: *://*.youtube.com/*, *://*.openai.com/*, *://chatgpt.com/*
+permissions: activeTab, storage, unlimitedStorage
+host_permissions: *://*.youtube.com/*
 ```
-
-The background script uses `declarativeNetRequest` to strip `content-security-policy`, `x-frame-options`, and related headers from `chatgpt.com` responses, enabling the ChatGPT iframe in the side panel.
 
 ### Web Accessible Resources
 

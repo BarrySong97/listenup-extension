@@ -11,29 +11,17 @@
       "32": "icon-32.png"
     }
   },
-  "side_panel": {
-    "default_path": "src/pages/panel/index.html"
-  },
   "icons": {
     "128": "icon-128.png"
   },
   "permissions": [
     "activeTab",
-    "webRequest",
-    "sidePanel",
     "storage",
-    "declarativeNetRequest",
     "unlimitedStorage"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
-    "*://*.openai.com/*",
-    "*://chatgpt.com/*"
+    "*://*.youtube.com/*"
   ],
-  "background": {
-    "service_worker": "src/pages/background/index.ts",
-    "type": "module"
-  },
   "content_scripts": [
     {
       "matches": [
@@ -50,7 +38,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://*.openai.com https://*.chatgpt.com https://chatgpt.com; style-src 'self' 'unsafe-inline';"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   "devtools_page": "src/pages/devtools/index.html",
   "web_accessible_resources": [

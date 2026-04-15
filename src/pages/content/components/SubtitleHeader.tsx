@@ -131,10 +131,6 @@ export const SubtitleHeader = memo(function SubtitleHeader({
     }
   };
 
-  const handleOpenSidePanel = () => {
-    chrome.runtime.sendMessage({ action: "openSidePanel" });
-  };
-
   // 配置dropdown菜单项
   const copyDropdownItems: DropdownItem[] = [
     {
@@ -187,15 +183,6 @@ export const SubtitleHeader = memo(function SubtitleHeader({
                 </Button>
               }
             />
-            <Button
-              size="sm"
-              variant="flat"
-              onPressStart={handleOpenSidePanel}
-              className="min-w-0"
-            >
-              <Icon icon="mdi:dock-right" className="w-4 h-4" />
-              Panel
-            </Button>
             <Dropdown
               items={copyDropdownItems}
               trigger={
