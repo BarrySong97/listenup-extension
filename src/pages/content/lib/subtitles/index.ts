@@ -1,4 +1,5 @@
-// 导出所有字幕相关功能
-export * from "../subtitleTypes";
-export * from "../subtitleParser";
-export * from "../subtitleFetcher";
+export * from "./subtitleTypes";
+export * from "./subtitleParser";
+export * from "./subtitleCleaner";
+export * from "./subtitleMerger";
+export * from "./subtitleConfig";

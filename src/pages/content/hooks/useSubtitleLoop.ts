@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
-import { youtubeController } from "../lib/youtubeController";
+import { youtubeSDK } from "../lib/youtube-sdk";
 
 export const useSubtitleLoop = () => {
   const [isLooping, setIsLooping] = useState(false);
@@ -11,13 +11,14 @@ export const useSubtitleLoop = () => {
   const checkVideoTime = useCallback(() => {
     if (!loopTargetSubtitle.current) return;
 
-    const currentTime = youtubeController.getCurrentTime();
+    const player = youtubeSDK.getPlayerFacade();
+    const currentTime = player.getCurrentTime();
     const subtitle = loopTargetSubtitle.current;
 
     // 如果视频播放超出字幕结束时间，立即跳回字幕开始
     if (currentTime >= subtitle.endTime) {
-      youtubeController.seekToTime(subtitle.startTime);
-      youtubeController.play();
+      player.seekTo(subtitle.startTime);
+      player.play();
     }
   }, []);
 
@@ -34,7 +35,7 @@ export const useSubtitleLoop = () => {
 
       // 每100ms检查一次视频时间
       loopCheckInterval.current = setInterval(() => {
-        const videoPlaying = youtubeController.isPlaying();
+        const videoPlaying = youtubeSDK.getPlayerFacade().isPlaying();
 
         if (videoPlaying) {
           checkVideoTime();
@@ -56,11 +57,12 @@ export const useSubtitleLoop = () => {
   // 开始循环播放
   const startLooping = useCallback(
     (subtitle: SubtitleItem) => {
+      const player = youtubeSDK.getPlayerFacade();
       setIsLooping(true);
 
       // 立即播放一次
-      youtubeController.seekToTime(subtitle.startTime);
-      youtubeController.play();
+      player.seekTo(subtitle.startTime);
+      player.play();
 
       // 开始循环监控
       startLoopMonitoring(subtitle);
@@ -72,7 +74,7 @@ export const useSubtitleLoop = () => {
   const stopLooping = useCallback(() => {
     setIsLooping(false);
     stopLoopMonitoring();
-    youtubeController.pause();
+    youtubeSDK.getPlayerFacade().pause();
   }, [stopLoopMonitoring]);
 
   // 切换循环播放状态

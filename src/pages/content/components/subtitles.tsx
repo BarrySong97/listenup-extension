@@ -1,18 +1,16 @@
 import { Button, Card, CardBody } from "@heroui/react";
-import { FC, useEffect, useRef, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import {
-  YouTubeSDK,
   youtubeSDK,
   YouTubeTheme,
 } from "@pages/content/lib/youtube-sdk";
-import { motion, AnimatePresence } from "framer-motion";
-import { Icon } from "@iconify/react";
+import { motion } from "framer-motion";
 import {
   MaterialSymbolsSubtitlesGearOutlineSharp,
   MaterialSymbolsSubtitlesGearRounded,
 } from "../icon";
 import { SubtitleStates } from "./SubtitleStates";
-import { useSubtitleContent } from "../hooks/useSubtitleContent";
+import { useSubtitles } from "../hooks/useSubtitles";
 import { useSubtitleSync } from "../hooks/useSubtitleSync";
 import { VList } from "virtua";
 import { SubtitleItemComponent } from "./SubtitleItem";
@@ -21,10 +19,6 @@ import { useSubtitleAutoScroll } from "../hooks/useSubtitleAutoScroll";
 import { SubtitleFooter } from "./SubtitleFooter";
 import { useSubtitleLoop } from "../hooks/useSubtitleLoop";
 import { SubtitleHeader } from "./SubtitleHeader";
-type CaptionMessage = {
-  type: "YT_CAPTION_URL";
-  url: string | null;
-};
 
 export interface SubtitlesProps {}
 const Subtitles: FC<SubtitlesProps> = () => {
@@ -33,9 +27,11 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [headerHeight, setheaderHeig] = useState(0);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
-  const YoutubeSDK = useRef<YouTubeSDK>(youtubeSDK);
-  const [url, setUrl] = useState<string | undefined>(undefined);
-  const { subtitles, loading, error } = useSubtitleContent(url);
+  const [videoId, setVideoId] = useState<string | null>(youtubeSDK.getVideoId());
+  const { subtitles, loading, error } = useSubtitles({
+    enabled: !isAdPlaying,
+    videoId,
+  });
   const { currentSubtitleIndex, setCurrentTime } = useSubtitleSync(subtitles);
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
   const { vListRef } = useSubtitleAutoScroll(currentSubtitleIndex, isAdPlaying);
@@ -52,7 +48,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
 
   // 初始化YoutubeSDK
   useEffect(() => {
-    YoutubeSDK.current.start({
+    youtubeSDK.start({
       onThemeChange: (theme) => {
         setYoutbeTheme(theme);
       },
@@ -62,25 +58,14 @@ const Subtitles: FC<SubtitlesProps> = () => {
       onPlayerStateChange: (playerState) => {
         setCurrentTime(playerState.currentTime);
       },
+      onSessionChange: (sessionState) => {
+        setVideoId(sessionState.videoId);
+      },
     });
     return () => {
       youtubeSDK.stop();
     };
   }, []);
-
-  // 获取字幕
-  useEffect(() => {
-    if (isAdPlaying || subtitles.length > 0) {
-      return;
-    }
-
-    YoutubeSDK.current.getSubtitleUrl("en").then((res) => {
-      if (res) {
-        setUrl(res);
-      }
-    });
-    // 找到第一个为en的字幕，或者en-US的字幕
-  }, [isAdPlaying, subtitles]);
   // 组件卸载时清理循环播放
   useEffect(() => {
     return () => {

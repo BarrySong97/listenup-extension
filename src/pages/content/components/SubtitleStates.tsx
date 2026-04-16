@@ -35,8 +35,9 @@ export const SubtitleStates = memo(function SubtitleStates({
   if (error) {
     return (
       <div className="p-4 flex items-center justify-center h-full">
-        {/* <p className="text-sm text-warning">{error}</p> */}
-        <p className="text-xs mt-1 ">error</p>
+        <p className="text-xs mt-1 break-words whitespace-pre-wrap text-center">
+          {error}
+        </p>
       </div>
     );
   }

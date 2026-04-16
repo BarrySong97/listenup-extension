@@ -20,6 +20,7 @@ const App: FC<AppProps> = () => {
 
       setIsYoutube(isVideoPage);
     };
+    isYoutube();
     window.addEventListener("yt-navigate-finish", isYoutube);
     return () => {
       window.removeEventListener("yt-navigate-finish", isYoutube);

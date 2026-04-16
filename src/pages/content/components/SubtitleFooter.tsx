@@ -3,7 +3,7 @@ import { Icon } from "@iconify/react";
 import React, { FC, useState, useCallback, useEffect, useRef } from "react";
 import { useAudioRecording } from "../hooks/useAudioRecording";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
-import { youtubeController } from "../lib/youtubeController";
+import { youtubeSDK } from "../lib/youtube-sdk";
 
 interface SubtitleFooterProps {
   currentSubtitle: SubtitleItem | null;
@@ -35,19 +35,19 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
 
   // 监听视频播放状态变化
   useEffect(() => {
+    const player = youtubeSDK.getPlayerFacade();
     if (playStateCleanup.current) {
       playStateCleanup.current();
     }
 
-    const cleanup = youtubeController.setupPlayStateListener(
-      () => setIsVideoPlaying(true),
-      () => setIsVideoPlaying(false)
+    const cleanup = player.subscribePlayState(
+      (playing) => setIsVideoPlaying(playing)
     );
 
     playStateCleanup.current = cleanup;
 
     // 初始状态检查
-    setIsVideoPlaying(youtubeController.isPlaying());
+    setIsVideoPlaying(player.isPlaying());
 
     return () => {
       if (playStateCleanup.current) {
@@ -61,13 +61,14 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
   const playCurrentSubtitle = useCallback(() => {
     if (!currentSubtitle) return;
 
-    youtubeController.seekToTime(currentSubtitle.startTime);
-    youtubeController.play();
+    const player = youtubeSDK.getPlayerFacade();
+    player.seekTo(currentSubtitle.startTime);
+    player.play();
   }, [currentSubtitle]);
 
   // 暂停视频
   const pauseCurrentVideo = useCallback(() => {
-    youtubeController.pause();
+    youtubeSDK.getPlayerFacade().pause();
   }, []);
 
   // 播放/暂停视频片段

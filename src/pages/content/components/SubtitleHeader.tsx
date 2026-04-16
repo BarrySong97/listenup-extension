@@ -2,6 +2,7 @@ import { memo, useState } from "react";
 import { CardHeader, Divider, Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { Dropdown, type DropdownItem } from "@src/components/ui";
+import { subtitleDebug } from "../lib/subtitle-domain/subtitleDebug";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 
 interface SubtitleHeaderProps {
@@ -15,6 +16,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   subtitles,
 }: SubtitleHeaderProps) {
   const [copyStatus, setCopyStatus] = useState(false);
+  const [exportStatus, setExportStatus] = useState(false);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -28,6 +30,13 @@ export const SubtitleHeader = memo(function SubtitleHeader({
     setCopyStatus(true);
     setTimeout(() => {
       setCopyStatus(false);
+    }, 1500);
+  };
+
+  const showExportSuccess = () => {
+    setExportStatus(true);
+    setTimeout(() => {
+      setExportStatus(false);
     }, 1500);
   };
 
@@ -131,6 +140,11 @@ export const SubtitleHeader = memo(function SubtitleHeader({
     }
   };
 
+  const handleExportLogs = () => {
+    subtitleDebug.exportLogs();
+    showExportSuccess();
+  };
+
   // 配置dropdown菜单项
   const copyDropdownItems: DropdownItem[] = [
     {
@@ -168,6 +182,18 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         <div className="flex justify-between items-center w-full">
           <h3 className="text-base font-semibold">{title}</h3>
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="flat"
+              onPressStart={handleExportLogs}
+              className="min-w-0"
+            >
+              <Icon
+                icon={exportStatus ? "mdi:check" : "mdi:file-export-outline"}
+                className="w-4 h-4"
+              />
+              {exportStatus ? "Exported" : "Logs"}
+            </Button>
             <Dropdown
               items={downloadDropdownItems}
               trigger={

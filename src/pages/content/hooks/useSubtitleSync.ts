@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
-import { youtubeController } from "../lib/youtubeController";
 
 /**
  * 字幕同步逻辑钩子
