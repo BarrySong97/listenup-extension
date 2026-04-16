@@ -1,14 +1,9 @@
-import { Button, Card, CardBody } from "@heroui/react";
-import { FC, useEffect, useState } from "react";
-import {
-  youtubeSDK,
-  YouTubeTheme,
-} from "@pages/content/lib/youtube-sdk";
+import { FC, useCallback, useEffect, useRef, useState } from "react";
+import { youtubeSDK, YouTubeTheme } from "@pages/content/lib/youtube-sdk";
 import { motion } from "framer-motion";
-import {
-  MaterialSymbolsSubtitlesGearOutlineSharp,
-  MaterialSymbolsSubtitlesGearRounded,
-} from "../icon";
+import { Icon } from "@iconify/react";
+import { Button } from "@heroui/react";
+import { iconScale } from "@src/components/ui/iconScale";
 import { SubtitleStates } from "./SubtitleStates";
 import { useSubtitles } from "../hooks/useSubtitles";
 import { useSubtitleSync } from "../hooks/useSubtitleSync";
@@ -16,18 +11,28 @@ import { VList } from "virtua";
 import { SubtitleItemComponent } from "./SubtitleItem";
 import { useSubtitleNavigation } from "../hooks/useSubtitleNavigation";
 import { useSubtitleAutoScroll } from "../hooks/useSubtitleAutoScroll";
+import { ActiveSegmentPanel } from "./ActiveSegmentPanel";
+import { PlaybackDivider } from "./PlaybackDivider";
 import { SubtitleFooter } from "./SubtitleFooter";
 import { useSubtitleLoop } from "../hooks/useSubtitleLoop";
 import { SubtitleHeader } from "./SubtitleHeader";
 
 export interface SubtitlesProps {}
+
+const panelAnimation = {
+  initial: { x: 380, opacity: 0.6 },
+  animate: { x: 0, opacity: 1 },
+  exit: { x: 380, opacity: 0.6 },
+};
+
 const Subtitles: FC<SubtitlesProps> = () => {
-  // 使用各种专门的hooks
-  const [youtbeTheme, setYoutbeTheme] = useState<YouTubeTheme | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [headerHeight, setheaderHeig] = useState(0);
+  const [youtubeTheme, setYoutubeTheme] = useState<YouTubeTheme | null>(null);
+  const [isOpen, setIsOpen] = useState(true);
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(youtubeSDK.getVideoId());
+  const playStateCleanup = useRef<(() => void) | null>(null);
   const { subtitles, loading, error } = useSubtitles({
     enabled: !isAdPlaying,
     videoId,
@@ -36,21 +41,18 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
   const { vListRef } = useSubtitleAutoScroll(currentSubtitleIndex, isAdPlaying);
   const { isLooping, toggleLooping, cleanup: cleanupLoop } = useSubtitleLoop();
-  // 获取header高度
+
   useEffect(() => {
     const header = document.querySelector("#masthead");
     if (header) {
-      setheaderHeig(header.clientHeight);
+      setHeaderHeight(header.clientHeight);
     }
-
-    return () => {};
   }, []);
 
-  // 初始化YoutubeSDK
   useEffect(() => {
     youtubeSDK.start({
       onThemeChange: (theme) => {
-        setYoutbeTheme(theme);
+        setYoutubeTheme(theme);
       },
       onAdStateChange: (adState) => {
         setIsAdPlaying(adState.isAdPlaying);
@@ -62,55 +64,91 @@ const Subtitles: FC<SubtitlesProps> = () => {
         setVideoId(sessionState.videoId);
       },
     });
+
     return () => {
       youtubeSDK.stop();
     };
-  }, []);
-  // 组件卸载时清理循环播放
+  }, [setCurrentTime]);
+
+  useEffect(() => {
+    const player = youtubeSDK.getPlayerFacade();
+    if (playStateCleanup.current) {
+      playStateCleanup.current();
+    }
+
+    const cleanup = player.subscribePlayState((playing) => {
+      setIsVideoPlaying(playing);
+    });
+
+    playStateCleanup.current = cleanup;
+    setIsVideoPlaying(player.isPlaying());
+
+    return () => {
+      if (playStateCleanup.current) {
+        playStateCleanup.current();
+        playStateCleanup.current = null;
+      }
+    };
+  }, [videoId]);
+
   useEffect(() => {
     return () => {
       cleanupLoop();
     };
   }, [cleanupLoop]);
-  const variant = {
-    initial: { x: 480 },
-    animate: { x: 0 },
-    exit: { x: 480 },
-  };
+
   const currentSubtitle =
     currentSubtitleIndex >= 0 && currentSubtitleIndex < subtitles.length
       ? subtitles[currentSubtitleIndex]
       : null;
 
+  const playCurrentSubtitle = useCallback(() => {
+    if (!currentSubtitle) return;
+
+    const player = youtubeSDK.getPlayerFacade();
+    player.seekTo(currentSubtitle.startTime);
+    player.play();
+  }, [currentSubtitle]);
+
+  const pauseCurrentVideo = useCallback(() => {
+    youtubeSDK.getPlayerFacade().pause();
+  }, []);
+
+  const toggleVideoPlayback = useCallback(() => {
+    if (isVideoPlaying) {
+      pauseCurrentVideo();
+      return;
+    }
+
+    playCurrentSubtitle();
+  }, [isVideoPlaying, pauseCurrentVideo, playCurrentSubtitle]);
+
   return (
-    <div className={`${youtbeTheme === "dark" ? "dark" : "light"}`}>
+    <div className={youtubeTheme === "dark" ? "dark" : "light"}>
       <motion.div
         id="listenup"
         style={{
-          height: "774px",
-          width: "454px",
-          top: headerHeight + 24,
-          display: "block",
+          height: "600px",
+          width: "360px",
+          top: headerHeight + 16,
           zIndex: 9999,
           position: "fixed",
-          right: 16,
+          right: 12,
         }}
         initial="initial"
         animate={isOpen ? "animate" : "exit"}
-        variants={variant}
+        variants={panelAnimation}
         transition={{
           type: "spring",
-          stiffness: 300,
-          damping: 30,
-          duration: 0.3,
+          stiffness: 320,
+          damping: 32,
         }}
+        className={isOpen ? "pointer-events-auto" : "pointer-events-none"}
       >
-        <Card shadow="lg" className="h-full w-full">
-          <SubtitleHeader
-            subtitleCount={subtitles.length}
-            subtitles={subtitles}
-          />
-          <CardBody className="p-0">
+        <div className="flex h-full flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl">
+          <SubtitleHeader subtitles={subtitles} onClose={() => setIsOpen(false)} />
+
+          <div className="min-h-0 flex-1 bg-zinc-50/30">
             <SubtitleStates
               isAd={isAdPlaying}
               error={error}
@@ -121,24 +159,37 @@ const Subtitles: FC<SubtitlesProps> = () => {
                 <VList
                   ref={vListRef}
                   style={{ height: "100%" }}
-                  className="px-4 py-2"
+                  className="custom-scrollbar bg-zinc-50/30"
                 >
                   {subtitles.map((subtitle, index) => (
-                    <div key={subtitle.id} className="py-1">
-                      <SubtitleItemComponent
-                        subtitle={subtitle}
-                        index={index}
-                        isActive={index === currentSubtitleIndex}
-                        onSubtitleClick={handleSubtitleClick}
-                      />
-                    </div>
+                    <SubtitleItemComponent
+                      key={subtitle.id}
+                      subtitle={subtitle}
+                      index={index}
+                      isActive={index === currentSubtitleIndex}
+                      onSubtitleClick={handleSubtitleClick}
+                    />
                   ))}
                 </VList>
               )}
             </SubtitleStates>
-          </CardBody>
+          </div>
 
-          {/* 字幕底部控制组件 */}
+          <PlaybackDivider
+            isPlaying={isVideoPlaying}
+            onTogglePlayback={toggleVideoPlayback}
+          />
+
+          <ActiveSegmentPanel
+            currentSubtitle={currentSubtitle}
+            isActive={
+              !loading &&
+              !error &&
+              subtitles.length > 0 &&
+              currentSubtitleIndex >= 0
+            }
+          />
+
           <SubtitleFooter
             currentSubtitle={currentSubtitle}
             isActive={
@@ -149,23 +200,30 @@ const Subtitles: FC<SubtitlesProps> = () => {
             }
             isLooping={isLooping}
             onToggleLoop={() => toggleLooping(currentSubtitle)}
+            isSegmentPlaying={isVideoPlaying}
           />
-        </Card>
+
+          <div className="flex h-1 items-center justify-center bg-white">
+            <div className="h-1 w-12 rounded-full bg-zinc-200" />
+          </div>
+        </div>
       </motion.div>
-      <div className="fixed bottom-4 right-6 z-30 ">
-        <Button
-          radius="full"
-          isIconOnly
-          onPressStart={() => setIsOpen(!isOpen)}
-          color="primary"
-        >
-          {isOpen ? (
-            <MaterialSymbolsSubtitlesGearOutlineSharp />
-          ) : (
-            <MaterialSymbolsSubtitlesGearRounded />
-          )}
-        </Button>
-      </div>
+
+      {!isOpen && (
+        <div className="fixed bottom-4 right-6 z-[9999]">
+          <Button
+            isIconOnly
+            radius="full"
+            color="default"
+            variant="solid"
+            className="h-12 w-12 bg-zinc-900 text-white shadow-[0_14px_30px_rgba(15,23,42,0.22)] transition-colors hover:bg-zinc-800"
+            onPressStart={() => setIsOpen(true)}
+            aria-label="Open Listen Up panel"
+          >
+            <Icon icon="mdi:subtitles-outline" className={iconScale.launcher} />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

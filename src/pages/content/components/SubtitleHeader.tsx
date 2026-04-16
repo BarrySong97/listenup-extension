@@ -1,19 +1,24 @@
 import { memo, useState } from "react";
-import { CardHeader, Divider, Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
+import { Button } from "@heroui/react";
+import { iconScale } from "@src/components/ui/iconScale";
 import { Dropdown, type DropdownItem } from "@src/components/ui";
 import { subtitleDebug } from "../lib/subtitle-domain/subtitleDebug";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 
 interface SubtitleHeaderProps {
-  subtitleCount: number;
   title?: string;
   subtitles: SubtitleItem[];
+  onClose: () => void;
 }
+
+const actionButtonClassName =
+  "h-9 w-9 min-w-0 rounded-md p-0 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 data-[hover=true]:bg-zinc-100 data-[hover=true]:text-zinc-900";
 
 export const SubtitleHeader = memo(function SubtitleHeader({
   title = "Listen Up",
   subtitles,
+  onClose,
 }: SubtitleHeaderProps) {
   const [copyStatus, setCopyStatus] = useState(false);
   const [exportStatus, setExportStatus] = useState(false);
@@ -28,14 +33,14 @@ export const SubtitleHeader = memo(function SubtitleHeader({
 
   const showCopySuccess = () => {
     setCopyStatus(true);
-    setTimeout(() => {
+    window.setTimeout(() => {
       setCopyStatus(false);
     }, 1500);
   };
 
   const showExportSuccess = () => {
     setExportStatus(true);
-    setTimeout(() => {
+    window.setTimeout(() => {
       setExportStatus(false);
     }, 1500);
   };
@@ -51,7 +56,6 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         .join("\n\n");
 
       await navigator.clipboard.writeText(allSubtitlesText);
-
       showCopySuccess();
     } catch (error) {
       console.error("Copy failed:", error);
@@ -69,7 +73,6 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         .join("\n");
 
       await navigator.clipboard.writeText(llmText);
-
       showCopySuccess();
     } catch (error) {
       console.error("Copy failed:", error);
@@ -145,18 +148,26 @@ export const SubtitleHeader = memo(function SubtitleHeader({
     showExportSuccess();
   };
 
-  // 配置dropdown菜单项
+  const menuDropdownItems: DropdownItem[] = [
+    {
+      key: "export-logs",
+      label: exportStatus ? "Logs exported" : "Export logs",
+      icon: exportStatus ? "mdi:check" : "mdi:format-list-bulleted",
+      onClick: handleExportLogs,
+    },
+  ];
+
   const copyDropdownItems: DropdownItem[] = [
     {
       key: "copy-all",
-      label: "Copy All Subtitles",
+      label: "Copy all subtitles",
       icon: "mdi:content-copy",
       onClick: handleCopyAllSubtitles,
     },
     {
       key: "copy-llm",
       label: "Copy for LLM",
-      icon: "mdi:robot",
+      icon: "mdi:robot-outline",
       onClick: handleCopyForLLM,
     },
   ];
@@ -177,65 +188,90 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   ];
 
   return (
-    <>
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center w-full">
-          <h3 className="text-base font-semibold">{title}</h3>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="flat"
-              onPressStart={handleExportLogs}
-              className="min-w-0"
-            >
-              <Icon
-                icon={exportStatus ? "mdi:check" : "mdi:file-export-outline"}
-                className="w-4 h-4"
-              />
-              {exportStatus ? "Exported" : "Logs"}
-            </Button>
-            <Dropdown
-              items={downloadDropdownItems}
-              trigger={
-                <Button
-                  size="sm"
-                  variant="flat"
-                  isDisabled={subtitles.length === 0}
-                  className="min-w-0"
-                >
-                  <Icon icon="mdi:download" className="w-4 h-4" />
-                  Download
-                  <Icon icon="mdi:chevron-down" className="w-4 h-4" />
-                </Button>
-              }
-            />
-            <Dropdown
-              items={copyDropdownItems}
-              trigger={
-                <Button
-                  size="sm"
-                  variant="flat"
-                  isDisabled={subtitles.length === 0}
-                  className="min-w-0"
-                >
-                  {copyStatus ? (
-                    <>
-                      <Icon icon="mdi:check" className="w-4 h-4" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      Copy
-                      <Icon icon="mdi:chevron-down" className="w-4 h-4" />
-                    </>
-                  )}
-                </Button>
-              }
-            />
+    <div className="sticky top-0 z-10 border-b border-zinc-100 bg-white/95 px-3 py-2.5 backdrop-blur-md">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-600">
+            <Icon icon="mdi:waveform" className={`${iconScale.brand} text-white`} />
+          </div>
+          <div className="truncate text-sm font-semibold tracking-tight text-zinc-900">
+            {title}
           </div>
         </div>
-      </CardHeader>
-      <Divider />
-    </>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Dropdown
+            items={menuDropdownItems}
+            menuClassName="min-w-40"
+            trigger={
+              <Button
+                isIconOnly
+                size="md"
+                variant="light"
+                className={actionButtonClassName}
+                aria-label="More actions"
+                title="Logs"
+              >
+                <Icon
+                  icon="mdi:format-list-bulleted"
+                  className={iconScale.headerAction}
+                />
+              </Button>
+            }
+          />
+          <Dropdown
+            items={downloadDropdownItems}
+            menuClassName="min-w-44"
+            trigger={
+              <Button
+                isIconOnly
+                size="md"
+                variant="light"
+                className={actionButtonClassName}
+                aria-label="Download subtitles"
+                title="Download"
+              >
+                <Icon
+                  icon="mdi:download-outline"
+                  className={iconScale.headerAction}
+                />
+              </Button>
+            }
+          />
+          <Dropdown
+            items={copyDropdownItems}
+            menuClassName="min-w-44"
+            trigger={
+              <Button
+                isIconOnly
+                size="md"
+                variant="light"
+                className={`${actionButtonClassName} ${
+                  copyStatus ? "text-blue-600" : ""
+                }`}
+                aria-label="Copy subtitles"
+                title="Copy"
+              >
+                <Icon
+                  icon={copyStatus ? "mdi:check" : "mdi:content-copy"}
+                  className={iconScale.headerAction}
+                />
+              </Button>
+            }
+          />
+          <div className="mx-1 h-4 w-px bg-zinc-200" />
+          <Button
+            isIconOnly
+            size="md"
+            variant="light"
+            className={actionButtonClassName}
+            aria-label="Close panel"
+            onPressStart={onClose}
+          >
+            <Icon icon="mdi:close" className={iconScale.headerAction} />
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 });

@@ -1,6 +1,5 @@
-import React from 'react';
-import '@pages/options/Options.css';
+import Newtab from "@pages/newtab/Newtab";
 
 export default function Options() {
-  return <div className="container">Options</div>;
+  return <Newtab />;
 }

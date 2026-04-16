@@ -84,6 +84,16 @@ export const Dropdown: React.FC<DropdownProps> = ({
     }
   };
 
+  const mergeHandlers = <T extends (...args: any[]) => void>(
+    original?: T,
+    injected?: T
+  ) => {
+    return (...args: Parameters<NonNullable<T>>) => {
+      original?.(...args);
+      injected?.(...args);
+    };
+  };
+
   const handleItemClick = (item: DropdownItem) => {
     item.onClick();
     setIsOpen(false);
@@ -94,7 +104,8 @@ export const Dropdown: React.FC<DropdownProps> = ({
 
   // 克隆trigger并添加onPressStart事件
   const triggerWithEvent = cloneElement(trigger, {
-    onPressStart: handleTriggerClick,
+    onPressStart: mergeHandlers((trigger.props as any).onPressStart, handleTriggerClick),
+    onClick: mergeHandlers((trigger.props as any).onClick, handleTriggerClick),
   } as any);
 
   return (
@@ -112,15 +123,14 @@ export const Dropdown: React.FC<DropdownProps> = ({
             transition={{ duration: 0.15, ease: "easeOut" }}
             className={`absolute right-0 top-full mt-1 z-50 ${menuClassName}`}
           >
-            <Listbox className="bg-content1 border border-divider rounded-lg shadow-lg min-w-40">
+            <Listbox className="min-w-40 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg">
               {items.map((item) => (
                 <ListboxItem
                   key={item.key}
                   startContent={
                     item.icon && <Icon icon={item.icon} className="w-4 h-4" />
                   }
-                  className="text-sm"
-                  // onClick={() => handleItemClick(item)}
+                  className="rounded-md text-sm text-zinc-700 data-[hover=true]:bg-zinc-100 data-[hover=true]:text-zinc-900"
                   onPressStart={() => handleItemClick(item)}
                 >
                   {item.label}
