@@ -1,6 +1,6 @@
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { youtubeSDK, YouTubeTheme } from "@pages/content/lib/youtube-sdk";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { Button } from "@heroui/react";
 import { iconScale } from "@src/components/ui/iconScale";
@@ -13,6 +13,7 @@ import { useSubtitleNavigation } from "../hooks/useSubtitleNavigation";
 import { useSubtitleAutoScroll } from "../hooks/useSubtitleAutoScroll";
 import { ActiveSegmentPanel } from "./ActiveSegmentPanel";
 import { PlaybackDivider } from "./PlaybackDivider";
+import { ReturnToActiveButton } from "./ReturnToActiveButton";
 import { SubtitleFooter } from "./SubtitleFooter";
 import { useSubtitleLoop } from "../hooks/useSubtitleLoop";
 import { SubtitleHeader } from "./SubtitleHeader";
@@ -39,7 +40,13 @@ const Subtitles: FC<SubtitlesProps> = () => {
   });
   const { currentSubtitleIndex, setCurrentTime } = useSubtitleSync(subtitles);
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
-  const { vListRef } = useSubtitleAutoScroll(currentSubtitleIndex, isAdPlaying);
+  const {
+    vListRef,
+    showReturnToActive,
+    returnToActiveSubtitle,
+    handleListScroll,
+    handleListScrollEnd,
+  } = useSubtitleAutoScroll(currentSubtitleIndex, isAdPlaying);
   const { isLooping, toggleLooping, cleanup: cleanupLoop } = useSubtitleLoop();
 
   useEffect(() => {
@@ -148,7 +155,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
         <div className="flex h-full flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl">
           <SubtitleHeader subtitles={subtitles} onClose={() => setIsOpen(false)} />
 
-          <div className="min-h-0 flex-1 bg-zinc-50/30">
+          <div className="relative min-h-0 flex-1 bg-zinc-50/30">
             <SubtitleStates
               isAd={isAdPlaying}
               error={error}
@@ -160,6 +167,8 @@ const Subtitles: FC<SubtitlesProps> = () => {
                   ref={vListRef}
                   style={{ height: "100%" }}
                   className="custom-scrollbar bg-zinc-50/30"
+                  onScroll={handleListScroll}
+                  onScrollEnd={handleListScrollEnd}
                 >
                   {subtitles.map((subtitle, index) => (
                     <SubtitleItemComponent
@@ -173,6 +182,15 @@ const Subtitles: FC<SubtitlesProps> = () => {
                 </VList>
               )}
             </SubtitleStates>
+
+            <AnimatePresence>
+              {showReturnToActive &&
+                !loading &&
+                !error &&
+                subtitles.length > 0 && (
+                  <ReturnToActiveButton onPress={returnToActiveSubtitle} />
+                )}
+            </AnimatePresence>
           </div>
 
           <PlaybackDivider

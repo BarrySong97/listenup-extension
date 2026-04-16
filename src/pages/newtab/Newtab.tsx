@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
+import { AnimatePresence } from "framer-motion";
 import { iconScale } from "@src/components/ui/iconScale";
 import { SubtitleHeader } from "@pages/content/components/SubtitleHeader";
 import { SubtitleStates } from "@pages/content/components/SubtitleStates";
 import { SubtitleItemComponent } from "@pages/content/components/SubtitleItem";
 import { PlaybackDivider } from "@pages/content/components/PlaybackDivider";
 import { ActiveSegmentPanel } from "@pages/content/components/ActiveSegmentPanel";
+import { ReturnToActiveButton } from "@pages/content/components/ReturnToActiveButton";
 import { SubtitleFooter } from "@pages/content/components/SubtitleFooter";
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 
@@ -61,6 +63,48 @@ const mockSubtitles: SubtitleItem[] = [
     endTime: 102,
     text: "A dedicated preview page makes rapid UI iteration much faster than reloading YouTube.",
   },
+  {
+    id: "s9",
+    startTime: 102,
+    endTime: 116,
+    text: "When the active sentence leaves the viewport, a floating return control should help users jump back instantly.",
+  },
+  {
+    id: "s10",
+    startTime: 116,
+    endTime: 129,
+    text: "Spacing, icon hierarchy, and scroll behavior all become easier to tune when the preview list is long enough.",
+  },
+  {
+    id: "s11",
+    startTime: 129,
+    endTime: 143,
+    text: "A compact timestamp column keeps navigation precise while still leaving enough width for comfortable reading.",
+  },
+  {
+    id: "s12",
+    startTime: 143,
+    endTime: 157,
+    text: "The middle playback divider is meant to visually separate the transcript area from the current focus tools below.",
+  },
+  {
+    id: "s13",
+    startTime: 157,
+    endTime: 171,
+    text: "Loop and recording controls can stay secondary, while the active sentence block remains readable at a glance.",
+  },
+  {
+    id: "s14",
+    startTime: 171,
+    endTime: 186,
+    text: "Longer preview data also makes it easier to validate hover states, active highlighting, and list density decisions.",
+  },
+  {
+    id: "s15",
+    startTime: 186,
+    endTime: 201,
+    text: "This should now give enough vertical depth to test list scrolling without relying on a real YouTube subtitle track.",
+  },
 ];
 
 const previewStateLabels: Array<{ key: PreviewState; label: string }> = [
@@ -77,6 +121,9 @@ export default function Newtab() {
   const [isOpen, setIsOpen] = useState(true);
   const [isSegmentPlaying, setIsSegmentPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
+  const [showReturnToActive, setShowReturnToActive] = useState(false);
+  const previewListRef = useRef<HTMLDivElement | null>(null);
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
 
   const subtitles = previewState === "empty" ? [] : mockSubtitles;
   const currentSubtitle =
@@ -95,6 +142,50 @@ export default function Newtab() {
   const handleSubtitleClick = (_subtitle: SubtitleItem, index: number) => {
     setActiveIndex(index);
   };
+
+  const updateReturnToActiveVisibility = useCallback(() => {
+    if (previewState !== "loaded" || !isOpen) {
+      setShowReturnToActive(false);
+      return;
+    }
+
+    const list = previewListRef.current;
+    const activeItem = activeItemRef.current;
+
+    if (!list || !activeItem) {
+      setShowReturnToActive(false);
+      return;
+    }
+
+    const listRect = list.getBoundingClientRect();
+    const activeRect = activeItem.getBoundingClientRect();
+    const padding = 8;
+    const isVisible =
+      activeRect.top >= listRect.top + padding &&
+      activeRect.bottom <= listRect.bottom - padding;
+
+    setShowReturnToActive(!isVisible);
+  }, [isOpen, previewState]);
+
+  const returnToActiveSubtitle = useCallback(() => {
+    if (!activeItemRef.current) return;
+
+    activeItemRef.current.scrollIntoView({
+      block: "center",
+      behavior: "smooth",
+    });
+    setShowReturnToActive(false);
+  }, []);
+
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(() => {
+      updateReturnToActiveVisibility();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [activeIndex, isOpen, previewState, subtitles.length, updateReturnToActiveVisibility]);
 
   const resetToLoaded = () => {
     setPreviewState("loaded");
@@ -224,25 +315,39 @@ export default function Newtab() {
                     onClose={() => setIsOpen(false)}
                   />
 
-                  <div className="min-h-0 flex-1 bg-zinc-50/30">
+                  <div className="relative min-h-0 flex-1 bg-zinc-50/30">
                     <SubtitleStates
                       isAd={previewState === "ad"}
                       error={errorMessage}
                       loading={previewState === "loading"}
                       isEmpty={previewState === "empty"}
                     >
-                      <div className="h-full overflow-y-auto bg-zinc-50/30">
+                      <div
+                        ref={previewListRef}
+                        className="h-full overflow-y-auto bg-zinc-50/30"
+                        onScroll={updateReturnToActiveVisibility}
+                      >
                         {subtitles.map((subtitle, index) => (
-                          <SubtitleItemComponent
+                          <div
                             key={subtitle.id}
-                            subtitle={subtitle}
-                            index={index}
-                            isActive={index === activeIndex}
-                            onSubtitleClick={handleSubtitleClick}
-                          />
+                            ref={index === activeIndex ? activeItemRef : null}
+                          >
+                            <SubtitleItemComponent
+                              subtitle={subtitle}
+                              index={index}
+                              isActive={index === activeIndex}
+                              onSubtitleClick={handleSubtitleClick}
+                            />
+                          </div>
                         ))}
                       </div>
                     </SubtitleStates>
+
+                    <AnimatePresence>
+                      {showReturnToActive && (
+                        <ReturnToActiveButton onPress={returnToActiveSubtitle} />
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   <PlaybackDivider
