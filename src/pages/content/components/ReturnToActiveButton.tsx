@@ -2,7 +2,6 @@ import { FC } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { motion } from "framer-motion";
-import { iconScale } from "@src/components/ui/iconScale";
 
 interface ReturnToActiveButtonProps {
   onPress: () => void;
@@ -29,16 +28,18 @@ export const ReturnToActiveButton: FC<ReturnToActiveButtonProps> = ({
         radius="full"
         variant="solid"
         color="default"
-        className="pointer-events-auto h-9 bg-zinc-900 px-4 text-white shadow-lg hover:bg-black"
-        startContent={
-          <Icon
-            icon="mdi:crosshairs-gps"
-            className={iconScale.secondaryAction}
-          />
-        }
+        className="pointer-events-auto h-10 bg-zinc-900 px-4.5 text-white shadow-lg hover:bg-black"
         onPressStart={onPress}
       >
-        <span className="text-xs font-semibold">Back to current</span>
+        <span className="inline-flex items-center gap-2">
+          <Icon
+            icon="mdi:crosshairs-gps"
+            className="h-[1.05em] w-[1.05em] shrink-0 text-[1rem]"
+          />
+          <span className="text-sm font-semibold leading-none">
+            Back to current
+          </span>
+        </span>
       </Button>
     </motion.div>
   );
