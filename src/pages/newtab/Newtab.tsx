@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
@@ -116,6 +117,7 @@ export default function Newtab() {
   const [activeIndex, setActiveIndex] = useState(2);
   const [isOpen, setIsOpen] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [collapsedHeight, setCollapsedHeight] = useState(56);
   const [isSegmentPlaying, setIsSegmentPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [showReturnToActive, setShowReturnToActive] = useState(false);
@@ -334,59 +336,70 @@ export default function Newtab() {
               </div>
             </div>
 
-            <div className="flex min-h-[42rem] items-center justify-center rounded-[1.5rem] border border-dashed border-zinc-300/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.85)_0%,rgba(244,244,245,0.85)_100%)] p-8">
+            <div className="flex min-h-[42rem] items-start justify-center rounded-[1.5rem] border border-dashed border-zinc-300/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.85)_0%,rgba(244,244,245,0.85)_100%)] p-8">
               {isOpen ? (
-                <SubtitlePanelShell
-                  className={`flex w-[392px] flex-col overflow-visible rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl transition-[height] duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                    isCollapsed ? "h-[56px]" : "h-[600px]"
-                  }`}
-                  subtitles={subtitles}
-                  isCollapsed={isCollapsed}
-                  onToggleCollapse={() =>
-                    setIsCollapsed((currentCollapsed) => !currentCollapsed)
-                  }
-                  toastMessage={toastMessage}
-                  listContent={
-                    <SubtitleStates
-                      isAd={previewState === "ad"}
-                      error={errorMessage}
-                      loading={previewState === "loading"}
-                      isEmpty={previewState === "empty"}
-                    >
-                      <div
-                        ref={previewListRef}
-                        className="h-full overflow-y-auto bg-zinc-50/30"
-                        onScroll={updateReturnToActiveVisibility}
+                <motion.div
+                  initial={false}
+                  animate={{ height: isCollapsed ? collapsedHeight : 600 }}
+                  transition={{
+                    height: {
+                      duration: 0.22,
+                      ease: [0.22, 1, 0.36, 1],
+                    },
+                  }}
+                  className="w-[392px] overflow-visible"
+                >
+                  <SubtitlePanelShell
+                    className="flex h-full w-[392px] flex-col overflow-visible rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl"
+                    subtitles={subtitles}
+                    isCollapsed={isCollapsed}
+                    onToggleCollapse={() =>
+                      setIsCollapsed((currentCollapsed) => !currentCollapsed)
+                    }
+                    onHeaderHeightChange={setCollapsedHeight}
+                    toastMessage={toastMessage}
+                    listContent={
+                      <SubtitleStates
+                        isAd={previewState === "ad"}
+                        error={errorMessage}
+                        loading={previewState === "loading"}
+                        isEmpty={previewState === "empty"}
                       >
-                        {subtitles.map((subtitle, index) => (
-                          <div
-                            key={subtitle.id}
-                            ref={index === activeIndex ? activeItemRef : null}
-                          >
-                            <SubtitleItemComponent
-                              subtitle={subtitle}
-                              index={index}
-                              isActive={index === activeIndex}
-                              onSubtitleClick={handleSubtitleClick}
-                              onToast={showToast}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </SubtitleStates>
-                  }
-                  showReturnToActive={showReturnToActive}
-                  onReturnToActive={returnToActiveSubtitle}
-                  isPlaying={isSegmentPlaying}
-                  onTogglePlayback={() => setIsSegmentPlaying((value) => !value)}
-                  currentSubtitle={currentSubtitle}
-                  isCurrentSubtitleActive={
-                    previewState === "loaded" && Boolean(currentSubtitle)
-                  }
-                  isLooping={isLooping}
-                  onToggleLoop={() => setIsLooping((value) => !value)}
-                  isSegmentPlaying={isSegmentPlaying}
-                />
+                        <div
+                          ref={previewListRef}
+                          className="h-full overflow-y-auto bg-zinc-50/30"
+                          onScroll={updateReturnToActiveVisibility}
+                        >
+                          {subtitles.map((subtitle, index) => (
+                            <div
+                              key={subtitle.id}
+                              ref={index === activeIndex ? activeItemRef : null}
+                            >
+                              <SubtitleItemComponent
+                                subtitle={subtitle}
+                                index={index}
+                                isActive={index === activeIndex}
+                                onSubtitleClick={handleSubtitleClick}
+                                onToast={showToast}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </SubtitleStates>
+                    }
+                    showReturnToActive={showReturnToActive}
+                    onReturnToActive={returnToActiveSubtitle}
+                    isPlaying={isSegmentPlaying}
+                    onTogglePlayback={() => setIsSegmentPlaying((value) => !value)}
+                    currentSubtitle={currentSubtitle}
+                    isCurrentSubtitleActive={
+                      previewState === "loaded" && Boolean(currentSubtitle)
+                    }
+                    isLooping={isLooping}
+                    onToggleLoop={() => setIsLooping((value) => !value)}
+                    isSegmentPlaying={isSegmentPlaying}
+                  />
+                </motion.div>
               ) : (
                 <Button
                   isIconOnly

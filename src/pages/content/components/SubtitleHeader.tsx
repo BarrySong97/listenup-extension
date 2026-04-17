@@ -248,13 +248,16 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   return (
     <div className="sticky top-0 z-20 border-b border-zinc-100 bg-white/95 px-3 py-2.5 backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-600">
-            <Icon icon="mdi:waveform" className={`${iconScale.brand} text-white`} />
-          </div>
-          <div className="truncate text-sm font-semibold tracking-tight text-zinc-900">
-            {title}
-          </div>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-600">
+              <Icon
+                icon="mdi:subtitles-outline"
+                className={`${iconScale.brand} text-white`}
+              />
+            </div>
+            <div className="truncate text-sm font-semibold tracking-tight text-zinc-900">
+              {title}
+            </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">

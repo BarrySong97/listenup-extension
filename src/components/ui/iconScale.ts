@@ -5,5 +5,5 @@ export const iconScale = {
   surface: "h-5 w-5",
   launcher: "h-6 w-6",
   canvasLauncher: "h-7 w-7",
-  brand: "h-3.5 w-3.5",
+  brand: "h-4 w-4",
 } as const;

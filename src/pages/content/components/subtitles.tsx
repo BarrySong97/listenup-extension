@@ -31,12 +31,6 @@ interface InlineLayoutSnapshot {
   relatedStyle: string;
 }
 
-const panelAnimation = {
-  initial: { x: 380, opacity: 0.6 },
-  animate: { x: 0, opacity: 1 },
-  exit: { x: 380, opacity: 0.6 },
-};
-
 const findDirectChildById = <T extends HTMLElement>(
   parent: HTMLElement | null,
   id: string
@@ -70,6 +64,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [youtubeTheme, setYoutubeTheme] = useState<YouTubeTheme | null>(null);
   const [isOpen, setIsOpen] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [collapsedHeight, setCollapsedHeight] = useState(56);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [playerHeight, setPlayerHeight] = useState<number | null>(null);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
@@ -361,16 +356,18 @@ const Subtitles: FC<SubtitlesProps> = () => {
 
   const resolvedPanelHeight =
     playerHeight && playerHeight > 0 ? `${playerHeight}px` : "600px";
-  const resolvedCollapsedHeight = "56px";
+  const resolvedCollapsedHeight = `${collapsedHeight}px`;
+
+  const panelTargetHeight = isCollapsed
+    ? resolvedCollapsedHeight
+    : resolvedPanelHeight;
 
   const panelStyle =
     layoutMode === "inline"
       ? {
-          height: isCollapsed ? resolvedCollapsedHeight : resolvedPanelHeight,
           width: "100%",
         }
       : {
-          height: isCollapsed ? resolvedCollapsedHeight : resolvedPanelHeight,
           width: "392px",
           top: headerHeight + 16,
           zIndex: 9999,
@@ -378,27 +375,46 @@ const Subtitles: FC<SubtitlesProps> = () => {
           right: 12,
         };
 
+  const panelMotionTarget =
+    layoutMode === "inline"
+      ? { opacity: 1, x: 0, height: panelTargetHeight }
+      : {
+          opacity: isOpen ? 1 : 0.6,
+          x: isOpen ? 0 : 380,
+          height: panelTargetHeight,
+        };
+
   return (
     <div className={youtubeTheme === "dark" ? "dark" : "light"}>
       <motion.div
         id="listenup"
         style={panelStyle}
-        initial="initial"
-        animate={isOpen ? "animate" : "exit"}
-        variants={panelAnimation}
+        initial={false}
+        animate={panelMotionTarget}
         transition={{
-          type: "spring",
-          stiffness: 320,
-          damping: 32,
+          x: {
+            type: "spring",
+            stiffness: 320,
+            damping: 32,
+          },
+          opacity: {
+            duration: 0.18,
+            ease: "easeOut",
+          },
+          height: {
+            duration: 0.22,
+            ease: [0.22, 1, 0.36, 1],
+          },
         }}
         className={`${
           isOpen ? "pointer-events-auto" : "pointer-events-none"
-        } overflow-visible transition-[height] duration-250 ease-[cubic-bezier(0.22,1,0.36,1)]`}
+        } overflow-visible`}
       >
         <SubtitlePanelShell
           subtitles={subtitles}
           isCollapsed={isCollapsed}
           onToggleCollapse={() => setIsCollapsed((current) => !current)}
+          onHeaderHeightChange={setCollapsedHeight}
           toastMessage={toastMessage}
           listContent={
             <SubtitleStates
