@@ -1,4 +1,11 @@
-import { memo, useEffect, useState, type MouseEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
@@ -18,26 +25,47 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
 }: SubtitleItemProps) {
   const [copyStatus, setCopyStatus] = useState(false);
   const [explainStatus, setExplainStatus] = useState(false);
-  const [wordCopyStatus, setWordCopyStatus] = useState<number | null>(null);
-  const [selectedRange, setSelectedRange] = useState<{
-    start: number;
-    end: number;
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [selectionActions, setSelectionActions] = useState<{
+    text: string;
+    x: number;
+    y: number;
   } | null>(null);
-  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const textContainerRef = useRef<HTMLDivElement | null>(null);
+  const toastTimeoutRef = useRef<number | null>(null);
+  const selectionPointerDownRef = useRef(false);
 
   useEffect(() => {
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === "Shift" && selectedRange) {
-        setSelectedRange(null);
-        setLastClickedIndex(null);
+    return () => {
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = getScopedSelection();
+      const textContainer = textContainerRef.current;
+
+      if (!selection || selection.isCollapsed || !textContainer) {
+        setSelectionActions(null);
+        return;
+      }
+
+      if (
+        !textContainer.contains(selection.anchorNode) ||
+        !textContainer.contains(selection.focusNode)
+      ) {
+        setSelectionActions(null);
       }
     };
 
-    document.addEventListener("keyup", handleKeyUp);
+    document.addEventListener("selectionchange", handleSelectionChange);
     return () => {
-      document.removeEventListener("keyup", handleKeyUp);
+      document.removeEventListener("selectionchange", handleSelectionChange);
     };
-  }, [selectedRange]);
+  }, []);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -59,6 +87,59 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
     window.setTimeout(() => {
       setExplainStatus(false);
     }, 1500);
+  };
+
+  const showToast = (message: string) => {
+    setToastMessage(message);
+
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 1200);
+  };
+
+  const getScopedSelection = () => {
+    const rootNode = textContainerRef.current?.getRootNode();
+    if (
+      rootNode &&
+      "getSelection" in rootNode &&
+      typeof rootNode.getSelection === "function"
+    ) {
+      return rootNode.getSelection();
+    }
+
+    return window.getSelection();
+  };
+
+  const clearSelection = () => {
+    const selection = getScopedSelection();
+    selection?.removeAllRanges();
+    setSelectionActions(null);
+  };
+
+  const getSelectedText = () => {
+    const selection = getScopedSelection();
+    const textContainer = textContainerRef.current;
+
+    if (
+      !selection ||
+      selection.isCollapsed ||
+      !textContainer ||
+      !textContainer.contains(selection.anchorNode) ||
+      !textContainer.contains(selection.focusNode)
+    ) {
+      return null;
+    }
+
+    const text = selection.toString().replace(/\s+/g, " ").trim();
+    if (!text) {
+      return null;
+    }
+
+    return { selection, text };
   };
 
   const handleCopySubtitle = async (event: MouseEvent<HTMLButtonElement>) => {
@@ -93,42 +174,93 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   };
 
   const handleWordClick = async (
-    event: MouseEvent<HTMLButtonElement>,
-    wordIndex: number,
+    event: MouseEvent<HTMLSpanElement>,
     word: string,
     fullText: string
   ) => {
     event.stopPropagation();
 
     try {
-      if (event.shiftKey && lastClickedIndex !== null) {
-        const start = Math.min(lastClickedIndex, wordIndex);
-        const end = Math.max(lastClickedIndex, wordIndex);
-        setSelectedRange({ start, end });
-
-        const words = fullText.split(/(\s+|[.,!?;:()"])/);
-        const selectedTokens = words.slice(start, end + 1);
-        const selectedPhrase = selectedTokens.join("").trim();
-        const copyText = `Please explain this phrase in English within the context of the whole subtitle: ${selectedPhrase} (Context: ${fullText})`;
-        await navigator.clipboard.writeText(copyText);
-
-        setWordCopyStatus(-1);
-        window.setTimeout(() => {
-          setWordCopyStatus(null);
-        }, 1500);
+      const selectedText = getSelectedText();
+      if (selectedText) {
         return;
       }
 
-      setSelectedRange(null);
-      setLastClickedIndex(wordIndex);
-
       const copyText = `Explain this word to me in English: ${word} (Context: ${fullText})`;
       await navigator.clipboard.writeText(copyText);
+      showToast(`Copied "${word}" prompt`);
+    } catch (error) {
+      console.error("复制失败:", error);
+    }
+  };
 
-      setWordCopyStatus(wordIndex);
-      window.setTimeout(() => {
-        setWordCopyStatus(null);
-      }, 1500);
+  const handleTextPointerDown = () => {
+    selectionPointerDownRef.current = true;
+    setSelectionActions(null);
+  };
+
+  const handleTextPointerUp = (_event: PointerEvent<HTMLDivElement>) => {
+    const selectedText = getSelectedText();
+    selectionPointerDownRef.current = false;
+
+    if (!selectedText || selectedText.selection.rangeCount === 0) {
+      setSelectionActions(null);
+      return;
+    }
+
+    const range = selectedText.selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (!rect.width && !rect.height) {
+      setSelectionActions(null);
+      return;
+    }
+
+    const toolbarWidth = 144;
+    const nextX = Math.min(
+      Math.max(rect.left + rect.width / 2 - toolbarWidth / 2, 12),
+      window.innerWidth - toolbarWidth - 12
+    );
+    const nextY = Math.max(rect.top - 52, 12);
+
+    setSelectionActions({
+      text: selectedText.text,
+      x: nextX,
+      y: nextY,
+    });
+  };
+
+  const handleCopySelectedText = async (
+    event: MouseEvent<HTMLButtonElement>
+  ) => {
+    event.stopPropagation();
+
+    if (!selectionActions) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectionActions.text);
+      showToast("Copied selection");
+      clearSelection();
+    } catch (error) {
+      console.error("复制失败:", error);
+    }
+  };
+
+  const handleExplainSelectedText = async (
+    event: MouseEvent<HTMLButtonElement>
+  ) => {
+    event.stopPropagation();
+
+    if (!selectionActions) {
+      return;
+    }
+
+    try {
+      const copyText = `Please explain this phrase in English within the context of the whole subtitle: ${selectionActions.text} (Context: ${subtitle.text})`;
+      await navigator.clipboard.writeText(copyText);
+      showToast("Copied selection prompt");
+      clearSelection();
     } catch (error) {
       console.error("复制失败:", error);
     }
@@ -147,32 +279,14 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
         return <span key={wordIndex}>{word}</span>;
       }
 
-      const isInSelectedRange =
-        selectedRange &&
-        wordIndex >= selectedRange.start &&
-        wordIndex <= selectedRange.end;
-
-      const isWordCopied =
-        wordCopyStatus === wordIndex ||
-        (selectedRange && wordCopyStatus === -1 && isInSelectedRange);
-
       return (
-        <button
+        <span
           key={wordIndex}
-          type="button"
-          className={`inline rounded-sm transition-colors outline-none ${
-            isWordCopied
-              ? "bg-emerald-100 text-emerald-700"
-              : isInSelectedRange
-              ? "bg-blue-100 text-blue-700"
-              : "text-inherit hover:text-blue-700"
-          }`}
-          onClick={(event) =>
-            handleWordClick(event, wordIndex, cleanWord, text)
-          }
+          className="inline cursor-pointer rounded-sm text-inherit transition-colors hover:text-blue-700"
+          onClick={(event) => handleWordClick(event, cleanWord, text)}
         >
           {word}
-        </button>
+        </span>
       );
     });
   };
@@ -184,7 +298,13 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
           ? "border-blue-100 bg-blue-50"
           : "border-zinc-100/80 hover:bg-zinc-100/50"
       }`}
-      onClick={() => onSubtitleClick?.(subtitle, index)}
+      onClick={() => {
+        if (getSelectedText() || selectionPointerDownRef.current) {
+          return;
+        }
+
+        onSubtitleClick?.(subtitle, index);
+      }}
     >
       <div className="relative flex items-start gap-4 px-3 py-2">
         <div
@@ -196,9 +316,12 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
         </div>
 
         <div
+          ref={textContainerRef}
           className={`min-w-0 flex-1 pr-10 text-xs leading-relaxed ${
             isActive ? "font-medium text-zinc-900" : "text-zinc-600"
           }`}
+          onPointerDown={handleTextPointerDown}
+          onPointerUp={handleTextPointerUp}
         >
           {renderWordsAsButtons(subtitle.text)}
         </div>
@@ -231,6 +354,42 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
             />
           </button>
         </div>
+
+        {toastMessage && (
+          <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-zinc-900 px-2.5 py-1 text-[10px] font-medium text-white shadow-lg">
+            {toastMessage}
+          </div>
+        )}
+
+        {selectionActions && (
+          <div
+            className="fixed z-[10000] flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-1 py-1 shadow-xl"
+            style={{
+              left: selectionActions.x,
+              top: selectionActions.y,
+            }}
+          >
+            <button
+              type="button"
+              className="flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+              onClick={handleCopySelectedText}
+            >
+              <Icon
+                icon="mdi:content-copy"
+                className={iconScale.secondaryAction}
+              />
+              Copy
+            </button>
+            <button
+              type="button"
+              className="flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+              onClick={handleExplainSelectedText}
+            >
+              <Icon icon="mdi:translate" className={iconScale.secondaryAction} />
+              Explain
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
