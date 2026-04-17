@@ -11,12 +11,9 @@ import { VList } from "virtua";
 import { SubtitleItemComponent } from "./SubtitleItem";
 import { useSubtitleNavigation } from "../hooks/useSubtitleNavigation";
 import { useSubtitleAutoScroll } from "../hooks/useSubtitleAutoScroll";
-import { ActiveSegmentPanel } from "./ActiveSegmentPanel";
-import { PlaybackDivider } from "./PlaybackDivider";
-import { ReturnToActiveButton } from "./ReturnToActiveButton";
-import { SubtitleFooter } from "./SubtitleFooter";
 import { useSubtitleLoop } from "../hooks/useSubtitleLoop";
-import { SubtitleHeader } from "./SubtitleHeader";
+import { SubtitlePanelShell } from "./SubtitlePanelShell";
+import { usePanelToast } from "../hooks/usePanelToast";
 
 export interface SubtitlesProps {}
 type PanelLayoutMode = "overlay" | "inline";
@@ -94,6 +91,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
     handleListScrollEnd,
   } = useSubtitleAutoScroll(currentSubtitleIndex, isAdPlaying);
   const { isLooping, toggleLooping, cleanup: cleanupLoop } = useSubtitleLoop();
+  const { toastMessage, showToast } = usePanelToast();
 
   const syncLayoutMetrics = useCallback(() => {
     const header = document.querySelector("#masthead");
@@ -393,10 +391,11 @@ const Subtitles: FC<SubtitlesProps> = () => {
         }}
         className={isOpen ? "pointer-events-auto" : "pointer-events-none"}
       >
-        <div className="flex h-full flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif]">
-          <SubtitleHeader subtitles={subtitles} onClose={() => setIsOpen(false)} />
-
-          <div className="relative min-h-0 flex-1 bg-zinc-50/30">
+        <SubtitlePanelShell
+          subtitles={subtitles}
+          onClose={() => setIsOpen(false)}
+          toastMessage={toastMessage}
+          listContent={
             <SubtitleStates
               isAd={isAdPlaying}
               error={error}
@@ -418,54 +417,30 @@ const Subtitles: FC<SubtitlesProps> = () => {
                       index={index}
                       isActive={index === currentSubtitleIndex}
                       onSubtitleClick={handleSubtitleClick}
+                      onToast={showToast}
                     />
                   ))}
                 </VList>
               )}
             </SubtitleStates>
-
-            <AnimatePresence>
-              {showReturnToActive &&
-                !loading &&
-                !error &&
-                subtitles.length > 0 && (
-                  <ReturnToActiveButton onPress={returnToActiveSubtitle} />
-                )}
-            </AnimatePresence>
-          </div>
-
-          <PlaybackDivider
-            isPlaying={isVideoPlaying}
-            onTogglePlayback={toggleVideoPlayback}
-          />
-
-          <ActiveSegmentPanel
-            currentSubtitle={currentSubtitle}
-            isActive={
-              !loading &&
-              !error &&
-              subtitles.length > 0 &&
-              currentSubtitleIndex >= 0
-            }
-          />
-
-          <SubtitleFooter
-            currentSubtitle={currentSubtitle}
-            isActive={
-              !loading &&
-              !error &&
-              subtitles.length > 0 &&
-              currentSubtitleIndex >= 0
-            }
-            isLooping={isLooping}
-            onToggleLoop={() => toggleLooping(currentSubtitle)}
-            isSegmentPlaying={isVideoPlaying}
-          />
-
-          <div className="flex h-1 items-center justify-center bg-white">
-            <div className="h-1 w-12 rounded-full bg-zinc-200" />
-          </div>
-        </div>
+          }
+          showReturnToActive={
+            showReturnToActive && !loading && !error && subtitles.length > 0
+          }
+          onReturnToActive={returnToActiveSubtitle}
+          isPlaying={isVideoPlaying}
+          onTogglePlayback={toggleVideoPlayback}
+          currentSubtitle={currentSubtitle}
+          isCurrentSubtitleActive={
+            !loading &&
+            !error &&
+            subtitles.length > 0 &&
+            currentSubtitleIndex >= 0
+          }
+          isLooping={isLooping}
+          onToggleLoop={() => toggleLooping(currentSubtitle)}
+          isSegmentPlaying={isVideoPlaying}
+        />
       </motion.div>
 
       {!isOpen && layoutMode === "overlay" && (

@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { AnimatePresence } from "framer-motion";
 import { iconScale } from "@src/components/ui/iconScale";
-import { SubtitleHeader } from "@pages/content/components/SubtitleHeader";
 import { SubtitleStates } from "@pages/content/components/SubtitleStates";
 import { SubtitleItemComponent } from "@pages/content/components/SubtitleItem";
-import { PlaybackDivider } from "@pages/content/components/PlaybackDivider";
-import { ActiveSegmentPanel } from "@pages/content/components/ActiveSegmentPanel";
-import { ReturnToActiveButton } from "@pages/content/components/ReturnToActiveButton";
-import { SubtitleFooter } from "@pages/content/components/SubtitleFooter";
+import { SubtitlePanelShell } from "@pages/content/components/SubtitlePanelShell";
+import { usePanelToast } from "@pages/content/hooks/usePanelToast";
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 
 type PreviewState = "loaded" | "loading" | "empty" | "error" | "ad";
@@ -124,6 +120,7 @@ export default function Newtab() {
   const [showReturnToActive, setShowReturnToActive] = useState(false);
   const previewListRef = useRef<HTMLDivElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement | null>(null);
+  const { toastMessage, showToast } = usePanelToast();
 
   const subtitles = previewState === "empty" ? [] : mockSubtitles;
   const currentSubtitle =
@@ -309,13 +306,12 @@ export default function Newtab() {
 
             <div className="flex min-h-[42rem] items-center justify-center rounded-[1.5rem] border border-dashed border-zinc-300/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.85)_0%,rgba(244,244,245,0.85)_100%)] p-8">
               {isOpen ? (
-                <div className="flex h-[600px] w-[360px] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl">
-                  <SubtitleHeader
-                    subtitles={subtitles}
-                    onClose={() => setIsOpen(false)}
-                  />
-
-                  <div className="relative min-h-0 flex-1 bg-zinc-50/30">
+                <SubtitlePanelShell
+                  className="flex h-[600px] w-[360px] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl"
+                  subtitles={subtitles}
+                  onClose={() => setIsOpen(false)}
+                  toastMessage={toastMessage}
+                  listContent={
                     <SubtitleStates
                       isAd={previewState === "ad"}
                       error={errorMessage}
@@ -337,41 +333,25 @@ export default function Newtab() {
                               index={index}
                               isActive={index === activeIndex}
                               onSubtitleClick={handleSubtitleClick}
+                              onToast={showToast}
                             />
                           </div>
                         ))}
                       </div>
                     </SubtitleStates>
-
-                    <AnimatePresence>
-                      {showReturnToActive && (
-                        <ReturnToActiveButton onPress={returnToActiveSubtitle} />
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  <PlaybackDivider
-                    isPlaying={isSegmentPlaying}
-                    onTogglePlayback={() => setIsSegmentPlaying((value) => !value)}
-                  />
-
-                  <ActiveSegmentPanel
-                    currentSubtitle={currentSubtitle}
-                    isActive={previewState === "loaded" && Boolean(currentSubtitle)}
-                  />
-
-                  <SubtitleFooter
-                    currentSubtitle={currentSubtitle}
-                    isActive={previewState === "loaded" && Boolean(currentSubtitle)}
-                    isLooping={isLooping}
-                    onToggleLoop={() => setIsLooping((value) => !value)}
-                    isSegmentPlaying={isSegmentPlaying}
-                  />
-
-                  <div className="flex h-1 items-center justify-center bg-white">
-                    <div className="h-1 w-12 rounded-full bg-zinc-200" />
-                  </div>
-                </div>
+                  }
+                  showReturnToActive={showReturnToActive}
+                  onReturnToActive={returnToActiveSubtitle}
+                  isPlaying={isSegmentPlaying}
+                  onTogglePlayback={() => setIsSegmentPlaying((value) => !value)}
+                  currentSubtitle={currentSubtitle}
+                  isCurrentSubtitleActive={
+                    previewState === "loaded" && Boolean(currentSubtitle)
+                  }
+                  isLooping={isLooping}
+                  onToggleLoop={() => setIsLooping((value) => !value)}
+                  isSegmentPlaying={isSegmentPlaying}
+                />
               ) : (
                 <Button
                   isIconOnly

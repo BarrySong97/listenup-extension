@@ -14,6 +14,7 @@ interface SubtitleItemProps {
   subtitle: SubtitleItem;
   isActive: boolean;
   onSubtitleClick?: (subtitle: SubtitleItem, index: number) => void;
+  onToast?: (message: string) => void;
   index: number;
 }
 
@@ -21,27 +22,18 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   subtitle,
   isActive,
   onSubtitleClick,
+  onToast,
   index,
 }: SubtitleItemProps) {
   const [copyStatus, setCopyStatus] = useState(false);
   const [explainStatus, setExplainStatus] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [selectionActions, setSelectionActions] = useState<{
     text: string;
     x: number;
     y: number;
   } | null>(null);
   const textContainerRef = useRef<HTMLDivElement | null>(null);
-  const toastTimeoutRef = useRef<number | null>(null);
   const selectionPointerDownRef = useRef(false);
-
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) {
-        window.clearTimeout(toastTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const handleSelectionChange = () => {
@@ -85,20 +77,8 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   const showExplainSuccess = () => {
     setExplainStatus(true);
     window.setTimeout(() => {
-      setExplainStatus(false);
+    setExplainStatus(false);
     }, 1500);
-  };
-
-  const showToast = (message: string) => {
-    setToastMessage(message);
-
-    if (toastTimeoutRef.current) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToastMessage(null);
-    }, 1200);
   };
 
   const getScopedSelection = () => {
@@ -188,7 +168,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
 
       const copyText = `Explain this word to me in English: ${word} (Context: ${fullText})`;
       await navigator.clipboard.writeText(copyText);
-      showToast(`Copied "${word}" prompt`);
+      onToast?.(`Copied "${word}" prompt`);
     } catch (error) {
       console.error("复制失败:", error);
     }
@@ -240,7 +220,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
 
     try {
       await navigator.clipboard.writeText(selectionActions.text);
-      showToast("Copied selection");
+      onToast?.("Copied selection");
       clearSelection();
     } catch (error) {
       console.error("复制失败:", error);
@@ -259,7 +239,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
     try {
       const copyText = `Please explain this phrase in English within the context of the whole subtitle: ${selectionActions.text} (Context: ${subtitle.text})`;
       await navigator.clipboard.writeText(copyText);
-      showToast("Copied selection prompt");
+      onToast?.("Copied selection prompt");
       clearSelection();
     } catch (error) {
       console.error("复制失败:", error);
@@ -354,12 +334,6 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
             />
           </button>
         </div>
-
-        {toastMessage && (
-          <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-zinc-900 px-2.5 py-1 text-[10px] font-medium text-white shadow-lg">
-            {toastMessage}
-          </div>
-        )}
 
         {selectionActions && (
           <div
