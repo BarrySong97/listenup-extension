@@ -4,7 +4,6 @@ import {
   useRef,
   useState,
   type MouseEvent,
-  type PointerEvent,
 } from "react";
 import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
@@ -25,37 +24,156 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   onToast,
   index,
 }: SubtitleItemProps) {
+  const TOOLBAR_WIDTH = 156;
+  const TOOLBAR_HEIGHT = 36;
+  const TOOLBAR_GAP = 6;
+  const TOOLBAR_PADDING = 8;
   const [copyStatus, setCopyStatus] = useState(false);
   const [explainStatus, setExplainStatus] = useState(false);
   const [selectionActions, setSelectionActions] = useState<{
     text: string;
-    x: number;
-    y: number;
+    left: number;
+    top: number;
+    placement: "top" | "bottom";
   } | null>(null);
+  const itemContentRef = useRef<HTMLDivElement | null>(null);
   const textContainerRef = useRef<HTMLDivElement | null>(null);
   const selectionPointerDownRef = useRef(false);
+  const selectionRafRef = useRef<number | null>(null);
+
+  const getScopedSelection = () => {
+    const rootNode = textContainerRef.current?.getRootNode();
+    if (
+      rootNode &&
+      "getSelection" in rootNode &&
+      typeof rootNode.getSelection === "function"
+    ) {
+      return rootNode.getSelection();
+    }
+
+    return window.getSelection();
+  };
+
+  const getScrollViewport = (element: HTMLElement | null) => {
+    let current = element?.parentElement ?? null;
+
+    while (current) {
+      const computedStyle = window.getComputedStyle(current);
+      const overflowY = computedStyle.overflowY;
+      const isScrollable =
+        (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+        current.scrollHeight > current.clientHeight;
+
+      if (isScrollable) {
+        return current;
+      }
+
+      current = current.parentElement;
+    }
+
+    return null;
+  };
+
+  const syncSelectionActions = () => {
+    const selection = getScopedSelection();
+    const textContainer = textContainerRef.current;
+    const itemContent = itemContentRef.current;
+    const containerRect = itemContent?.getBoundingClientRect();
+    const viewportRect =
+      getScrollViewport(itemContent)?.getBoundingClientRect() ?? containerRect;
+
+    if (
+      !selection ||
+      selection.isCollapsed ||
+      !textContainer ||
+      !containerRect ||
+      !viewportRect ||
+      !textContainer.contains(selection.anchorNode) ||
+      !textContainer.contains(selection.focusNode) ||
+      selection.rangeCount === 0
+    ) {
+      setSelectionActions(null);
+      return;
+    }
+
+    const text = selection.toString().replace(/\s+/g, " ").trim();
+    if (!text) {
+      setSelectionActions(null);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (!rect.width && !rect.height) {
+      setSelectionActions(null);
+      return;
+    }
+
+    const centerX = rect.left + rect.width / 2 - containerRect.left;
+    const maxLeft = Math.max(
+      containerRect.width - TOOLBAR_WIDTH - TOOLBAR_PADDING,
+      TOOLBAR_PADDING
+    );
+    const left = Math.min(
+      Math.max(centerX - TOOLBAR_WIDTH / 2, TOOLBAR_PADDING),
+      maxLeft
+    );
+
+    const canPlaceTop = rect.top - viewportRect.top >= TOOLBAR_HEIGHT + TOOLBAR_GAP;
+    const canPlaceBottom =
+      viewportRect.bottom - rect.bottom >= TOOLBAR_HEIGHT + TOOLBAR_GAP;
+    const placement =
+      canPlaceTop || !canPlaceBottom ? "top" : "bottom";
+    const top =
+      placement === "top"
+        ? rect.top - containerRect.top
+        : rect.bottom - containerRect.top + TOOLBAR_GAP;
+
+    setSelectionActions({
+      text,
+      left,
+      top,
+      placement,
+    });
+  };
+
+  const scheduleSelectionActionsSync = () => {
+    if (selectionRafRef.current) {
+      window.cancelAnimationFrame(selectionRafRef.current);
+    }
+
+    selectionRafRef.current = window.requestAnimationFrame(() => {
+      selectionRafRef.current = null;
+      syncSelectionActions();
+    });
+  };
 
   useEffect(() => {
     const handleSelectionChange = () => {
-      const selection = getScopedSelection();
-      const textContainer = textContainerRef.current;
-
-      if (!selection || selection.isCollapsed || !textContainer) {
-        setSelectionActions(null);
+      if (selectionPointerDownRef.current) {
         return;
       }
 
-      if (
-        !textContainer.contains(selection.anchorNode) ||
-        !textContainer.contains(selection.focusNode)
-      ) {
-        setSelectionActions(null);
+      scheduleSelectionActionsSync();
+    };
+
+    const handleGlobalPointerUp = () => {
+      if (!selectionPointerDownRef.current) {
+        return;
       }
+
+      selectionPointerDownRef.current = false;
+      scheduleSelectionActionsSync();
     };
 
     document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerup", handleGlobalPointerUp, true);
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerup", handleGlobalPointerUp, true);
+      if (selectionRafRef.current) {
+        window.cancelAnimationFrame(selectionRafRef.current);
+      }
     };
   }, []);
 
@@ -77,21 +195,8 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   const showExplainSuccess = () => {
     setExplainStatus(true);
     window.setTimeout(() => {
-    setExplainStatus(false);
+      setExplainStatus(false);
     }, 1500);
-  };
-
-  const getScopedSelection = () => {
-    const rootNode = textContainerRef.current?.getRootNode();
-    if (
-      rootNode &&
-      "getSelection" in rootNode &&
-      typeof rootNode.getSelection === "function"
-    ) {
-      return rootNode.getSelection();
-    }
-
-    return window.getSelection();
   };
 
   const clearSelection = () => {
@@ -153,60 +258,9 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
     }
   };
 
-  const handleWordClick = async (
-    event: MouseEvent<HTMLSpanElement>,
-    word: string,
-    fullText: string
-  ) => {
-    event.stopPropagation();
-
-    try {
-      const selectedText = getSelectedText();
-      if (selectedText) {
-        return;
-      }
-
-      const copyText = `Explain this word to me in English: ${word} (Context: ${fullText})`;
-      await navigator.clipboard.writeText(copyText);
-      onToast?.(`Copied "${word}" prompt`);
-    } catch (error) {
-      console.error("复制失败:", error);
-    }
-  };
-
   const handleTextPointerDown = () => {
     selectionPointerDownRef.current = true;
     setSelectionActions(null);
-  };
-
-  const handleTextPointerUp = (_event: PointerEvent<HTMLDivElement>) => {
-    const selectedText = getSelectedText();
-    selectionPointerDownRef.current = false;
-
-    if (!selectedText || selectedText.selection.rangeCount === 0) {
-      setSelectionActions(null);
-      return;
-    }
-
-    const range = selectedText.selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    if (!rect.width && !rect.height) {
-      setSelectionActions(null);
-      return;
-    }
-
-    const toolbarWidth = 144;
-    const nextX = Math.min(
-      Math.max(rect.left + rect.width / 2 - toolbarWidth / 2, 12),
-      window.innerWidth - toolbarWidth - 12
-    );
-    const nextY = Math.max(rect.top - 52, 12);
-
-    setSelectionActions({
-      text: selectedText.text,
-      x: nextX,
-      y: nextY,
-    });
   };
 
   const handleCopySelectedText = async (
@@ -246,34 +300,9 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
     }
   };
 
-  const renderWordsAsButtons = (text: string) => {
-    const words = text.split(/(\s+|[.,!?;:()"])/);
-
-    return words.map((word, wordIndex) => {
-      if (/^\s*$/.test(word) || /^[.,!?;:()"]*$/.test(word)) {
-        return <span key={wordIndex}>{word}</span>;
-      }
-
-      const cleanWord = word.replace(/^[.,!?;:()"]+|[.,!?;:()"]+$/g, "");
-      if (!cleanWord) {
-        return <span key={wordIndex}>{word}</span>;
-      }
-
-      return (
-        <span
-          key={wordIndex}
-          className="inline cursor-pointer rounded-sm text-inherit transition-colors hover:text-blue-700"
-          onClick={(event) => handleWordClick(event, cleanWord, text)}
-        >
-          {word}
-        </span>
-      );
-    });
-  };
-
   return (
     <div
-      className={`group cursor-pointer border-b transition-colors last:border-b-0 ${
+      className={`group border-b transition-colors last:border-b-0 ${
         isActive
           ? "border-blue-100 bg-blue-50"
           : "border-zinc-100/80 hover:bg-zinc-100/50"
@@ -286,7 +315,10 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
         onSubtitleClick?.(subtitle, index);
       }}
     >
-      <div className="relative flex items-start gap-4 px-3 py-2">
+      <div
+        ref={itemContentRef}
+        className="relative flex items-start gap-4 px-3 py-2"
+      >
         <div
           className={`mt-0.5 w-11 shrink-0 font-mono text-[10px] tabular-nums ${
             isActive ? "text-blue-600" : "text-zinc-400"
@@ -297,13 +329,12 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
 
         <div
           ref={textContainerRef}
-          className={`min-w-0 flex-1 pr-10 text-xs leading-relaxed ${
-            isActive ? "font-medium text-zinc-900" : "text-zinc-600"
+          className={`min-w-0 cursor-text flex-1 pr-20 text-xs leading-relaxed ${
+            isActive ? "text-zinc-900" : "text-zinc-600"
           }`}
           onPointerDown={handleTextPointerDown}
-          onPointerUp={handleTextPointerUp}
         >
-          {renderWordsAsButtons(subtitle.text)}
+          {subtitle.text}
         </div>
 
         <div className="absolute right-2 top-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -337,10 +368,15 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
 
         {selectionActions && (
           <div
-            className="fixed z-[10000] flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-1 py-1 shadow-xl"
+            className="absolute z-20 flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-1 py-1 shadow-xl"
             style={{
-              left: selectionActions.x,
-              top: selectionActions.y,
+              left: selectionActions.left,
+              top: selectionActions.top,
+              transform:
+                selectionActions.placement === "top"
+                  ? `translateY(calc(-100% - ${TOOLBAR_GAP}px))`
+                  : undefined,
+              maxWidth: `calc(100% - ${TOOLBAR_PADDING * 2}px)`,
             }}
           >
             <button
@@ -359,7 +395,10 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
               className="flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
               onClick={handleExplainSelectedText}
             >
-              <Icon icon="mdi:translate" className={iconScale.secondaryAction} />
+              <Icon
+                icon="mdi:translate"
+                className={iconScale.secondaryAction}
+              />
               Explain
             </button>
           </div>

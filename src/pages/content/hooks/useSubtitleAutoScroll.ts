@@ -15,6 +15,7 @@ export const useSubtitleAutoScroll = (
   const [showReturnToActive, setShowReturnToActive] = useState(false);
   const [isFollowingCurrent, setIsFollowingCurrent] = useState(true);
   const isProgrammaticScroll = useRef(false);
+  const isReturningToActive = useRef(false);
 
   const isActiveSubtitleVisible = () => {
     if (!vListRef.current || currentSubtitleIndex < 0) {
@@ -29,12 +30,13 @@ export const useSubtitleAutoScroll = (
     );
   };
 
-  const scrollToActiveSubtitle = (smooth: boolean) => {
+  const scrollToActiveSubtitle = (smooth: boolean, isManualReturn = false) => {
     if (currentSubtitleIndex < 0 || !vListRef.current) {
       return;
     }
 
     isProgrammaticScroll.current = true;
+    isReturningToActive.current = isManualReturn;
     setIsFollowingCurrent(true);
     setShowReturnToActive(false);
     vListRef.current.scrollToIndex(currentSubtitleIndex, {
@@ -67,7 +69,11 @@ export const useSubtitleAutoScroll = (
   ]);
 
   const handleListScroll = () => {
-    if (isProgrammaticScroll.current || currentSubtitleIndex < 0) {
+    if (
+      isProgrammaticScroll.current ||
+      isReturningToActive.current ||
+      currentSubtitleIndex < 0
+    ) {
       return;
     }
 
@@ -86,6 +92,13 @@ export const useSubtitleAutoScroll = (
       isProgrammaticScroll.current = false;
     }
 
+    if (isReturningToActive.current) {
+      isReturningToActive.current = false;
+      setShowReturnToActive(false);
+      setIsFollowingCurrent(true);
+      return;
+    }
+
     if (currentSubtitleIndex < 0) {
       setShowReturnToActive(false);
       return;
@@ -97,7 +110,7 @@ export const useSubtitleAutoScroll = (
   };
 
   const returnToActiveSubtitle = () => {
-    scrollToActiveSubtitle(true);
+    scrollToActiveSubtitle(true, true);
   };
 
   return {

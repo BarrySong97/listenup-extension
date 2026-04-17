@@ -1,8 +1,6 @@
 import { FC, ReactNode } from "react";
-import { AnimatePresence } from "framer-motion";
 import { SubtitleHeader } from "./SubtitleHeader";
 import { SubtitlePanelToast } from "./SubtitlePanelToast";
-import { ReturnToActiveButton } from "./ReturnToActiveButton";
 import { PlaybackDivider } from "./PlaybackDivider";
 import { ActiveSegmentPanel } from "./ActiveSegmentPanel";
 import { SubtitleFooter } from "./SubtitleFooter";
@@ -53,12 +51,6 @@ export const SubtitlePanelShell: FC<SubtitlePanelShellProps> = ({
       <div className="relative min-h-0 flex-1 bg-zinc-50/30">
         <SubtitlePanelToast message={toastMessage} />
         {listContent}
-
-        <AnimatePresence>
-          {showReturnToActive && (
-            <ReturnToActiveButton onPress={onReturnToActive} />
-          )}
-        </AnimatePresence>
       </div>
 
       <PlaybackDivider
@@ -69,6 +61,8 @@ export const SubtitlePanelShell: FC<SubtitlePanelShellProps> = ({
       <ActiveSegmentPanel
         currentSubtitle={currentSubtitle}
         isActive={isCurrentSubtitleActive}
+        showReturnToActive={showReturnToActive}
+        onReturnToActive={onReturnToActive}
       />
 
       <SubtitleFooter

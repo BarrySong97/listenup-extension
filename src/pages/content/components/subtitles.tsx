@@ -369,7 +369,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
         }
       : {
           height: resolvedPanelHeight,
-          width: "360px",
+          width: "392px",
           top: headerHeight + 16,
           zIndex: 9999,
           position: "fixed" as const,

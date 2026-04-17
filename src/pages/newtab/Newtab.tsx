@@ -120,6 +120,8 @@ export default function Newtab() {
   const [showReturnToActive, setShowReturnToActive] = useState(false);
   const previewListRef = useRef<HTMLDivElement | null>(null);
   const activeItemRef = useRef<HTMLDivElement | null>(null);
+  const isReturningToActiveRef = useRef(false);
+  const returnToActiveTimeoutRef = useRef<number | null>(null);
   const { toastMessage, showToast } = usePanelToast();
 
   const subtitles = previewState === "empty" ? [] : mockSubtitles;
@@ -146,6 +148,11 @@ export default function Newtab() {
       return;
     }
 
+    if (isReturningToActiveRef.current) {
+      setShowReturnToActive(false);
+      return;
+    }
+
     const list = previewListRef.current;
     const activeItem = activeItemRef.current;
 
@@ -167,11 +174,30 @@ export default function Newtab() {
   const returnToActiveSubtitle = useCallback(() => {
     if (!activeItemRef.current) return;
 
+    isReturningToActiveRef.current = true;
+    setShowReturnToActive(false);
     activeItemRef.current.scrollIntoView({
       block: "center",
       behavior: "smooth",
     });
-    setShowReturnToActive(false);
+
+    if (returnToActiveTimeoutRef.current) {
+      window.clearTimeout(returnToActiveTimeoutRef.current);
+    }
+
+    returnToActiveTimeoutRef.current = window.setTimeout(() => {
+      isReturningToActiveRef.current = false;
+      updateReturnToActiveVisibility();
+      returnToActiveTimeoutRef.current = null;
+    }, 450);
+  }, [updateReturnToActiveVisibility]);
+
+  useEffect(() => {
+    return () => {
+      if (returnToActiveTimeoutRef.current) {
+        window.clearTimeout(returnToActiveTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -307,7 +333,7 @@ export default function Newtab() {
             <div className="flex min-h-[42rem] items-center justify-center rounded-[1.5rem] border border-dashed border-zinc-300/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.85)_0%,rgba(244,244,245,0.85)_100%)] p-8">
               {isOpen ? (
                 <SubtitlePanelShell
-                  className="flex h-[600px] w-[360px] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl"
+                  className="flex h-[600px] w-[392px] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl"
                   subtitles={subtitles}
                   onClose={() => setIsOpen(false)}
                   toastMessage={toastMessage}
