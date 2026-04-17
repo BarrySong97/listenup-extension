@@ -115,6 +115,7 @@ export default function Newtab() {
   const [previewState, setPreviewState] = useState<PreviewState>("loaded");
   const [activeIndex, setActiveIndex] = useState(2);
   const [isOpen, setIsOpen] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSegmentPlaying, setIsSegmentPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [showReturnToActive, setShowReturnToActive] = useState(false);
@@ -213,6 +214,7 @@ export default function Newtab() {
   const resetToLoaded = () => {
     setPreviewState("loaded");
     setIsOpen(true);
+    setIsCollapsed(false);
     setActiveIndex(2);
     setIsSegmentPlaying(false);
     setIsLooping(false);
@@ -303,7 +305,9 @@ export default function Newtab() {
               Current Setup
             </p>
             <div className="mt-4 space-y-2 text-sm text-zinc-600">
-              <p>Panel: {isOpen ? "Visible" : "Collapsed"}</p>
+              <p>
+                Panel: {isOpen ? (isCollapsed ? "Collapsed" : "Expanded") : "Hidden"}
+              </p>
               <p>State: {panelSummary}</p>
               <p>Active subtitle: {currentSubtitle ? activeIndex + 1 : "None"}</p>
               <p>Loop: {isLooping ? "On" : "Off"}</p>
@@ -333,9 +337,14 @@ export default function Newtab() {
             <div className="flex min-h-[42rem] items-center justify-center rounded-[1.5rem] border border-dashed border-zinc-300/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.85)_0%,rgba(244,244,245,0.85)_100%)] p-8">
               {isOpen ? (
                 <SubtitlePanelShell
-                  className="flex h-[600px] w-[392px] flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl"
+                  className={`flex w-[392px] flex-col overflow-visible rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl transition-[height] duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    isCollapsed ? "h-[56px]" : "h-[600px]"
+                  }`}
                   subtitles={subtitles}
-                  onClose={() => setIsOpen(false)}
+                  isCollapsed={isCollapsed}
+                  onToggleCollapse={() =>
+                    setIsCollapsed((currentCollapsed) => !currentCollapsed)
+                  }
                   toastMessage={toastMessage}
                   listContent={
                     <SubtitleStates

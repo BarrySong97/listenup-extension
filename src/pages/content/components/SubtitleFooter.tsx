@@ -11,6 +11,7 @@ interface SubtitleFooterProps {
   isLooping: boolean;
   onToggleLoop: () => void;
   isSegmentPlaying: boolean;
+  selectedDeviceId: string;
 }
 
 const formatClock = (seconds: number) => {
@@ -27,56 +28,37 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
   isLooping,
   onToggleLoop,
   isSegmentPlaying,
+  selectedDeviceId,
 }) => {
   const {
     isRecording,
     isPlaying,
     hasRecording,
+    recordingCount,
     duration,
     error,
     startRecording,
     stopRecording,
     playRecording,
     pauseRecording,
-  } = useAudioRecording();
+    clearRecording,
+  } = useAudioRecording(selectedDeviceId);
 
-  const handleRecordingAction = useCallback(() => {
+  const handlePrimaryRecordingAction = useCallback(() => {
     if (isRecording) {
       stopRecording();
       return;
     }
 
-    if (hasRecording) {
-      if (isPlaying) {
-        pauseRecording();
-      } else {
-        playRecording();
-      }
-      return;
-    }
-
     startRecording();
-  }, [
-    hasRecording,
-    isPlaying,
-    isRecording,
-    pauseRecording,
-    playRecording,
-    startRecording,
-    stopRecording,
-  ]);
+  }, [isRecording, startRecording, stopRecording]);
 
   if (!currentSubtitle || !isActive) {
     return null;
   }
 
-  const recordingIcon = isRecording
-    ? "mdi:stop"
-    : hasRecording
-    ? isPlaying
-      ? "mdi:pause"
-      : "mdi:play"
-    : "mdi:microphone-outline";
+  const recordingIcon = isRecording ? "mdi:stop" : "mdi:microphone-outline";
+  const playbackIcon = isPlaying ? "mdi:pause" : "mdi:play";
 
   return (
     <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/95 px-3 pb-3 pt-3 backdrop-blur-xl">
@@ -111,20 +93,69 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
               ? "border-blue-200/50 bg-blue-100 text-blue-700"
               : "border-blue-200/50 bg-blue-50 text-blue-600 hover:bg-blue-100"
           }`}
-          onPressStart={handleRecordingAction}
+          onPressStart={handlePrimaryRecordingAction}
           aria-label="Recording action"
         >
           <Icon icon={recordingIcon} className={iconScale.primaryControl} />
         </Button>
       </div>
 
+      {hasRecording && !isRecording && (
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Button
+            size="sm"
+            variant="flat"
+            color="default"
+            className="h-9 gap-1.5 rounded-md bg-zinc-200/70 text-xs font-semibold text-zinc-700 hover:bg-zinc-200"
+            onPressStart={isPlaying ? pauseRecording : playRecording}
+          >
+            <Icon icon={playbackIcon} className={iconScale.secondaryAction} />
+            {isPlaying ? "Pause" : "Play"}
+          </Button>
+          <Button
+            size="sm"
+            variant="flat"
+            color="danger"
+            className="h-9 gap-1.5 rounded-md bg-red-50 text-xs font-semibold text-red-600 hover:bg-red-100"
+            onPressStart={clearRecording}
+          >
+            <Icon
+              icon="mdi:delete-outline"
+              className={iconScale.secondaryAction}
+            />
+            Delete
+          </Button>
+          <Button
+            size="sm"
+            variant="flat"
+            color="primary"
+            className="h-9 gap-1.5 rounded-md bg-blue-50 text-xs font-semibold text-blue-600 hover:bg-blue-100"
+            onPressStart={startRecording}
+          >
+            <Icon
+              icon="mdi:microphone-plus"
+              className={iconScale.secondaryAction}
+            />
+            Continue
+          </Button>
+        </div>
+      )}
+
       {(hasRecording || error) && (
         <div className="mt-2 flex items-center justify-between px-0.5 text-[10px]">
           <span className="text-zinc-400">
-            {hasRecording ? `Recording ${formatClock(duration)}` : ""}
+            {hasRecording || isRecording
+              ? `${recordingCount > 1 ? `${recordingCount} takes · ` : ""}${formatClock(
+                  duration
+                )}`
+              : ""}
           </span>
           <span className="text-zinc-400">
-            {isSegmentPlaying ? "Segment Playing" : ""}
+            {isRecording
+              ? "Recording"
+              : isSegmentPlaying
+              ? "Segment Playing"
+              : ""}
           </span>
           {error ? <span className="text-red-500">{error}</span> : null}
         </div>

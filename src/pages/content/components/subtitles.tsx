@@ -69,6 +69,7 @@ const findActiveRelatedElement = () => {
 const Subtitles: FC<SubtitlesProps> = () => {
   const [youtubeTheme, setYoutubeTheme] = useState<YouTubeTheme | null>(null);
   const [isOpen, setIsOpen] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [playerHeight, setPlayerHeight] = useState<number | null>(null);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
@@ -360,15 +361,16 @@ const Subtitles: FC<SubtitlesProps> = () => {
 
   const resolvedPanelHeight =
     playerHeight && playerHeight > 0 ? `${playerHeight}px` : "600px";
+  const resolvedCollapsedHeight = "56px";
 
   const panelStyle =
     layoutMode === "inline"
       ? {
-          height: resolvedPanelHeight,
+          height: isCollapsed ? resolvedCollapsedHeight : resolvedPanelHeight,
           width: "100%",
         }
       : {
-          height: resolvedPanelHeight,
+          height: isCollapsed ? resolvedCollapsedHeight : resolvedPanelHeight,
           width: "392px",
           top: headerHeight + 16,
           zIndex: 9999,
@@ -389,11 +391,14 @@ const Subtitles: FC<SubtitlesProps> = () => {
           stiffness: 320,
           damping: 32,
         }}
-        className={isOpen ? "pointer-events-auto" : "pointer-events-none"}
+        className={`${
+          isOpen ? "pointer-events-auto" : "pointer-events-none"
+        } overflow-visible transition-[height] duration-250 ease-[cubic-bezier(0.22,1,0.36,1)]`}
       >
         <SubtitlePanelShell
           subtitles={subtitles}
-          onClose={() => setIsOpen(false)}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed((current) => !current)}
           toastMessage={toastMessage}
           listContent={
             <SubtitleStates

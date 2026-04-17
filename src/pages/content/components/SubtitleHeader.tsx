@@ -9,7 +9,14 @@ import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 interface SubtitleHeaderProps {
   title?: string;
   subtitles: SubtitleItem[];
-  onClose: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  audioInputDevices: MediaDeviceInfo[];
+  selectedAudioInputId: string;
+  selectedAudioInputLabel: string;
+  audioInputError: string | null;
+  onSelectAudioInput: (deviceId: string) => void;
+  onRefreshAudioInputs: () => void;
 }
 
 const actionButtonClassName =
@@ -18,7 +25,14 @@ const actionButtonClassName =
 export const SubtitleHeader = memo(function SubtitleHeader({
   title = "Listen Up",
   subtitles,
-  onClose,
+  isCollapsed,
+  onToggleCollapse,
+  audioInputDevices,
+  selectedAudioInputId,
+  selectedAudioInputLabel,
+  audioInputError,
+  onSelectAudioInput,
+  onRefreshAudioInputs,
 }: SubtitleHeaderProps) {
   const [copyStatus, setCopyStatus] = useState(false);
   const [exportStatus, setExportStatus] = useState(false);
@@ -150,6 +164,50 @@ export const SubtitleHeader = memo(function SubtitleHeader({
 
   const menuDropdownItems: DropdownItem[] = [
     {
+      key: "audio-inputs",
+      label: "Microphone",
+      icon: "mdi:microphone-outline",
+      items: audioInputError
+        ? [
+            {
+              key: "audio-input-error",
+              label: audioInputError,
+              icon: "mdi:alert-circle-outline",
+              isDisabled: true,
+            },
+            {
+              key: "audio-input-refresh",
+              label: "Retry microphone list",
+              icon: "mdi:refresh",
+              onClick: onRefreshAudioInputs,
+            },
+          ]
+        : [
+        {
+          key: "audio-input-default",
+          label: `System default${selectedAudioInputId ? "" : " · Selected"}`,
+          icon: "mdi:tune-vertical",
+          isSelected: !selectedAudioInputId,
+          onClick: () => onSelectAudioInput(""),
+        },
+        ...audioInputDevices.map((device, index) => ({
+          key: `audio-input-${device.deviceId}`,
+          label: `${device.label || `Microphone ${index + 1}`}${
+            selectedAudioInputId === device.deviceId ? " · Selected" : ""
+          }`,
+          icon: "mdi:microphone-outline",
+          isSelected: selectedAudioInputId === device.deviceId,
+          onClick: () => onSelectAudioInput(device.deviceId),
+        })),
+        {
+          key: "audio-input-refresh",
+          label: `Refresh devices · ${selectedAudioInputLabel}`,
+          icon: "mdi:refresh",
+          onClick: onRefreshAudioInputs,
+        },
+      ],
+    },
+    {
       key: "export-logs",
       label: exportStatus ? "Logs exported" : "Export logs",
       icon: exportStatus ? "mdi:check" : "mdi:format-list-bulleted",
@@ -188,7 +246,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   ];
 
   return (
-    <div className="sticky top-0 z-10 border-b border-zinc-100 bg-white/95 px-3 py-2.5 backdrop-blur-md">
+    <div className="sticky top-0 z-20 border-b border-zinc-100 bg-white/95 px-3 py-2.5 backdrop-blur-md">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-600">
@@ -210,10 +268,10 @@ export const SubtitleHeader = memo(function SubtitleHeader({
                 variant="light"
                 className={actionButtonClassName}
                 aria-label="More actions"
-                title="Logs"
+                title="Settings"
               >
                 <Icon
-                  icon="mdi:format-list-bulleted"
+                  icon="mdi:cog-outline"
                   className={iconScale.headerAction}
                 />
               </Button>
@@ -265,10 +323,15 @@ export const SubtitleHeader = memo(function SubtitleHeader({
             size="md"
             variant="light"
             className={actionButtonClassName}
-            aria-label="Close panel"
-            onPressStart={onClose}
+            aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
+            onPressStart={onToggleCollapse}
           >
-            <Icon icon="mdi:close" className={iconScale.headerAction} />
+            <Icon
+              icon="mdi:chevron-up"
+              className={`${iconScale.headerAction} transition-transform duration-200 ${
+                isCollapsed ? "rotate-180" : ""
+              }`}
+            />
           </Button>
         </div>
       </div>

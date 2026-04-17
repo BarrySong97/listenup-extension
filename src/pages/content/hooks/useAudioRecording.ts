@@ -1,48 +1,181 @@
-import { useState, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
+
+interface RecordingClip {
+  blob: Blob;
+  url: string;
+  duration: number;
+}
 
 export interface RecordingState {
   isRecording: boolean;
   isPlaying: boolean;
-  audioBlob: Blob | null;
-  audioUrl: string | null;
+  clips: RecordingClip[];
   duration: number;
   error: string | null;
 }
 
-export const useAudioRecording = () => {
+const RECORDING_MIME_TYPES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+];
+
+const getSupportedMimeType = () => {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
+  }
+
+  return (
+    RECORDING_MIME_TYPES.find((mimeType) =>
+      MediaRecorder.isTypeSupported(mimeType)
+    ) ?? ""
+  );
+};
+
+const sumDurations = (clips: RecordingClip[]) =>
+  clips.reduce((total, clip) => total + clip.duration, 0);
+
+export const useAudioRecording = (selectedDeviceId?: string) => {
   const [state, setState] = useState<RecordingState>({
     isRecording: false,
     isPlaying: false,
-    audioBlob: null,
-    audioUrl: null,
+    clips: [],
     duration: 0,
-    error: null
+    error: null,
   });
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const startTimeRef = useRef<number>(0);
+  const clipsRef = useRef<RecordingClip[]>([]);
+  const startTimeRef = useRef(0);
+  const durationTimerRef = useRef<number | null>(null);
+  const playbackIndexRef = useRef(0);
 
-  // 开始录音
+  const clearDurationTimer = useCallback(() => {
+    if (durationTimerRef.current) {
+      window.clearInterval(durationTimerRef.current);
+      durationTimerRef.current = null;
+    }
+  }, []);
+
+  const stopActiveStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  const disposeAudio = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    audio.onplay = null;
+    audio.onpause = null;
+    audio.onended = null;
+    audio.onerror = null;
+    audio.pause();
+    audioRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    clipsRef.current = state.clips;
+  }, [state.clips]);
+
+  const playClipAtIndex = useCallback(
+    (index: number) => {
+      const clip = clipsRef.current[index];
+      if (!clip) {
+        playbackIndexRef.current = 0;
+        setState((prev) => ({ ...prev, isPlaying: false }));
+        return;
+      }
+
+      disposeAudio();
+
+      const audio = new Audio(clip.url);
+      playbackIndexRef.current = index;
+      audioRef.current = audio;
+
+      audio.onplay = () => {
+        setState((prev) => ({ ...prev, isPlaying: true, error: null }));
+      };
+
+      audio.onpause = () => {
+        setState((prev) => ({ ...prev, isPlaying: false }));
+      };
+
+      audio.onended = () => {
+        const nextIndex = playbackIndexRef.current + 1;
+        if (nextIndex < clipsRef.current.length) {
+          playClipAtIndex(nextIndex);
+          return;
+        }
+
+        audioRef.current = null;
+        playbackIndexRef.current = 0;
+        setState((prev) => ({ ...prev, isPlaying: false }));
+      };
+
+      audio.onerror = () => {
+        audioRef.current = null;
+        playbackIndexRef.current = 0;
+        setState((prev) => ({
+          ...prev,
+          isPlaying: false,
+          error: "Audio playback failed",
+        }));
+      };
+
+      audio.play().catch(() => {
+        audioRef.current = null;
+        playbackIndexRef.current = 0;
+        setState((prev) => ({
+          ...prev,
+          isPlaying: false,
+          error: "Unable to start playback",
+        }));
+      });
+    },
+    [disposeAudio]
+  );
+
   const startRecording = useCallback(async () => {
+    if (state.isRecording) {
+      return;
+    }
+
     try {
-      setState(prev => ({ ...prev, error: null }));
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      audioRef.current?.pause();
+      clearDurationTimer();
+
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          ...(selectedDeviceId
+            ? {
+                deviceId: { exact: selectedDeviceId },
+              }
+            : {}),
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 44100
-        }
+          sampleRate: 44100,
+        },
       });
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      const mimeType = getSupportedMimeType();
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
 
+      streamRef.current = stream;
+      mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
       startTimeRef.current = Date.now();
+
+      const baseDuration = clipsRef.current.length
+        ? sumDurations(clipsRef.current)
+        : 0;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -51,131 +184,167 @@ export const useAudioRecording = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm;codecs=opus' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const duration = (Date.now() - startTimeRef.current) / 1000;
+        clearDurationTimer();
+        stopActiveStream();
+        mediaRecorderRef.current = null;
 
-        setState(prev => ({
-          ...prev,
-          audioBlob,
-          audioUrl,
-          duration,
-          isRecording: false
-        }));
+        const clipDuration = (Date.now() - startTimeRef.current) / 1000;
+        const nextDuration = baseDuration + clipDuration;
 
-        // 停止所有音频轨道
-        stream.getTracks().forEach(track => track.stop());
+        if (chunksRef.current.length === 0) {
+          setState((prev) => ({
+            ...prev,
+            isRecording: false,
+            duration: baseDuration,
+          }));
+          return;
+        }
+
+        const blob = new Blob(chunksRef.current, {
+          type: mimeType || chunksRef.current[0]?.type || "audio/webm",
+        });
+        const clip: RecordingClip = {
+          blob,
+          url: URL.createObjectURL(blob),
+          duration: clipDuration,
+        };
+
+        setState((prev) => {
+          const clips = [...prev.clips, clip];
+          return {
+            ...prev,
+            clips,
+            duration: nextDuration,
+            isRecording: false,
+            error: null,
+          };
+        });
       };
 
-      mediaRecorder.start(100); // 每100ms收集一次数据
-      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.onerror = () => {
+        clearDurationTimer();
+        stopActiveStream();
+        mediaRecorderRef.current = null;
+        setState((prev) => ({
+          ...prev,
+          isRecording: false,
+          isPlaying: false,
+          duration: baseDuration,
+          error: "Recording failed",
+        }));
+      };
 
-      setState(prev => ({
+      durationTimerRef.current = window.setInterval(() => {
+        setState((prev) =>
+          prev.isRecording
+            ? {
+                ...prev,
+                duration: baseDuration + (Date.now() - startTimeRef.current) / 1000,
+              }
+            : prev
+        );
+      }, 100);
+
+      mediaRecorder.start(100);
+
+      setState((prev) => ({
         ...prev,
         isRecording: true,
-        audioBlob: null,
-        audioUrl: null,
-        duration: 0
+        isPlaying: false,
+        duration: baseDuration,
+        error: null,
       }));
-
     } catch (error) {
-      console.error('录音启动失败:', error);
-      setState(prev => ({
+      stopActiveStream();
+      clearDurationTimer();
+      setState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : '录音启动失败'
+        isRecording: false,
+        error: error instanceof Error ? error.message : "Unable to start recording",
       }));
     }
-  }, []);
+  }, [
+    clearDurationTimer,
+    selectedDeviceId,
+    state.isRecording,
+    stopActiveStream,
+  ]);
 
-  // 停止录音
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && state.isRecording) {
-      mediaRecorderRef.current.stop();
+    if (!mediaRecorderRef.current || !state.isRecording) {
+      return;
     }
+
+    mediaRecorderRef.current.stop();
   }, [state.isRecording]);
 
-  // 播放录音
   const playRecording = useCallback(() => {
-    if (!state.audioUrl) return;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+    if (!clipsRef.current.length) {
+      return;
     }
 
-    const audio = new Audio(state.audioUrl);
-    audioRef.current = audio;
+    if (audioRef.current?.paused) {
+      audioRef.current.play().catch(() => {
+        setState((prev) => ({
+          ...prev,
+          isPlaying: false,
+          error: "Unable to resume playback",
+        }));
+      });
+      return;
+    }
 
-    audio.onplay = () => {
-      setState(prev => ({ ...prev, isPlaying: true }));
-    };
+    playClipAtIndex(playbackIndexRef.current);
+  }, [playClipAtIndex]);
 
-    audio.onpause = () => {
-      setState(prev => ({ ...prev, isPlaying: false }));
-    };
-
-    audio.onended = () => {
-      setState(prev => ({ ...prev, isPlaying: false }));
-      audioRef.current = null;
-    };
-
-    audio.onerror = (error) => {
-      console.error('音频播放失败:', error);
-      setState(prev => ({
-        ...prev,
-        isPlaying: false,
-        error: '音频播放失败'
-      }));
-      audioRef.current = null;
-    };
-
-    audio.play().catch(error => {
-      console.error('播放启动失败:', error);
-      setState(prev => ({
-        ...prev,
-        error: '播放启动失败'
-      }));
-    });
-  }, [state.audioUrl]);
-
-  // 暂停播放
   const pauseRecording = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
+    audioRef.current?.pause();
   }, []);
 
-  // 清除录音
   const clearRecording = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+    clearDurationTimer();
+    disposeAudio();
+
+    if (mediaRecorderRef.current && state.isRecording) {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.onerror = null;
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
     }
 
-    if (state.audioUrl) {
-      URL.revokeObjectURL(state.audioUrl);
-    }
+    stopActiveStream();
+    clipsRef.current.forEach((clip) => URL.revokeObjectURL(clip.url));
+    clipsRef.current = [];
+    playbackIndexRef.current = 0;
+    chunksRef.current = [];
 
     setState({
       isRecording: false,
       isPlaying: false,
-      audioBlob: null,
-      audioUrl: null,
+      clips: [],
       duration: 0,
-      error: null
+      error: null,
     });
-  }, [state.audioUrl]);
+  }, [clearDurationTimer, disposeAudio, state.isRecording, stopActiveStream]);
 
-  // 检查是否有录音
-  const hasRecording = state.audioBlob !== null;
+  useEffect(() => {
+    return () => {
+      clearDurationTimer();
+      disposeAudio();
+      stopActiveStream();
+      clipsRef.current.forEach((clip) => URL.revokeObjectURL(clip.url));
+    };
+  }, [clearDurationTimer, disposeAudio, stopActiveStream]);
 
   return {
     ...state,
-    hasRecording,
+    hasRecording: state.clips.length > 0,
+    recordingCount: state.clips.length,
     startRecording,
     stopRecording,
     playRecording,
     pauseRecording,
-    clearRecording
+    clearRecording,
   };
 };
