@@ -24,18 +24,18 @@ export const ActiveSegmentPanel: FC<ActiveSegmentPanelProps> = ({
   showReturnToActive,
   onReturnToActive,
 }) => {
-  if (!currentSubtitle || !isActive) {
-    return null;
-  }
-
   return (
-    <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/95 px-3 pt-3 backdrop-blur-xl">
-      <div className="rounded-md border border-zinc-200 bg-white p-3 shadow-sm">
+    <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/95 px-3 py-3 backdrop-blur-xl">
+      <div className="min-h-[112px] rounded-md border border-zinc-200 bg-white p-3 shadow-sm">
         <div className="mb-1.5 flex items-center justify-between gap-3">
-          <span className="text-[9px] font-bold uppercase tracking-wider text-blue-600">
-            Active Segment
+          <span
+            className={`text-[9px] font-bold uppercase tracking-wider ${
+              isActive ? "text-blue-600" : "text-zinc-400"
+            }`}
+          >
+            {currentSubtitle ? (isActive ? "Active Segment" : "Recent Segment") : "Active Segment"}
           </span>
-          {showReturnToActive ? (
+          {currentSubtitle && showReturnToActive ? (
             <Button
               size="sm"
               radius="full"
@@ -50,22 +50,30 @@ export const ActiveSegmentPanel: FC<ActiveSegmentPanelProps> = ({
               />
               Back to current
             </Button>
-          ) : (
+          ) : currentSubtitle ? (
             <span className="font-mono text-[11px] text-zinc-400">
               {formatClock(currentSubtitle.startTime)} -{" "}
               {formatClock(currentSubtitle.endTime)}
             </span>
+          ) : (
+            <span className="font-mono text-[11px] text-zinc-300">--:-- - --:--</span>
           )}
         </div>
-        {showReturnToActive && (
+        {currentSubtitle && showReturnToActive && (
           <div className="mb-2 font-mono text-[11px] text-zinc-400">
             {formatClock(currentSubtitle.startTime)} -{" "}
             {formatClock(currentSubtitle.endTime)}
           </div>
         )}
-        <p className="text-sm font-medium leading-6 text-zinc-900">
-          {currentSubtitle.text}
-        </p>
+        {currentSubtitle ? (
+          <p className="text-sm font-medium leading-6 text-zinc-900">
+            {currentSubtitle.text}
+          </p>
+        ) : (
+          <p className="text-sm leading-6 text-zinc-400">
+            Waiting for current subtitle...
+          </p>
+        )}
       </div>
     </div>
   );

@@ -69,7 +69,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [playerHeight, setPlayerHeight] = useState<number | null>(null);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<PanelLayoutMode>("overlay");
+  const [layoutMode, setLayoutMode] = useState<PanelLayoutMode>("inline");
   const [videoId, setVideoId] = useState<string | null>(youtubeSDK.getVideoId());
   const playStateCleanup = useRef<(() => void) | null>(null);
   const inlineLayoutSnapshotRef = useRef<InlineLayoutSnapshot | null>(null);
@@ -122,7 +122,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const restoreOverlayLayout = useCallback(() => {
     const snapshot = inlineLayoutSnapshotRef.current;
     if (!snapshot) {
-      setLayoutMode("overlay");
+      setLayoutMode("inline");
       return;
     }
 
@@ -183,7 +183,6 @@ const Subtitles: FC<SubtitlesProps> = () => {
       null;
 
     const canUseInlineLayout =
-      window.innerWidth >= 1200 &&
       window.location.pathname.startsWith("/watch") &&
       host &&
       columns &&
@@ -220,9 +219,9 @@ const Subtitles: FC<SubtitlesProps> = () => {
     secondaryInner.style.rowGap = "24px";
 
     host.style.display = "block";
-    host.style.position = "sticky";
-    host.style.top = `${headerHeight + 16}px`;
-    host.style.zIndex = "10";
+    host.style.position = "relative";
+    host.style.top = "";
+    host.style.zIndex = "auto";
     host.style.width = "100%";
     host.style.maxWidth = "100%";
     host.style.margin = "0";
@@ -332,14 +331,21 @@ const Subtitles: FC<SubtitlesProps> = () => {
     currentSubtitleIndex >= 0 && currentSubtitleIndex < subtitles.length
       ? subtitles[currentSubtitleIndex]
       : null;
+  const [displaySubtitle, setDisplaySubtitle] = useState(currentSubtitle);
+
+  useEffect(() => {
+    if (currentSubtitle) {
+      setDisplaySubtitle(currentSubtitle);
+    }
+  }, [currentSubtitle]);
 
   const playCurrentSubtitle = useCallback(() => {
-    if (!currentSubtitle) return;
+    if (!displaySubtitle) return;
 
     const player = youtubeSDK.getPlayerFacade();
-    player.seekTo(currentSubtitle.startTime);
+    player.seekTo(displaySubtitle.startTime);
     player.play();
-  }, [currentSubtitle]);
+  }, [displaySubtitle]);
 
   const pauseCurrentVideo = useCallback(() => {
     youtubeSDK.getPlayerFacade().pause();
@@ -362,27 +368,11 @@ const Subtitles: FC<SubtitlesProps> = () => {
     ? resolvedCollapsedHeight
     : resolvedPanelHeight;
 
-  const panelStyle =
-    layoutMode === "inline"
-      ? {
-          width: "100%",
-        }
-      : {
-          width: "392px",
-          top: headerHeight + 16,
-          zIndex: 9999,
-          position: "fixed" as const,
-          right: 12,
-        };
+  const panelStyle = {
+    width: "100%",
+  };
 
-  const panelMotionTarget =
-    layoutMode === "inline"
-      ? { opacity: 1, x: 0, height: panelTargetHeight }
-      : {
-          opacity: isOpen ? 1 : 0.6,
-          x: isOpen ? 0 : 380,
-          height: panelTargetHeight,
-        };
+  const panelMotionTarget = { opacity: 1, x: 0, height: panelTargetHeight };
 
   return (
     <div className={youtubeTheme === "dark" ? "dark" : "light"}>
@@ -393,9 +383,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
         animate={panelMotionTarget}
         transition={{
           x: {
-            type: "spring",
-            stiffness: 320,
-            damping: 32,
+            duration: 0,
           },
           opacity: {
             duration: 0.18,
@@ -451,7 +439,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
           onReturnToActive={returnToActiveSubtitle}
           isPlaying={isVideoPlaying}
           onTogglePlayback={toggleVideoPlayback}
-          currentSubtitle={currentSubtitle}
+          currentSubtitle={displaySubtitle}
           isCurrentSubtitleActive={
             !loading &&
             !error &&
@@ -459,7 +447,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
             currentSubtitleIndex >= 0
           }
           isLooping={isLooping}
-          onToggleLoop={() => toggleLooping(currentSubtitle)}
+          onToggleLoop={() => toggleLooping(displaySubtitle)}
           isSegmentPlaying={isVideoPlaying}
         />
       </motion.div>

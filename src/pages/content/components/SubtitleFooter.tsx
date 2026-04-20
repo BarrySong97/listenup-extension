@@ -53,7 +53,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
     startRecording();
   }, [isRecording, startRecording, stopRecording]);
 
-  if (!currentSubtitle || !isActive) {
+  if (!currentSubtitle) {
     return null;
   }
 

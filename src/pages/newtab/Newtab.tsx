@@ -130,6 +130,13 @@ export default function Newtab() {
   const subtitles = previewState === "empty" ? [] : mockSubtitles;
   const currentSubtitle =
     activeIndex >= 0 && activeIndex < subtitles.length ? subtitles[activeIndex] : null;
+  const [displaySubtitle, setDisplaySubtitle] = useState(currentSubtitle);
+
+  useEffect(() => {
+    if (currentSubtitle) {
+      setDisplaySubtitle(currentSubtitle);
+    }
+  }, [currentSubtitle]);
 
   const errorMessage =
     previewState === "error"
@@ -391,7 +398,7 @@ export default function Newtab() {
                     onReturnToActive={returnToActiveSubtitle}
                     isPlaying={isSegmentPlaying}
                     onTogglePlayback={() => setIsSegmentPlaying((value) => !value)}
-                    currentSubtitle={currentSubtitle}
+                    currentSubtitle={displaySubtitle}
                     isCurrentSubtitleActive={
                       previewState === "loaded" && Boolean(currentSubtitle)
                     }
