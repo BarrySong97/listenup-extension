@@ -22,6 +22,7 @@ interface InlineLayoutSnapshot {
   host: HTMLElement;
   secondaryInner: HTMLElement;
   related: HTMLElement;
+  hiddenAds: Array<{ element: HTMLElement; style: string }>;
   hostOriginalParent: Node;
   hostOriginalNextSibling: ChildNode | null;
   relatedOriginalParent: Node;
@@ -58,6 +59,39 @@ const findActiveRelatedElement = () => {
         !candidate.closest("#related-skeleton")
     ) ?? null
   );
+};
+
+const findSidebarAdElements = (root: HTMLElement) => {
+  const adSelectors = [
+    "ytd-display-ad-renderer",
+    "ytd-companion-slot-renderer",
+    "ytd-action-companion-ad-renderer",
+    "ytd-ad-slot-renderer",
+    "panel-ad-header-image-lockup-view-model",
+    "ad-badge-view-model",
+    '[aria-label*="赞助商广告"]',
+    '[aria-label*="Sponsored"]',
+  ];
+
+  const adElements = new Set<HTMLElement>();
+
+  adSelectors.forEach((selector) => {
+    root.querySelectorAll<HTMLElement>(selector).forEach((element) => {
+      const adContainer =
+        element.closest<HTMLElement>("ytd-engagement-panel-section-list-renderer") ??
+        element.closest<HTMLElement>("ytd-display-ad-renderer") ??
+        element.closest<HTMLElement>("ytd-companion-slot-renderer") ??
+        element.closest<HTMLElement>("ytd-action-companion-ad-renderer") ??
+        element.closest<HTMLElement>("ytd-ad-slot-renderer") ??
+        element;
+
+      if (adContainer && root.contains(adContainer)) {
+        adElements.add(adContainer);
+      }
+    });
+  });
+
+  return Array.from(adElements);
 };
 
 const Subtitles: FC<SubtitlesProps> = () => {
@@ -130,6 +164,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
       host,
       secondaryInner,
       related,
+      hiddenAds,
       hostOriginalParent,
       hostOriginalNextSibling,
       relatedOriginalParent,
@@ -142,6 +177,11 @@ const Subtitles: FC<SubtitlesProps> = () => {
     host.style.cssText = hostStyle;
     secondaryInner.style.cssText = secondaryInnerStyle;
     related.style.cssText = relatedStyle;
+    hiddenAds.forEach(({ element, style }) => {
+      if (element.isConnected) {
+        element.style.cssText = style;
+      }
+    });
 
     if (hostOriginalParent.isConnected) {
       if (
@@ -200,6 +240,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
         host,
         secondaryInner,
         related,
+        hiddenAds: [],
         hostOriginalParent: host.parentNode ?? document.documentElement,
         hostOriginalNextSibling: host.nextSibling,
         relatedOriginalParent: related.parentNode ?? secondaryInner,
@@ -236,6 +277,23 @@ const Subtitles: FC<SubtitlesProps> = () => {
     related.style.maxWidth = "100%";
     related.style.marginTop = "0";
     related.style.flex = "none";
+
+    const snapshot = inlineLayoutSnapshotRef.current;
+    if (snapshot) {
+      const trackedAds = new Set(snapshot.hiddenAds.map(({ element }) => element));
+
+      findSidebarAdElements(secondaryInner).forEach((adElement) => {
+        if (!trackedAds.has(adElement)) {
+          snapshot.hiddenAds.push({
+            element: adElement,
+            style: adElement.style.cssText,
+          });
+        }
+
+        adElement.style.display = "none";
+      });
+    }
+
     setLayoutMode("inline");
   }, [headerHeight, restoreOverlayLayout]);
 
