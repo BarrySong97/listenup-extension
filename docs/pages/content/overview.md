@@ -20,6 +20,7 @@
 - 解析、清洗和合并字幕
 - 将字幕与播放器时间同步
 - 允许逐句跳转、循环播放、录音和复制学习 prompt
+- 选中文字后弹出 Explain 卡片（词性 / 音标 / AI 讲解 / 图片参考）
 - 根据 YouTube 主题和布局动态调整面板表现
 
 ## 边界
@@ -59,3 +60,4 @@
 - [内容脚本架构](architecture.md)
 - [内容脚本 setup](setup.md)
 - [内容脚本 FAQ](faq.md)
+- [Explain 卡片](explain-card.md)

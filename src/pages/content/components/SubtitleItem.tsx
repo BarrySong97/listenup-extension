@@ -8,12 +8,14 @@ import {
 import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { ExplainTarget } from "../hooks/useExplain";
 
 interface SubtitleItemProps {
   subtitle: SubtitleItem;
   isActive: boolean;
   onSubtitleClick?: (subtitle: SubtitleItem, index: number) => void;
   onToast?: (message: string) => void;
+  onRequestExplain?: (target: Omit<ExplainTarget, "videoId">) => void;
   index: number;
 }
 
@@ -22,6 +24,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   isActive,
   onSubtitleClick,
   onToast,
+  onRequestExplain,
   index,
 }: SubtitleItemProps) {
   const TOOLBAR_WIDTH = 156;
@@ -281,7 +284,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
     }
   };
 
-  const handleExplainSelectedText = async (
+  const handleExplainSelectedText = (
     event: MouseEvent<HTMLButtonElement>
   ) => {
     event.stopPropagation();
@@ -290,14 +293,11 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
       return;
     }
 
-    try {
-      const copyText = `Please explain this phrase in English within the context of the whole subtitle: ${selectionActions.text} (Context: ${subtitle.text})`;
-      await navigator.clipboard.writeText(copyText);
-      onToast?.("Copied selection prompt");
-      clearSelection();
-    } catch (error) {
-      console.error("复制失败:", error);
-    }
+    onRequestExplain?.({
+      text: selectionActions.text,
+      context: subtitle.text,
+    });
+    clearSelection();
   };
 
   return (

@@ -80,10 +80,13 @@ export const Dropdown: React.FC<DropdownProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
+      const root = dropdownRef.current;
+      if (!root) return;
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      const isInside = path.length > 0
+        ? path.includes(root)
+        : root.contains(event.target as Node);
+      if (!isInside) {
         setIsOpen(false);
         setOpenSubmenuKey(null);
         if (openDropdownId === dropdownId) {
@@ -237,12 +240,8 @@ export const Dropdown: React.FC<DropdownProps> = ({
 
   const triggerProps = trigger.props as any;
   const triggerWithEvent = cloneElement(trigger, {
-    onPressStart: triggerProps.onPressStart
-      ? mergeHandlers(triggerProps.onPressStart, handleTriggerClick)
-      : undefined,
-    onClick: !triggerProps.onPressStart
-      ? mergeHandlers(triggerProps.onClick, handleTriggerClick)
-      : triggerProps.onClick,
+    onPressStart: mergeHandlers(triggerProps.onPressStart, handleTriggerClick),
+    onClick: triggerProps.onClick,
   } as any);
 
   useEffect(() => {

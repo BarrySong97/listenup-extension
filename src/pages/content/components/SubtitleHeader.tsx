@@ -17,6 +17,7 @@ interface SubtitleHeaderProps {
   audioInputError: string | null;
   onSelectAudioInput: (deviceId: string) => void;
   onRefreshAudioInputs: () => void;
+  onOpenAiSettings: () => void;
 }
 
 const actionButtonClassName =
@@ -33,6 +34,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   audioInputError,
   onSelectAudioInput,
   onRefreshAudioInputs,
+  onOpenAiSettings,
 }: SubtitleHeaderProps) {
   const [copyStatus, setCopyStatus] = useState(false);
   const [exportStatus, setExportStatus] = useState(false);
@@ -206,6 +208,12 @@ export const SubtitleHeader = memo(function SubtitleHeader({
           onClick: onRefreshAudioInputs,
         },
       ],
+    },
+    {
+      key: "ai-settings",
+      label: "AI settings",
+      icon: "mdi:robot-outline",
+      onClick: onOpenAiSettings,
     },
     {
       key: "export-logs",

@@ -6,8 +6,39 @@ import { iconScale } from "@src/components/ui/iconScale";
 import { SubtitleStates } from "@pages/content/components/SubtitleStates";
 import { SubtitleItemComponent } from "@pages/content/components/SubtitleItem";
 import { SubtitlePanelShell } from "@pages/content/components/SubtitlePanelShell";
+import { ExplainCard } from "@pages/content/components/ExplainCard";
+import { AiSettingsCard } from "@pages/content/components/AiSettingsCard";
 import { usePanelToast } from "@pages/content/hooks/usePanelToast";
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
+import type { ExplainResult } from "@src/services/ai/explainSchema";
+import type { ImageSearchResult } from "@src/services/search/imageSearch";
+import type { AiSettings } from "@src/services/ai/aiSettings";
+
+const MOCK_EXPLAIN_DATA: ExplainResult = {
+  partOfSpeech: "adjective",
+  phonetics: { us: "næˌvəˈɡeɪʃənəl", uk: "nævɪˈɡeɪʃənəl" },
+  meaningExplain: "Related to finding or directing the course of a ship.",
+  detailExplain: [
+    "Helps the ship know where to go.",
+    "Involves tools and methods for steering.",
+    "Can include maps, stars, or technology.",
+  ],
+};
+
+const MOCK_EXPLAIN_IMAGES: ImageSearchResult[] = [
+  { thumbnailUrl: "https://placehold.co/120x120/e2e8f0/64748b?text=Map", sourceUrl: "#" },
+  { thumbnailUrl: "https://placehold.co/120x120/fecaca/9f1239?text=Compass", sourceUrl: "#" },
+  { thumbnailUrl: "https://placehold.co/120x120/bfdbfe/1e3a8a?text=Chart", sourceUrl: "#" },
+  { thumbnailUrl: "https://placehold.co/120x120/fde68a/78350f?text=Globe", sourceUrl: "#" },
+  { thumbnailUrl: "https://placehold.co/120x120/bbf7d0/14532d?text=Stars", sourceUrl: "#" },
+];
+
+const MOCK_EXPLAIN_SETTINGS: AiSettings = {
+  baseUrl: "https://api.openai.com/v1",
+  apiKey: "mock",
+  model: "gpt-4o-mini",
+  imageSearchEngine: "bing",
+};
 
 type PreviewState = "loaded" | "loading" | "empty" | "error" | "ad";
 
@@ -112,11 +143,15 @@ const previewStateLabels: Array<{ key: PreviewState; label: string }> = [
   { key: "ad", label: "Ad" },
 ];
 
+type ExplainPreviewState = "hidden" | "loading" | "loaded" | "error";
+
 export default function Newtab() {
   const [previewState, setPreviewState] = useState<PreviewState>("loaded");
   const [activeIndex, setActiveIndex] = useState(2);
   const [isOpen, setIsOpen] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [explainPreview, setExplainPreview] = useState<ExplainPreviewState>("hidden");
+  const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(56);
   const [isSegmentPlaying, setIsSegmentPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
@@ -305,6 +340,35 @@ export default function Newtab() {
                 <Button size="sm" variant="flat" color="default" onPressStart={resetToLoaded}>
                   Reset
                 </Button>
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color={explainPreview !== "hidden" ? "primary" : "default"}
+                  onPressStart={() =>
+                    setExplainPreview((cur) => {
+                      if (cur === "hidden") return "loaded";
+                      if (cur === "loaded") return "loading";
+                      if (cur === "loading") return "error";
+                      return "hidden";
+                    })
+                  }
+                >
+                  {explainPreview === "hidden"
+                    ? "Show Explain Card"
+                    : explainPreview === "loaded"
+                    ? "Explain: Loading"
+                    : explainPreview === "loading"
+                    ? "Explain: Error"
+                    : "Hide Explain Card"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color={isAiSettingsOpen ? "primary" : "default"}
+                  onPressStart={() => setIsAiSettingsOpen((current) => !current)}
+                >
+                  {isAiSettingsOpen ? "Hide AI Settings" : "Show AI Settings"}
+                </Button>
               </div>
             </div>
           </div>
@@ -354,7 +418,7 @@ export default function Newtab() {
                       ease: [0.22, 1, 0.36, 1],
                     },
                   }}
-                  className="w-[392px] overflow-visible"
+                  className="relative w-[392px] overflow-visible"
                 >
                   <SubtitlePanelShell
                     className="flex h-full w-[392px] flex-col overflow-visible rounded-lg border border-zinc-200 bg-white font-['Inter',ui-sans-serif,system-ui,sans-serif] shadow-2xl"
@@ -364,6 +428,7 @@ export default function Newtab() {
                       setIsCollapsed((currentCollapsed) => !currentCollapsed)
                     }
                     onHeaderHeightChange={setCollapsedHeight}
+                    onOpenAiSettings={() => setIsAiSettingsOpen(true)}
                     toastMessage={toastMessage}
                     listContent={
                       <SubtitleStates
@@ -405,6 +470,37 @@ export default function Newtab() {
                     isLooping={isLooping}
                     onToggleLoop={() => setIsLooping((value) => !value)}
                     isSegmentPlaying={isSegmentPlaying}
+                  />
+
+                  <ExplainCard
+                    target={
+                      explainPreview === "hidden"
+                        ? null
+                        : { text: "navigational", context: "I'm on a ship, so it must be a navigational issue." }
+                    }
+                    data={explainPreview === "loaded" ? MOCK_EXPLAIN_DATA : null}
+                    loading={explainPreview === "loading"}
+                    error={
+                      explainPreview === "error"
+                        ? "Mock error: please configure the AI provider in Options."
+                        : null
+                    }
+                    streamText={
+                      explainPreview === "loading"
+                        ? '{\n  "partOfSpeech": "adjective",\n  "phonetics": { "us": "næˌvəˈɡeɪʃənəl", "uk": "nævɪˈɡeɪʃənəl" },\n  "meaningExplain": "Related to finding direction on a ship",\n  "detailExplain": [\n    "Describes tools or problems about navigation",\n    "Used here to explain the kind of issue on the ship"\n  ]\n}'
+                        : ""
+                    }
+                    images={explainPreview === "loaded" ? MOCK_EXPLAIN_IMAGES : []}
+                    imagesLoading={explainPreview === "loading"}
+                    settings={MOCK_EXPLAIN_SETTINGS}
+                    onClose={() => setExplainPreview("hidden")}
+                    onRefresh={() => setExplainPreview("loading")}
+                    onOpenSettings={() => setIsAiSettingsOpen(true)}
+                  />
+
+                  <AiSettingsCard
+                    isOpen={isAiSettingsOpen}
+                    onClose={() => setIsAiSettingsOpen(false)}
                   />
                 </motion.div>
               ) : (

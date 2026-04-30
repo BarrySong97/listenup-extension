@@ -12,12 +12,15 @@
 
 ## 当前职责
 
-当前 popup 很轻，它的主要作用是显示一个简短说明，并把用户带到 `src/pages/options/index.html`。这个入口本质上是为了开发和视觉调试服务，而不是正式的 end-user settings 面板。
+当前 popup 很轻，主要提供两个快捷入口：
+
+- `AI Settings`：打开正式设置页
+- `UI Preview`：打开独立预览页
 
 ## 当前行为
 
 - 显示 ListenUp 的简短说明
-- 点击按钮后通过 `chrome.tabs.create()` 打开 preview 页面
+- 点击按钮后通过 `chrome.tabs.create()` 打开对应扩展页面
 - 打开后自动关闭 popup
 
 ## 边界

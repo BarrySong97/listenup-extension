@@ -1,10 +1,10 @@
 # Options 概览
 
-> 目的: 解释为什么 options 页目前几乎不包含独立逻辑，以及它和 preview 页的关系
+> 目的: 说明 options 页现在是正式 AI 设置入口，而不是 preview 页的别名
 >
 > 源码路径: `src/pages/options/`
 >
-> 覆盖范围: options 当前角色、转发关系和未来扩展提醒
+> 覆盖范围: options 当前角色、与 preview 页的分工、用户入口
 
 ## 源码定位
 
@@ -12,21 +12,21 @@
 
 ## 当前职责
 
-`Options.tsx` 目前只是直接返回 `Newtab` 组件，因此 options 页本质上是 UI Preview 的另一个入口，而不是一个独立的设置系统。
+`Options.tsx` 现在承载真正的 AI 设置表单，用来配置 Explain 卡片所需的 base URL、API key、model 和图片搜索引擎。
 
-## 为什么这样做
+## 与 Preview 的分工
 
-浏览器扩展里 options 页更适合承载一个完整独立页面。当前项目借用了这一点，把预览工具挂在 options 下，方便：
+- `options`：正式设置入口，面向真实使用
+- `newtab`：UI Preview / 调试入口，面向开发迭代
 
-- 从 popup 直接打开
-- 不依赖 YouTube 环境快速验证 UI
+Options 页顶部保留了一个 `Open UI Preview` 按钮，方便在配置完成后切回独立预览页面继续调样式。
 
-## 后续扩展
+## 用户入口
 
-如果未来真的加入用户设置，这里应当重新拆分：
-
-- 预览工具保留在单独页面
-- options 页改为真实设置面板
+- 浏览器扩展 popup 中可直接打开 `AI Settings`
+- `options` 页面仍是完整设置页入口
+- 内容脚本面板 header 的设置菜单里提供 `AI settings`，会在面板内右侧滑出设置卡片
+- Explain 卡片头部和错误态也复用同一个右侧设置卡片入口
 
 ## 相关文档
 

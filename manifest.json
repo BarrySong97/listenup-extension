@@ -5,6 +5,10 @@
   "options_ui": {
     "page": "src/pages/options/index.html"
   },
+  "background": {
+    "service_worker": "src/pages/background/index.ts",
+    "type": "module"
+  },
   "action": {
     "default_popup": "src/pages/popup/index.html",
     "default_icon": {
@@ -20,7 +24,11 @@
     "unlimitedStorage"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*"
+    "*://*.youtube.com/*",
+    "https://www.bing.com/*",
+    "https://www.google.com/*",
+    "https://image.baidu.com/*",
+    "https://api.openai.com/*"
   ],
   "content_scripts": [
     {

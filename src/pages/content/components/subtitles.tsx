@@ -14,6 +14,9 @@ import { useSubtitleAutoScroll } from "../hooks/useSubtitleAutoScroll";
 import { useSubtitleLoop } from "../hooks/useSubtitleLoop";
 import { SubtitlePanelShell } from "./SubtitlePanelShell";
 import { usePanelToast } from "../hooks/usePanelToast";
+import { ExplainCard } from "./ExplainCard";
+import { ExplainTarget, useExplain } from "../hooks/useExplain";
+import { AiSettingsCard } from "./AiSettingsCard";
 
 export interface SubtitlesProps {}
 type PanelLayoutMode = "overlay" | "inline";
@@ -122,6 +125,9 @@ const Subtitles: FC<SubtitlesProps> = () => {
   } = useSubtitleAutoScroll(currentSubtitleIndex, isAdPlaying);
   const { isLooping, toggleLooping, cleanup: cleanupLoop } = useSubtitleLoop();
   const { toastMessage, showToast } = usePanelToast();
+  const [explainTarget, setExplainTarget] = useState<ExplainTarget | null>(null);
+  const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
+  const explainState = useExplain(explainTarget);
 
   const syncLayoutMetrics = useCallback(() => {
     const header = document.querySelector("#masthead");
@@ -409,6 +415,25 @@ const Subtitles: FC<SubtitlesProps> = () => {
     youtubeSDK.getPlayerFacade().pause();
   }, []);
 
+  const handleRequestExplain = useCallback((
+    target: Omit<ExplainTarget, "videoId">
+  ) => {
+    pauseCurrentVideo();
+    setIsAiSettingsOpen(false);
+    setExplainTarget({
+      ...target,
+      videoId,
+    });
+  }, [pauseCurrentVideo, videoId]);
+
+  const openAiSettings = useCallback(() => {
+    setIsAiSettingsOpen(true);
+  }, []);
+
+  const closeAiSettings = useCallback(() => {
+    setIsAiSettingsOpen(false);
+  }, []);
+
   const toggleVideoPlayback = useCallback(() => {
     if (isVideoPlaying) {
       pauseCurrentVideo();
@@ -454,13 +479,14 @@ const Subtitles: FC<SubtitlesProps> = () => {
         }}
         className={`${
           isOpen ? "pointer-events-auto" : "pointer-events-none"
-        } overflow-visible`}
+        } relative overflow-visible`}
       >
         <SubtitlePanelShell
           subtitles={subtitles}
           isCollapsed={isCollapsed}
           onToggleCollapse={() => setIsCollapsed((current) => !current)}
           onHeaderHeightChange={setCollapsedHeight}
+          onOpenAiSettings={openAiSettings}
           toastMessage={toastMessage}
           listContent={
             <SubtitleStates
@@ -485,6 +511,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
                       isActive={index === currentSubtitleIndex}
                       onSubtitleClick={handleSubtitleClick}
                       onToast={showToast}
+                      onRequestExplain={handleRequestExplain}
                     />
                   ))}
                 </VList>
@@ -507,6 +534,25 @@ const Subtitles: FC<SubtitlesProps> = () => {
           isLooping={isLooping}
           onToggleLoop={() => toggleLooping(displaySubtitle)}
           isSegmentPlaying={isVideoPlaying}
+        />
+
+        <ExplainCard
+          target={explainState.target}
+          data={explainState.data}
+          loading={explainState.loading}
+          error={explainState.error}
+          streamText={explainState.streamText}
+          images={explainState.images}
+          imagesLoading={explainState.imagesLoading}
+          settings={explainState.settings}
+          onClose={() => setExplainTarget(null)}
+          onRefresh={explainState.refresh}
+          onOpenSettings={openAiSettings}
+        />
+
+        <AiSettingsCard
+          isOpen={isAiSettingsOpen}
+          onClose={closeAiSettings}
         />
       </motion.div>
 

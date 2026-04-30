@@ -26,6 +26,7 @@ interface SubtitlePanelShellProps {
   className?: string;
   style?: CSSProperties;
   onHeaderHeightChange?: (height: number) => void;
+  onOpenAiSettings: () => void;
 }
 
 export const SubtitlePanelShell: FC<SubtitlePanelShellProps> = ({
@@ -46,6 +47,7 @@ export const SubtitlePanelShell: FC<SubtitlePanelShellProps> = ({
   className,
   style,
   onHeaderHeightChange,
+  onOpenAiSettings,
 }) => {
   const {
     devices,
@@ -98,6 +100,7 @@ export const SubtitlePanelShell: FC<SubtitlePanelShellProps> = ({
           audioInputError={error}
           onSelectAudioInput={setSelectedDeviceId}
           onRefreshAudioInputs={refreshDevices}
+          onOpenAiSettings={onOpenAiSettings}
         />
       </div>
 

@@ -23,7 +23,7 @@ ListenUp 是一个 Manifest V3 浏览器扩展。它的核心价值不是“通�
 
 - `src/pages/content/`: 真正的产品主界面，运行在 YouTube 页面内的 Shadow DOM
 - `src/pages/popup/`: 扩展图标弹窗，目前主要用来打开 UI Preview
-- `src/pages/options/`: 复用 `newtab` 预览界面，作为独立调试入口
+- `src/pages/options/`: Explain / AI 能力的正式设置页
 - `src/pages/newtab/`: 面板实验室，脱离 YouTube 也能迭代组件视觉和状态
 - `src/pages/devtools/`: 一个最小 DevTools 面板入口，当前内容很轻
 
@@ -41,7 +41,12 @@ ListenUp 是一个 Manifest V3 浏览器扩展。它的核心价值不是“通�
 
 内容脚本依赖 YouTube DOM、播放器状态和 Shadow DOM，直接在页面里调样式的反馈循环很慢。`src/pages/newtab/Newtab.tsx` 把主要字幕组件重新装配到一个独立页面里，并用 mock 数据模拟 loaded / loading / empty / error / ad 等状态，方便快速迭代视觉和交互。
 
-这也是为什么 `popup` 会直接打开 `options` 页，而 `options` 又只是复用 `Newtab` 组件。它们当前更像开发支撑面，而不是终端用户功能面。
+现在 `options` 和 `newtab` 已经拆分：
+
+- `options` 面向真实使用，用来配置 AI provider
+- `newtab` 面向开发调试，用来做独立 UI Preview
+
+`popup` 同时暴露这两个入口，内容脚本里的 Explain 卡片和 header 菜单也能直接跳到设置页。
 
 ## 相关文档
 
