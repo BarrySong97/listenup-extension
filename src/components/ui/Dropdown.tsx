@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useId,
   useMemo,
+  useCallback,
   useRef,
   useState,
 } from "react";
@@ -14,6 +15,7 @@ export interface DropdownItem {
   label: string;
   icon?: string;
   endIcon?: string;
+  renderEnd?: () => React.ReactNode;
   isSelected?: boolean;
   isDisabled?: boolean;
   items?: DropdownItem[];
@@ -25,6 +27,7 @@ interface DropdownProps {
   items: DropdownItem[];
   className?: string;
   menuClassName?: string;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 let openDropdownId: string | null = null;
@@ -40,6 +43,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
   items,
   className = "",
   menuClassName = "",
+  onOpenChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [openSubmenuKey, setOpenSubmenuKey] = useState<string | null>(null);
@@ -101,13 +105,13 @@ export const Dropdown: React.FC<DropdownProps> = ({
     };
   }, [dropdownId]);
 
-  const closeDropdown = () => {
+  const closeDropdown = useCallback(() => {
     setIsOpen(false);
     setOpenSubmenuKey(null);
     if (openDropdownId === dropdownId) {
       openDropdownId = null;
     }
-  };
+  }, [dropdownId]);
 
   const handleTriggerClick = () => {
     if (openDropdownId && openDropdownId !== dropdownId) {
@@ -124,6 +128,10 @@ export const Dropdown: React.FC<DropdownProps> = ({
       openDropdownId = null;
     }
   };
+
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const openSubmenu = (itemKey: string, anchorElement?: HTMLElement | null) => {
     if (anchorElement) {
@@ -207,6 +215,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
               {item.endIcon ? (
                 <Icon icon={item.endIcon} className="h-4 w-4 shrink-0 text-zinc-400" />
               ) : null}
+              {item.renderEnd ? item.renderEnd() : null}
               {hasSubmenu ? (
                 <Icon
                   icon="mdi:chevron-right"

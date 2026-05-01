@@ -146,8 +146,8 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
       return;
     }
 
-    try {
-      audioRef.current?.pause();
+      try {
+      disposeAudio();
       clearDurationTimer();
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -211,6 +211,7 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
 
         setState((prev) => {
           const clips = [...prev.clips, clip];
+          playbackIndexRef.current = Math.max(clips.length - 1, 0);
           return {
             ...prev,
             clips,
@@ -294,7 +295,12 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
       return;
     }
 
-    playClipAtIndex(playbackIndexRef.current);
+    const nextIndex = Math.min(
+      playbackIndexRef.current,
+      Math.max(clipsRef.current.length - 1, 0)
+    );
+    playbackIndexRef.current = nextIndex;
+    playClipAtIndex(nextIndex);
   }, [playClipAtIndex]);
 
   const pauseRecording = useCallback(() => {

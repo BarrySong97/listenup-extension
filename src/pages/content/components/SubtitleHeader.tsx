@@ -1,10 +1,11 @@
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Button } from "@heroui/react";
 import { iconScale } from "@src/components/ui/iconScale";
 import { Dropdown, type DropdownItem } from "@src/components/ui";
 import { subtitleDebug } from "../lib/subtitle-domain/subtitleDebug";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { useAudioInputLevel } from "../hooks/useAudioInputLevel";
 
 interface SubtitleHeaderProps {
   title?: string;
@@ -38,6 +39,25 @@ export const SubtitleHeader = memo(function SubtitleHeader({
 }: SubtitleHeaderProps) {
   const [copyStatus, setCopyStatus] = useState(false);
   const [exportStatus, setExportStatus] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { level: audioInputLevel } = useAudioInputLevel(
+    selectedAudioInputId,
+    isMenuOpen
+  );
+
+  const renderAudioLevelMeter = useMemo(() => {
+    return () => (
+      <span className="ml-1.5 flex h-4 w-10 items-center rounded-full bg-zinc-200/80 px-1">
+        <span
+          className="h-2 rounded-full bg-emerald-500 transition-[width] duration-100"
+          style={{
+            width: `${Math.max(10, Math.round(audioInputLevel * 100))}%`,
+            opacity: audioInputLevel > 0.02 ? 1 : 0.35,
+          }}
+        />
+      </span>
+    );
+  }, [audioInputLevel]);
 
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -190,6 +210,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
           label: `System default${selectedAudioInputId ? "" : " · Selected"}`,
           icon: "mdi:tune-vertical",
           isSelected: !selectedAudioInputId,
+          renderEnd: !selectedAudioInputId ? renderAudioLevelMeter : undefined,
           onClick: () => onSelectAudioInput(""),
         },
         ...audioInputDevices.map((device, index) => ({
@@ -199,6 +220,8 @@ export const SubtitleHeader = memo(function SubtitleHeader({
           }`,
           icon: "mdi:microphone-outline",
           isSelected: selectedAudioInputId === device.deviceId,
+          renderEnd:
+            selectedAudioInputId === device.deviceId ? renderAudioLevelMeter : undefined,
           onClick: () => onSelectAudioInput(device.deviceId),
         })),
         {
@@ -272,6 +295,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
           <Dropdown
             items={menuDropdownItems}
             menuClassName="min-w-40"
+            onOpenChange={setIsMenuOpen}
             trigger={
               <Button
                 isIconOnly
