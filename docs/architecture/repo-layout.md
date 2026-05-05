@@ -2,7 +2,7 @@
 
 > 目的: 解释仓库的主要目录和配置文件应该去哪里找，降低首次定位成本
 >
-> 源码路径: `src/`, `public/`, `manifest.json`, `vite.config.*`, `.github/workflows/`
+> 源码路径: `src/`, `public/`, `manifest.json`, `vite.config.*`, `.github/workflows/`, `LICENSE`
 >
 > 覆盖范围: 目录职责、关键配置入口、哪些目录是当前主战场，哪些只是配套
 
@@ -51,9 +51,12 @@
 - `vite.config.firefox.ts`: Firefox 输出目录和 CRX 配置
 - `custom-vite-plugins.ts`: dev icon 清理和可选 i18n 资源注入
 - `tailwind-rem-to-em.js`: 用于 Shadow DOM 场景的单位转换
+- `LICENSE`: 项目主许可证和上游模板 notice，当前限制为非商用使用
+- `package.json`: `license` 字段应与 `LICENSE` 保持一致
 
 ## 相关文档
 
 - [系统总览](system-overview.md)
 - [运行时、权限与构建](runtime-permissions-and-builds.md)
+- [许可证](license.md)
 - [页面文档索引](../pages/README.md)

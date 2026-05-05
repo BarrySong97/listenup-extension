@@ -2,7 +2,7 @@
   "name": "vite-web-extension",
   "version": "1.4.0",
   "description": "A simple chrome & firefox extension template with Vite, React, TypeScript and Tailwind CSS.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/JohnBra/vite-web-extension.git"

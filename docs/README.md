@@ -18,9 +18,10 @@
 1. [系统总览](architecture/system-overview.md)
 2. [仓库结构](architecture/repo-layout.md)
 3. [运行时、权限与构建](architecture/runtime-permissions-and-builds.md)
-4. [内容脚本文档索引](pages/content/README.md)
-5. [全局工作流](workflows.md)
-6. [全局测试规范](testing.md)
+4. [许可证](architecture/license.md)
+5. [内容脚本文档索引](pages/content/README.md)
+6. [全局工作流](workflows.md)
+7. [全局测试规范](testing.md)
 
 ## 目录索引
 
@@ -38,5 +39,6 @@
 ## 相关文档
 
 - [系统总览](architecture/system-overview.md)
+- [许可证](architecture/license.md)
 - [内容脚本概览](pages/content/overview.md)
 - [全局工作流](workflows.md)

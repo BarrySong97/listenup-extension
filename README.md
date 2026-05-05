@@ -38,3 +38,8 @@ pnpm dev:firefox
 - `CLAUDE.md` 和 `AGENTS.md` 只放稳定、简短的协作约定。
 - 具体架构、工作流、踩坑记录统一写进 `docs/`。
 - 代码改动如果改变了行为、结构或工作流，需要同步更新对应文档。
+
+## License
+
+ListenUp Extension 使用 [PolyForm Noncommercial License 1.0.0](LICENSE)。
+你可以 fork、自用、修改，并以免费、非商用方式发布；商业使用需要另行获得授权。
