@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
-import { youtubeController } from "../lib/youtubeController";
+import { youtubeSDK } from "../lib/youtube-sdk";
 
 /**
  * 字幕导航逻辑钩子
@@ -9,7 +9,8 @@ import { youtubeController } from "../lib/youtubeController";
 export const useSubtitleNavigation = (subtitles: SubtitleItem[]) => {
   const handleSubtitleClick = useCallback(
     (subtitle: SubtitleItem, index: number) => {
-      const video = youtubeController.getVideoElement();
+      const player = youtubeSDK.getPlayerFacade();
+      const video = player.getVideoElement();
       if (!video) {
         console.error("跳转失败，无法找到视频元素");
         return;
@@ -20,7 +21,7 @@ export const useSubtitleNavigation = (subtitles: SubtitleItem[]) => {
 
       // 暂停视频避免时差
       if (wasPlaying) {
-        youtubeController.pause();
+        player.pause();
       }
 
       // 计算跳转时间 - 智能处理时间重叠问题
@@ -48,13 +49,13 @@ export const useSubtitleNavigation = (subtitles: SubtitleItem[]) => {
       }
 
       // 跳转到目标时间
-      const success = youtubeController.seekToTime(targetTime, 0);
+      const success = player.seekTo(targetTime);
 
       if (success) {
         // 恢复播放状态
         if (wasPlaying) {
           setTimeout(() => {
-            youtubeController.play();
+            player.play();
           }, 100); // 小延迟确保时间设置完成
         }
       } else {

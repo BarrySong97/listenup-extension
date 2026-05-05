@@ -1,0 +1,11 @@
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #eef2f7;
+}
+
+#__root {
+  min-height: 100vh;
+}

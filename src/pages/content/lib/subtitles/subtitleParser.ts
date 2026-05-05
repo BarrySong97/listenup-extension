@@ -1,5 +1,20 @@
 import { SubtitleItem, ParsedSubtitleData } from "./subtitleTypes";
 
+export type SubtitleParseErrorCode =
+  | "EMPTY_CONTENT"
+  | "UNSUPPORTED_FORMAT"
+  | "INVALID_JSON"
+  | "INVALID_XML";
+
+export class SubtitleParseError extends Error {
+  public readonly code: SubtitleParseErrorCode;
+
+  constructor(code: SubtitleParseErrorCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 /**
  * 解析时间字符串为秒数
  */
@@ -20,7 +35,10 @@ export const parseJSONSubtitles = (content: string): SubtitleItem[] => {
     const data: ParsedSubtitleData = JSON.parse(content);
 
     if (!data.events) {
-      return [];
+      throw new SubtitleParseError(
+        "INVALID_JSON",
+        "JSON subtitle data is missing events"
+      );
     }
 
     const subtitles: SubtitleItem[] = [];
@@ -48,8 +66,10 @@ export const parseJSONSubtitles = (content: string): SubtitleItem[] => {
 
     return subtitles.sort((a, b) => a.startTime - b.startTime);
   } catch (err) {
-    console.error("JSON解析失败:", err);
-    return [];
+    if (err instanceof SubtitleParseError) {
+      throw err;
+    }
+    throw new SubtitleParseError("INVALID_JSON", "Failed to parse JSON subtitles");
   }
 };
 
@@ -102,6 +122,9 @@ export const parseWebVTT = (content: string): SubtitleItem[] => {
 export const parseXMLSubtitles = (content: string): SubtitleItem[] => {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(content, "text/xml");
+  if (xmlDoc.querySelector("parsererror")) {
+    throw new SubtitleParseError("INVALID_XML", "Failed to parse XML subtitles");
+  }
   const textNodes = xmlDoc.querySelectorAll("text");
 
   const subtitles: SubtitleItem[] = [];
@@ -127,21 +150,25 @@ export const parseXMLSubtitles = (content: string): SubtitleItem[] => {
 export const parseSubtitleContent = async (
   content: string
 ): Promise<SubtitleItem[]> => {
-  try {
-    // 尝试解析JSON格式
-    if (content.trim().startsWith("{") || content.trim().startsWith("[")) {
-      return parseJSONSubtitles(content);
-    }
-    // 手动解析其他格式
-    else if (content.includes("WEBVTT")) {
-      return parseWebVTT(content);
-    } else if (content.includes("<transcript>") || content.includes("<text")) {
-      return parseXMLSubtitles(content);
-    }
-
-    return [];
-  } catch (err) {
-    console.error("解析失败:", err);
-    return [];
+  const trimmedContent = content.trim();
+  if (!trimmedContent) {
+    throw new SubtitleParseError("EMPTY_CONTENT", "Subtitle document is empty");
   }
+
+  if (trimmedContent.startsWith("{") || trimmedContent.startsWith("[")) {
+    return parseJSONSubtitles(trimmedContent);
+  }
+
+  if (trimmedContent.includes("WEBVTT")) {
+    return parseWebVTT(trimmedContent);
+  }
+
+  if (trimmedContent.includes("<transcript>") || trimmedContent.includes("<text")) {
+    return parseXMLSubtitles(trimmedContent);
+  }
+
+  throw new SubtitleParseError(
+    "UNSUPPORTED_FORMAT",
+    "Unsupported subtitle document format"
+  );
 };

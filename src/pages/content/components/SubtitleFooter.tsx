@@ -1,29 +1,40 @@
-import { Button, Divider } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import React, { FC, useState, useCallback, useEffect, useRef } from "react";
+import { Button } from "@heroui/react";
+import { iconScale } from "@src/components/ui/iconScale";
+import React, { FC, useCallback } from "react";
 import { useAudioRecording } from "../hooks/useAudioRecording";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
-import { youtubeController } from "../lib/youtubeController";
 
 interface SubtitleFooterProps {
   currentSubtitle: SubtitleItem | null;
   isActive: boolean;
   isLooping: boolean;
   onToggleLoop: () => void;
+  isSegmentPlaying: boolean;
+  selectedDeviceId: string;
 }
+
+const formatClock = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, "0")}:${secs
+    .toString()
+    .padStart(2, "0")}`;
+};
 
 export const SubtitleFooter: FC<SubtitleFooterProps> = ({
   currentSubtitle,
   isActive,
   isLooping,
   onToggleLoop,
+  isSegmentPlaying,
+  selectedDeviceId,
 }) => {
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const playStateCleanup = useRef<(() => void) | null>(null);
   const {
     isRecording,
     isPlaying,
     hasRecording,
+    recordingCount,
     duration,
     error,
     startRecording,
@@ -31,213 +42,124 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
     playRecording,
     pauseRecording,
     clearRecording,
-  } = useAudioRecording();
+  } = useAudioRecording(selectedDeviceId);
 
-  // 监听视频播放状态变化
-  useEffect(() => {
-    if (playStateCleanup.current) {
-      playStateCleanup.current();
-    }
-
-    const cleanup = youtubeController.setupPlayStateListener(
-      () => setIsVideoPlaying(true),
-      () => setIsVideoPlaying(false)
-    );
-
-    playStateCleanup.current = cleanup;
-
-    // 初始状态检查
-    setIsVideoPlaying(youtubeController.isPlaying());
-
-    return () => {
-      if (playStateCleanup.current) {
-        playStateCleanup.current();
-        playStateCleanup.current = null;
-      }
-    };
-  }, []);
-
-  // 播放当前字幕片段
-  const playCurrentSubtitle = useCallback(() => {
-    if (!currentSubtitle) return;
-
-    youtubeController.seekToTime(currentSubtitle.startTime);
-    youtubeController.play();
-  }, [currentSubtitle]);
-
-  // 暂停视频
-  const pauseCurrentVideo = useCallback(() => {
-    youtubeController.pause();
-  }, []);
-
-  // 播放/暂停视频片段
-  const toggleVideoPlayback = useCallback(() => {
-    if (isVideoPlaying) {
-      pauseCurrentVideo();
-    } else {
-      playCurrentSubtitle();
-    }
-  }, [isVideoPlaying, playCurrentSubtitle, pauseCurrentVideo]);
-
-  // 切换循环播放状态
-  const handleToggleLoop = useCallback(() => {
-    onToggleLoop();
-  }, [onToggleLoop]);
-
-  // 录音按钮点击处理
-  const handleRecordingToggle = useCallback(() => {
+  const handlePrimaryRecordingAction = useCallback(() => {
     if (isRecording) {
       stopRecording();
-    } else {
-      startRecording();
+      return;
     }
+
+    startRecording();
   }, [isRecording, startRecording, stopRecording]);
 
-  // 播放录音按钮点击处理
-  const handlePlaybackToggle = useCallback(() => {
-    if (isPlaying) {
-      pauseRecording();
-    } else {
-      playRecording();
-    }
-  }, [isPlaying, playRecording, pauseRecording]);
-
-  // 格式化录音时长
-  const formatDuration = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, "0")}:${secs
-      .toString()
-      .padStart(2, "0")}`;
-  };
-
-  // 如果没有当前字幕则不显示
-  if (!currentSubtitle || !isActive) {
+  if (!currentSubtitle) {
     return null;
   }
 
-  return (
-    <div
-      className="w-full bg-content1 border-t border-default-200"
-      data-loop-state={isLooping}
-    >
-      <Divider />
-      <div className="p-4 space-y-3">
-        {/* 字幕信息 */}
-        <div className="text-center">
-          <p className="text-sm text-default-600 mb-1">Current Subtitle</p>
-          <p className="text-xs font-mono text-default-500">
-            {Math.floor(currentSubtitle.startTime / 60)}:
-            {Math.floor(currentSubtitle.startTime % 60)
-              .toString()
-              .padStart(2, "0")}{" "}
-            - {Math.floor(currentSubtitle.endTime / 60)}:
-            {Math.floor(currentSubtitle.endTime % 60)
-              .toString()
-              .padStart(2, "0")}
-          </p>
-          <p className="text-sm mt-1 line-clamp-2">{currentSubtitle.text}</p>
-        </div>
+  const recordingIcon = isRecording ? "mdi:stop" : "mdi:microphone-outline";
+  const playbackIcon = isPlaying ? "mdi:pause" : "mdi:play";
 
-        {/* 字幕播放控制 */}
-        <div className="flex items-center justify-center gap-2">
+  return (
+    <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/95 px-3 pb-3 pt-3 backdrop-blur-xl">
+      <div className="flex items-center gap-2">
+        <Button
+          isIconOnly
+          size="md"
+          variant="flat"
+          color="default"
+          className={`flex h-11 flex-1 items-center justify-center rounded-md transition-colors ${
+            isLooping
+              ? "bg-zinc-200 text-zinc-900"
+              : "bg-zinc-200/50 text-zinc-700 hover:bg-zinc-200"
+          }`}
+          onPressStart={onToggleLoop}
+          aria-label={isLooping ? "Disable loop playback" : "Enable loop playback"}
+        >
+          <Icon
+            icon={isLooping ? "mdi:repeat-once" : "mdi:repeat-once"}
+            className={iconScale.primaryControl}
+          />
+        </Button>
+        <Button
+          isIconOnly
+          size="md"
+          variant="flat"
+          color={isRecording ? "danger" : "primary"}
+          className={`flex h-11 flex-1 items-center justify-center rounded-md border transition-colors ${
+            isRecording
+              ? "border-red-200 bg-red-50 text-red-600"
+              : hasRecording
+              ? "border-blue-200/50 bg-blue-100 text-blue-700"
+              : "border-blue-200/50 bg-blue-50 text-blue-600 hover:bg-blue-100"
+          }`}
+          onPressStart={handlePrimaryRecordingAction}
+          aria-label="Recording action"
+        >
+          <Icon icon={recordingIcon} className={iconScale.primaryControl} />
+        </Button>
+      </div>
+
+      {hasRecording && !isRecording && (
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <Button
+            size="sm"
+            variant="flat"
+            color="default"
+            className="h-9 gap-1.5 rounded-md bg-zinc-200/70 text-xs font-semibold text-zinc-700 hover:bg-zinc-200"
+            onPressStart={isPlaying ? pauseRecording : playRecording}
+          >
+            <Icon icon={playbackIcon} className={iconScale.secondaryAction} />
+            {isPlaying ? "Pause" : "Play"}
+          </Button>
+          <Button
+            size="sm"
+            variant="flat"
+            color="danger"
+            className="h-9 gap-1.5 rounded-md bg-red-50 text-xs font-semibold text-red-600 hover:bg-red-100"
+            onPressStart={clearRecording}
+          >
+            <Icon
+              icon="mdi:delete-outline"
+              className={iconScale.secondaryAction}
+            />
+            Delete
+          </Button>
           <Button
             size="sm"
             variant="flat"
             color="primary"
-            startContent={
-              <Icon
-                icon={isVideoPlaying ? "mdi:pause" : "mdi:play"}
-                className="w-4 h-4"
-              />
-            }
-            onPressStart={toggleVideoPlayback}
+            className="h-9 gap-1.5 rounded-md bg-blue-50 text-xs font-semibold text-blue-600 hover:bg-blue-100"
+            onPressStart={startRecording}
           >
-            {isVideoPlaying ? "Pause" : "Play Segment"}
-          </Button>
-          <Button
-            size="sm"
-            variant={isLooping ? "solid" : "flat"}
-            color={isLooping ? "secondary" : "default"}
-            startContent={
-              <Icon
-                icon={isLooping ? "mdi:repeat" : "mdi:repeat-off"}
-                className="w-4 h-4"
-              />
-            }
-            onPressStart={handleToggleLoop}
-          >
-            {isLooping ? "Stop Loop" : "Loop Play"}
+            <Icon
+              icon="mdi:microphone-plus"
+              className={iconScale.secondaryAction}
+            />
+            Continue
           </Button>
         </div>
+      )}
 
-        <Divider />
-
-        {/* 录音控制 */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-center gap-2">
-            <Button
-              size="sm"
-              variant={isRecording ? "solid" : "flat"}
-              color={isRecording ? "danger" : "default"}
-              startContent={
-                <Icon
-                  icon={isRecording ? "mdi:stop" : "mdi:microphone"}
-                  className="w-4 h-4"
-                />
-              }
-              onPressStart={handleRecordingToggle}
-            >
-              {isRecording ? "Stop Recording" : "Start Recording"}
-            </Button>
-
-            {hasRecording && (
-              <>
-                <Button
-                  size="sm"
-                  variant="flat"
-                  color="success"
-                  startContent={
-                    <Icon
-                      icon={isPlaying ? "mdi:pause" : "mdi:play"}
-                      className="w-4 h-4"
-                    />
-                  }
-                  onPressStart={handlePlaybackToggle}
-                  isDisabled={isRecording}
-                >
-                  {isPlaying ? "Pause" : "Play"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="light"
-                  color="danger"
-                  startContent={<Icon icon="mdi:delete" className="w-4 h-4" />}
-                  onPressStart={clearRecording}
-                  isDisabled={isRecording || isPlaying}
-                >
-                  Clear
-                </Button>
-              </>
-            )}
-          </div>
-
-          {/* 录音状态信息 */}
-          {hasRecording && (
-            <div className="text-center">
-              <p className="text-xs text-default-500">
-                Recording Duration: {formatDuration(duration)}
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <div className="text-center">
-              <p className="text-xs text-danger">{error}</p>
-            </div>
-          )}
+      {(hasRecording || error) && (
+        <div className="mt-2 flex items-center justify-between px-0.5 text-[10px]">
+          <span className="text-zinc-400">
+            {hasRecording || isRecording
+              ? `${recordingCount > 1 ? `${recordingCount} takes · ` : ""}${formatClock(
+                  duration
+                )}`
+              : ""}
+          </span>
+          <span className="text-zinc-400">
+            {isRecording
+              ? "Recording"
+              : isSegmentPlaying
+              ? "Segment Playing"
+              : ""}
+          </span>
+          {error ? <span className="text-red-500">{error}</span> : null}
         </div>
-      </div>
+      )}
     </div>
   );
 };

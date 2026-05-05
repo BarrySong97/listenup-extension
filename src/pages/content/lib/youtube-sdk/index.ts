@@ -4,11 +4,19 @@
 
 export { YouTubeSDK } from './YouTubeSDK';
 export { YouTubeAdDetector } from './YouTubeAdDetector';
-export { YouTubeVideoController } from './YouTubeVideoController';
-export { YouTubeSubtitleExtractor } from './YouTubeSubtitleExtractor';
+export { YouTubePlayerFacade } from './YouTubePlayerFacade';
+export { YouTubeSessionMonitor } from './YouTubeSessionMonitor';
 export { YouTubeThemeDetector } from './YouTubeThemeDetector';
-export type { AdState, PlayerState, YouTubeTheme, AdStateCallback, PlayerStateCallback, ThemeChangeCallback } from './types';
-export type { SubtitleInfo, CaptionTrack, CaptionsData } from './YouTubeSubtitleExtractor';
+export type {
+  AdState,
+  PlayerState,
+  YouTubeTheme,
+  YouTubeSessionState,
+  AdStateCallback,
+  PlayerStateCallback,
+  ThemeChangeCallback,
+  SessionChangeCallback,
+} from './types';
 
 // Export singleton instance for convenience
 import { YouTubeSDK } from './YouTubeSDK';

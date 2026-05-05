@@ -4,47 +4,35 @@
  */
 
 import { YouTubeAdDetector } from "./YouTubeAdDetector";
-import { YouTubeVideoController } from "./YouTubeVideoController";
-import { YouTubeSubtitleExtractor } from "./YouTubeSubtitleExtractor";
+import { YouTubePlayerFacade } from "./YouTubePlayerFacade";
+import { YouTubeSessionMonitor } from "./YouTubeSessionMonitor";
 import { YouTubeThemeDetector } from "./YouTubeThemeDetector";
 import {
   AdStateCallback,
   PlayerStateCallback,
+  SessionChangeCallback,
   ThemeChangeCallback,
+  YouTubeSessionState,
 } from "./types";
 
 export class YouTubeSDK {
   private adDetector: YouTubeAdDetector;
-  private videoController: YouTubeVideoController;
-  private subtitleExtractor: YouTubeSubtitleExtractor;
+  private playerFacade: YouTubePlayerFacade;
+  private sessionMonitor: YouTubeSessionMonitor;
   private themeDetector: YouTubeThemeDetector;
   private observer: MutationObserver | null = null;
-  private videoId: string | null = null;
-  private originalPushState = history.pushState;
-  private originalReplaceState = history.replaceState;
+  private playerCleanup: (() => void) | null = null;
+  private sessionCleanup: (() => void) | null = null;
 
   constructor() {
     this.adDetector = new YouTubeAdDetector();
-    this.videoController = new YouTubeVideoController();
-    this.subtitleExtractor = new YouTubeSubtitleExtractor();
+    this.playerFacade = new YouTubePlayerFacade();
+    this.sessionMonitor = new YouTubeSessionMonitor();
     this.themeDetector = new YouTubeThemeDetector();
-
-    // Connect the video controller with ad detector
-    this.videoController.setAdDetector(this.adDetector);
   }
 
   public getVideoId(): string | null {
-    if (this.videoId) {
-      return this.videoId;
-    }
-    // 使用正则表达式提取 v 参数，兼容后续还有其他参数的情况
-    const match = window.location.search.match(/[?&]v=([^&]+)/);
-    const videoId = match ? match[1] : null;
-    if (videoId) {
-      this.videoId = videoId;
-      return videoId;
-    }
-    return null;
+    return this.sessionMonitor.getState().videoId;
   }
 
   /**
@@ -64,17 +52,15 @@ export class YouTubeSDK {
     if (!this.isVideoPage()) {
       // Reset states when not on video page
       this.adDetector.reset();
-      this.videoController.reset();
+      this.playerFacade.reset();
       return;
     }
 
-    const player = document.querySelector("#movie_player");
-    if (!player) return;
+    const player = document.querySelector("#movie_player") || document.documentElement;
 
     this.observer = new MutationObserver(() => {
       // Notify both detectors of changes
       this.adDetector.notifyChange();
-      this.videoController.notifyChange();
     });
 
     this.observer.observe(player, {
@@ -86,7 +72,6 @@ export class YouTubeSDK {
 
     // Initial check
     this.adDetector.notifyChange();
-    this.videoController.notifyChange();
   }
 
   /**
@@ -104,17 +89,32 @@ export class YouTubeSDK {
       onAdStateChange?: AdStateCallback;
       onPlayerStateChange?: PlayerStateCallback;
       onThemeChange?: ThemeChangeCallback;
+      onSessionChange?: SessionChangeCallback;
     } = {}
   ): void {
     // Set callbacks
     if (options.onAdStateChange) {
       this.adDetector.setCallback(options.onAdStateChange);
     }
-    if (options.onPlayerStateChange) {
-      this.videoController.setCallback(options.onPlayerStateChange);
-    }
     if (options.onThemeChange) {
       this.themeDetector.setCallback(options.onThemeChange);
+    }
+
+    this.playerCleanup?.();
+    if (options.onPlayerStateChange) {
+      this.playerCleanup = this.playerFacade.subscribeState(
+        options.onPlayerStateChange
+      );
+    } else {
+      this.playerCleanup = null;
+    }
+
+    this.sessionMonitor.start();
+    this.sessionCleanup?.();
+    if (options.onSessionChange) {
+      this.sessionCleanup = this.sessionMonitor.subscribe(options.onSessionChange);
+    } else {
+      this.sessionCleanup = null;
     }
 
     // Start theme monitoring
@@ -122,20 +122,6 @@ export class YouTubeSDK {
 
     // Setup initially
     this.setupObserver();
-
-    // Intercept History API for SPA navigation
-    const self = this;
-    history.pushState = function (...args) {
-      self.originalPushState.apply(history, args);
-      self.handleUrlChange();
-    };
-
-    history.replaceState = function (...args) {
-      self.originalReplaceState.apply(history, args);
-      self.handleUrlChange();
-    };
-
-    window.addEventListener("popstate", this.handleUrlChange);
   }
 
   /**
@@ -147,21 +133,19 @@ export class YouTubeSDK {
 
     // Clear callbacks
     this.adDetector.setCallback(null);
-    this.videoController.setCallback(null);
     this.themeDetector.setCallback(null);
+    this.playerCleanup?.();
+    this.playerCleanup = null;
+    this.sessionCleanup?.();
+    this.sessionCleanup = null;
 
     // Stop theme monitoring
     this.themeDetector.stopMonitoring();
+    this.sessionMonitor.stop();
 
     // Reset states
     this.adDetector.reset();
-    this.videoController.reset();
-
-    // Restore original History API methods
-    history.pushState = this.originalPushState;
-    history.replaceState = this.originalReplaceState;
-
-    window.removeEventListener("popstate", this.handleUrlChange);
+    this.playerFacade.reset();
   }
 
   /**
@@ -174,15 +158,12 @@ export class YouTubeSDK {
   /**
    * Get the video controller instance
    */
-  public getVideoController(): YouTubeVideoController {
-    return this.videoController;
+  public getPlayerFacade(): YouTubePlayerFacade {
+    return this.playerFacade;
   }
 
-  /**
-   * Get the subtitle extractor instance
-   */
-  public getSubtitleExtractor(): YouTubeSubtitleExtractor {
-    return this.subtitleExtractor;
+  public getSessionState(): YouTubeSessionState {
+    return this.sessionMonitor.getState();
   }
 
   /**
@@ -207,43 +188,39 @@ export class YouTubeSDK {
 
   // Video-related methods
   public getVideo(): HTMLVideoElement | null {
-    return this.videoController.getVideoElement();
+    return this.playerFacade.getVideoElement();
   }
 
   public play(): boolean {
-    return this.videoController.play();
+    return this.playerFacade.play();
   }
 
   public pause(): boolean {
-    return this.videoController.pause();
+    return this.playerFacade.pause();
   }
 
   public seekTo(time: number): boolean {
-    return this.videoController.seekTo(time);
+    return this.playerFacade.seekTo(time);
   }
 
   public setVolume(volume: number): boolean {
-    return this.videoController.setVolume(volume);
+    return this.playerFacade.setVolume(volume);
   }
 
   public getCurrentTime(): number {
-    return this.videoController.getCurrentTime();
+    return this.playerFacade.getCurrentTime();
   }
 
   public getDuration(): number {
-    return this.videoController.getDuration();
+    return this.playerFacade.getDuration();
   }
 
   public isPlaying(): boolean {
-    return this.videoController.isPlaying();
+    return this.playerFacade.isPlaying();
   }
 
   public getCurrentPlayerState() {
-    return this.videoController.detectPlayerState();
-  }
-
-  public async getSubtitleUrl(languageCode: string): Promise<string | null> {
-    return await this.subtitleExtractor.getSubtitleUrl(languageCode);
+    return this.playerFacade.detectPlayerState();
   }
 
   // Theme-related methods

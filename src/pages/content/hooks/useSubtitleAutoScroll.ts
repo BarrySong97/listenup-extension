@@ -12,29 +12,112 @@ export const useSubtitleAutoScroll = (
 ) => {
   const vListRef = useRef<VListHandle>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [showReturnToActive, setShowReturnToActive] = useState(false);
+  const [isFollowingCurrent, setIsFollowingCurrent] = useState(true);
+  const isProgrammaticScroll = useRef(false);
+  const isReturningToActive = useRef(false);
 
-  // 自動滾動到當前字幕
+  const isActiveSubtitleVisible = () => {
+    if (!vListRef.current || currentSubtitleIndex < 0) {
+      return true;
+    }
+
+    const startIndex = vListRef.current.findStartIndex();
+    const endIndex = vListRef.current.findEndIndex();
+
+    return (
+      currentSubtitleIndex >= startIndex && currentSubtitleIndex <= endIndex
+    );
+  };
+
+  const scrollToActiveSubtitle = (smooth: boolean, isManualReturn = false) => {
+    if (currentSubtitleIndex < 0 || !vListRef.current) {
+      return;
+    }
+
+    isProgrammaticScroll.current = true;
+    isReturningToActive.current = isManualReturn;
+    setIsFollowingCurrent(true);
+    setShowReturnToActive(false);
+    vListRef.current.scrollToIndex(currentSubtitleIndex, {
+      align: "center",
+      smooth,
+    });
+  };
+
   useEffect(() => {
     if (isAdPlaying) {
       return;
     }
-    if (currentSubtitleIndex >= 0 && vListRef.current) {
-      if (isInitialLoad) {
-        // 初始加载时立即跳转，不使用平滑动画
-        vListRef.current.scrollToIndex(currentSubtitleIndex, {
-          align: "center",
-          smooth: false, // 立即跳转
-        });
-        setIsInitialLoad(false);
-      } else {
-        // 后续更新使用平滑滚动
-        vListRef.current.scrollToIndex(currentSubtitleIndex, {
-          align: "center",
-          smooth: true,
-        });
-      }
-    }
-  }, [currentSubtitleIndex, isInitialLoad, isAdPlaying]);
 
-  return { vListRef };
+    if (currentSubtitleIndex < 0 || !vListRef.current || !isFollowingCurrent) {
+      return;
+    }
+
+    if (isInitialLoad) {
+      scrollToActiveSubtitle(false);
+      setIsInitialLoad(false);
+      return;
+    }
+
+    scrollToActiveSubtitle(true);
+  }, [
+    currentSubtitleIndex,
+    isInitialLoad,
+    isAdPlaying,
+    isFollowingCurrent,
+  ]);
+
+  const handleListScroll = () => {
+    if (
+      isProgrammaticScroll.current ||
+      isReturningToActive.current ||
+      currentSubtitleIndex < 0
+    ) {
+      return;
+    }
+
+    if (isActiveSubtitleVisible()) {
+      setShowReturnToActive(false);
+      setIsFollowingCurrent(true);
+      return;
+    }
+
+    setShowReturnToActive(true);
+    setIsFollowingCurrent(false);
+  };
+
+  const handleListScrollEnd = () => {
+    if (isProgrammaticScroll.current) {
+      isProgrammaticScroll.current = false;
+    }
+
+    if (isReturningToActive.current) {
+      isReturningToActive.current = false;
+      setShowReturnToActive(false);
+      setIsFollowingCurrent(true);
+      return;
+    }
+
+    if (currentSubtitleIndex < 0) {
+      setShowReturnToActive(false);
+      return;
+    }
+
+    if (isActiveSubtitleVisible()) {
+      setShowReturnToActive(false);
+    }
+  };
+
+  const returnToActiveSubtitle = () => {
+    scrollToActiveSubtitle(true, true);
+  };
+
+  return {
+    vListRef,
+    showReturnToActive,
+    returnToActiveSubtitle,
+    handleListScroll,
+    handleListScrollEnd,
+  };
 };

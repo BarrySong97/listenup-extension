@@ -1,9 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "name in manifest.json",
-  "description": "description in manifest.json",
+  "name": "listen up immers",
+  "description": "listen up immers",
   "options_ui": {
     "page": "src/pages/options/index.html"
+  },
+  "background": {
+    "service_worker": "src/pages/background/index.ts",
+    "type": "module"
   },
   "action": {
     "default_popup": "src/pages/popup/index.html",
@@ -11,29 +15,21 @@
       "32": "icon-32.png"
     }
   },
-  "side_panel": {
-    "default_path": "src/pages/panel/index.html"
-  },
   "icons": {
     "128": "icon-128.png"
   },
   "permissions": [
     "activeTab",
-    "webRequest",
-    "sidePanel",
     "storage",
-    "declarativeNetRequest",
     "unlimitedStorage"
   ],
   "host_permissions": [
     "*://*.youtube.com/*",
-    "*://*.openai.com/*",
-    "*://chatgpt.com/*"
+    "https://www.bing.com/*",
+    "https://www.google.com/*",
+    "https://image.baidu.com/*",
+    "https://api.openai.com/*"
   ],
-  "background": {
-    "service_worker": "src/pages/background/index.ts",
-    "type": "module"
-  },
   "content_scripts": [
     {
       "matches": [
@@ -50,7 +46,7 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://*.openai.com https://*.chatgpt.com https://chatgpt.com; style-src 'self' 'unsafe-inline';"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';"
   },
   "devtools_page": "src/pages/devtools/index.html",
   "web_accessible_resources": [

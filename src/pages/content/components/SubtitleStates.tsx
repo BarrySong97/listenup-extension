@@ -17,41 +17,38 @@ export const SubtitleStates = memo(function SubtitleStates({
 }: SubtitleStatesProps) {
   if (isAd) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-sm ml-3">ad...</p>
+      <div className="flex h-full items-center justify-center px-8 text-center">
+        <p className="text-xs text-zinc-500">Subtitles are paused during ads.</p>
       </div>
     );
   }
-  // Loading状态
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-sm ml-3">loading...</p>
+      <div className="flex h-full items-center justify-center px-8 text-center">
+        <p className="text-xs text-zinc-500">Loading subtitles...</p>
       </div>
     );
   }
 
-  // Error状态
   if (error) {
     return (
-      <div className="p-4 flex items-center justify-center h-full">
-        {/* <p className="text-sm text-warning">{error}</p> */}
-        <p className="text-xs mt-1 ">error</p>
+      <div className="flex h-full items-center justify-center p-6">
+        <p className="break-words whitespace-pre-wrap text-center text-xs text-zinc-500">
+          {error}
+        </p>
       </div>
     );
   }
 
-  // Empty状态
   if (isEmpty) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex h-full items-center justify-center px-8 text-center">
         <div className="text-center">
-          <p className="text-sm">empty</p>
+          <p className="text-xs text-zinc-500">No subtitles available.</p>
         </div>
       </div>
     );
   }
 
-  // 如果都不是以上状态，返回null（不渲染任何内容）
   return children;
 });
