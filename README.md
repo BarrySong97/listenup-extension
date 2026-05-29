@@ -1,45 +1,33 @@
-# ListenUp Extension
+# ListenUp Monorepo
 
-ListenUp 是一个面向 YouTube 语言学习的 Chrome / Firefox 扩展。核心功能在 YouTube 页面内注入字幕侧边栏，支持字幕提取、逐句跳转、循环播放、录音练习，以及复制字幕或解释 prompt。
+这个仓库使用 pnpm workspace 和 Turborepo 管理两个应用：
+
+- `apps/extension`: ListenUp Chrome / Firefox 浏览器扩展
+- `apps/website`: 从 `install-ipa-to-iphone/webs` 复制过来的 Next.js 站点
 
 ## 快速开始
-
-推荐使用 `pnpm`：
 
 ```bash
 pnpm install
 pnpm build
 ```
 
-开发模式：
+常用命令：
 
 ```bash
-pnpm dev
-pnpm dev:firefox
+pnpm build:extension
+pnpm build:firefox
+pnpm build:website
+pnpm dev:extension
+pnpm dev:website
 ```
-
-加载扩展：
-
-1. Chrome: 打开 `chrome://extensions`，启用开发者模式，加载 `dist_chrome/`
-2. Firefox: 打开 `about:debugging#/runtime/this-firefox`，加载 `dist_firefox/manifest.json`
 
 ## 文档
 
-详细文档统一维护在 [docs/README.md](docs/README.md)。
-
-推荐阅读顺序：
-
-1. [docs/README.md](docs/README.md)
-2. [docs/architecture/system-overview.md](docs/architecture/system-overview.md)
-3. [docs/pages/content/README.md](docs/pages/content/README.md)
-
-## 开发约定
-
-- `CLAUDE.md` 和 `AGENTS.md` 只放稳定、简短的协作约定。
-- 具体架构、工作流、踩坑记录统一写进 `docs/`。
-- 代码改动如果改变了行为、结构或工作流，需要同步更新对应文档。
+- Monorepo 文档入口: [docs/README.md](docs/README.md)
+- Extension 文档入口: [apps/extension/docs/README.md](apps/extension/docs/README.md)
+- Website 说明: [apps/website/README.md](apps/website/README.md)
 
 ## License
 
 ListenUp Extension 使用 [PolyForm Noncommercial License 1.0.0](LICENSE)。
-你可以 fork、自用、修改，并以免费、非商用方式发布；商业使用需要另行获得授权。

@@ -1,44 +1,26 @@
-# ListenUp 文档入口
+# ListenUp Monorepo 文档入口
 
-> 目的: 作为仓库内长期文档的总入口，告诉协作者从哪里开始读、每类知识放在哪里
+> 目的: 说明 monorepo 的应用边界、命令入口和各 app 文档位置
 >
-> 源码路径: `docs/`
+> 源码路径: `apps/`, `package.json`, `pnpm-workspace.yaml`, `turbo.json`
 >
-> 覆盖范围: 文档导航、推荐阅读顺序、模块索引，不包含具体实现细节
-
-## 源码定位
-
-- 主路径: `docs/`
-- 相关路径: `README.md`
-- 相关路径: `CLAUDE.md`
-- 相关路径: `AGENTS.md`
+> 覆盖范围: 仓库级结构和工作流，不替代各 app 内部实现文档
 
 ## 推荐阅读顺序
 
-1. [系统总览](architecture/system-overview.md)
-2. [仓库结构](architecture/repo-layout.md)
-3. [运行时、权限与构建](architecture/runtime-permissions-and-builds.md)
-4. [许可证](architecture/license.md)
-5. [内容脚本文档索引](pages/content/README.md)
-6. [全局工作流](workflows.md)
-7. [全局测试规范](testing.md)
+1. [仓库结构](architecture/repo-layout.md)
+2. [全局工作流](workflows.md)
+3. [全局测试规范](testing.md)
+4. [Extension 文档](../apps/extension/docs/README.md)
+5. [Website 说明](../apps/website/README.md)
 
-## 目录索引
+## 应用索引
 
-- [architecture/](architecture/README.md): 跨模块系统级说明，包括仓库结构、运行时和构建
-- [pages/](pages/README.md): 对齐 `src/pages/` 的入口页面文档
-- [workflows.md](workflows.md): 开发、提交流程和文档同步要求
-- [testing.md](testing.md): 当前测试方式、最低验证要求和手工回归清单
+- `apps/extension/`: 浏览器扩展，保留原 ListenUp Extension 项目源码和文档
+- `apps/website/`: Next.js 站点，从 `install-ipa-to-iphone/webs` 复制而来
 
-## 当前重点模块
+## 关键配置
 
-- [pages/content/](pages/content/README.md): 真正面向用户的核心功能，优先维护
-- [pages/newtab/](pages/newtab/README.md): 用于快速迭代字幕面板 UI 的预览页
-- [pages/popup/](pages/popup/README.md): 用于打开预览页的轻量入口
-
-## 相关文档
-
-- [系统总览](architecture/system-overview.md)
-- [许可证](architecture/license.md)
-- [内容脚本概览](pages/content/overview.md)
-- [全局工作流](workflows.md)
+- `pnpm-workspace.yaml`: 声明 `apps/*` 为 workspace package
+- `turbo.json`: 定义 `build`、`dev`、`lint`、`start` 的任务缓存和持久进程规则
+- `package.json`: 根目录命令入口，使用 `pnpm --filter` 定位具体 app
