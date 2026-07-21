@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ListenUp Native Subtitle Demo",
+  "version": "0.1.0",
+  "identifier": "com.listenup.native-subtitle-demo",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1421",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ListenUp Native Subtitles",
+        "width": 560,
+        "height": 620,
+        "minWidth": 420,
+        "minHeight": 360,
+        "alwaysOnTop": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "category": "Education",
+    "icon": ["../../extension/public/icon-128.png"]
+  }
+}

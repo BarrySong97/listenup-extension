@@ -38,6 +38,8 @@
 - `storage`
 - `unlimitedStorage`
 
+`manifest.dev.json` 会在开发构建中用完整权限数组覆盖上述配置，并额外声明 `nativeMessaging`。该权限只服务于 macOS Tauri 字幕同步 Demo，生产构建不包含它。
+
 `host_permissions` 当前只包含 `*://*.youtube.com/*`。因此虽然内容脚本匹配范围更大，真正需要的数据访问和 web-accessible resource 仍围绕 YouTube。
 
 ## Web Accessible Resources
@@ -56,6 +58,7 @@
 - Firefox: `pnpm build:firefox`
 - Chrome dev: `pnpm dev:extension`
 - Firefox dev: `pnpm dev:firefox`
+- Chrome Native Messaging Demo: `pnpm build:extension:native-demo`
 
 产物目录：
 

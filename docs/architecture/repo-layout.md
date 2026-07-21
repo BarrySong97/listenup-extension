@@ -10,6 +10,7 @@
 
 - `apps/extension/`: 原 ListenUp 浏览器扩展项目，包含 `src/`、`manifest.json`、Vite 配置和扩展文档
 - `apps/website/`: Next.js website app，包含 `app/`、`public/` 和 Next 配置
+- `apps/native-subtitle-demo/`: Tauri v2 macOS Demo；Rust 端充当 Chrome Native Messaging Host，React 前端展示同步字幕
 - `docs/`: monorepo 级文档
 - `.github/workflows/`: 仓库级 CI
 - `package.json`: 根命令入口
@@ -20,11 +21,14 @@
 
 - Extension: `apps/extension/docs/README.md`
 - Website: `apps/website/README.md`
+- Native subtitle demo: `apps/native-subtitle-demo/README.md`
 
 ## 构建产物
 
 - Extension Chrome: `apps/extension/dist_chrome/`
 - Extension Firefox: `apps/extension/dist_firefox/`
 - Website: `apps/website/.next/`
+- Native subtitle demo frontend: `apps/native-subtitle-demo/dist/`
+- Native subtitle demo Rust/Tauri: `apps/native-subtitle-demo/src-tauri/target/`
 
 这些目录都是生成物，不应手工编辑。

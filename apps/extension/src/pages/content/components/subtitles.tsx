@@ -17,6 +17,7 @@ import { usePanelToast } from "../hooks/usePanelToast";
 import { ExplainCard } from "./ExplainCard";
 import { ExplainTarget, useExplain } from "../hooks/useExplain";
 import { AiSettingsCard } from "./AiSettingsCard";
+import { useNativeSubtitleBridge } from "../hooks/useNativeSubtitleBridge";
 
 export interface SubtitlesProps {}
 type PanelLayoutMode = "overlay" | "inline";
@@ -110,11 +111,12 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [videoId, setVideoId] = useState<string | null>(youtubeSDK.getVideoId());
   const playStateCleanup = useRef<(() => void) | null>(null);
   const inlineLayoutSnapshotRef = useRef<InlineLayoutSnapshot | null>(null);
-  const { subtitles, loading, error } = useSubtitles({
+  const { subtitles, track, loading, error } = useSubtitles({
     enabled: !isAdPlaying,
     videoId,
   });
-  const { currentSubtitleIndex, setCurrentTime } = useSubtitleSync(subtitles);
+  const { currentTime, currentSubtitleIndex, setCurrentTime } =
+    useSubtitleSync(subtitles);
   const { handleSubtitleClick } = useSubtitleNavigation(subtitles);
   const {
     vListRef,
@@ -128,6 +130,18 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [explainTarget, setExplainTarget] = useState<ExplainTarget | null>(null);
   const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
   const explainState = useExplain(explainTarget);
+
+  useNativeSubtitleBridge({
+    videoId,
+    subtitles,
+    track,
+    loading,
+    error,
+    currentTime,
+    currentSubtitleIndex,
+    isVideoPlaying,
+    isAdPlaying,
+  });
 
   const syncLayoutMetrics = useCallback(() => {
     const header = document.querySelector("#masthead");

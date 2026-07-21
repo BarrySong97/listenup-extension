@@ -29,8 +29,13 @@
 - 监听主题、广告、播放器状态和会话变化
 - 调用 `useSubtitles` 加载字幕
 - 协调当前字幕索引、自动滚动、循环播放和面板布局
+- 在开发构建启用 Native Messaging 时，把字幕快照和节流后的播放游标交给 background service worker
 
 它既是“容器组件”，也是当前模块的主要编排层。
+
+## Native 字幕 Demo 数据流
+
+`useNativeSubtitleBridge` 只在 manifest 含 `nativeMessaging` 权限时工作。每个视频加载状态或字幕结果变化时，它发送一次 session 消息；播放期间最多每 250ms 发送一次 cursor，当前字幕索引变化则立即发送。background 为消息补充 `tabId`，只在 session 到达时懒连接 `com.listenup.native_subtitle_demo`，因此 Host 缺失或窗口关闭不会被高频 cursor 反复拉起。
 
 ## 字幕加载层
 

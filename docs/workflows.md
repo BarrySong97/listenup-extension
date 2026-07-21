@@ -22,6 +22,8 @@ pnpm build
 pnpm build:extension
 pnpm build:firefox
 pnpm build:website
+pnpm build:extension:native-demo
+pnpm build:native-host-demo
 pnpm dev:extension
 pnpm dev:website
 ```
@@ -31,6 +33,7 @@ pnpm dev:website
 - 新增或移动 app
 - 根目录 workspace、turbo、CI 或构建命令发生变化
 - Extension 内容脚本、权限、构建链路或交互方式发生变化
+- Native Messaging 协议、Host 安装位置或 Tauri Demo 构建方式发生变化
 - Website 的运行方式、环境变量或部署方式发生变化
 
 ## 提交前检查清单

@@ -1,4 +1,10 @@
 {
+  "permissions": [
+    "activeTab",
+    "storage",
+    "unlimitedStorage",
+    "nativeMessaging"
+  ],
   "action": {
     "default_icon": "public/dev-icon-32.png",
     "default_popup": "src/pages/popup/index.html"

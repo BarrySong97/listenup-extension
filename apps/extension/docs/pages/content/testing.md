@@ -55,6 +55,14 @@ pnpm build:firefox
 - 样式不污染 YouTube 原生页面
 - Dropdown、hover、选区浮层等 overlay 行为没有错位
 
+改 Native 字幕同步链路时，额外检查：
+
+- 生产 manifest 不含 `nativeMessaging`，开发 Demo manifest 包含该权限
+- Host 未安装时字幕面板仍正常工作
+- Native 窗口能随播放、暂停和 seek 高亮并滚动当前字幕
+- YouTube SPA 切换视频后 Native 窗口替换为新字幕
+- 多标签页时 Native 窗口跟随最近播放的页面
+
 ## 相关文档
 
 - [全局测试规范](../../testing.md)

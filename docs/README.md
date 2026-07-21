@@ -18,6 +18,7 @@
 
 - `apps/extension/`: 浏览器扩展，保留原 ListenUp Extension 项目源码和文档
 - `apps/website/`: Next.js 站点，从 `install-ipa-to-iphone/webs` 复制而来
+- `apps/native-subtitle-demo/`: macOS Tauri Native Messaging 字幕同步 Demo，使用说明见 app 内 README
 
 ## 关键配置
 
