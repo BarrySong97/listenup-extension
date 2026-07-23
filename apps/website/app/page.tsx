@@ -59,6 +59,7 @@ export default function Home() {
               href={DOWNLOAD_URL}
               target="_blank"
               rel="noreferrer"
+              title="Download the latest ListenUp for macOS"
               className="inline-flex items-center gap-2.5 rounded-[12px] bg-[#141416] px-6 py-[13px] text-[15.5px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-px"
             >
               <AppleIcon />
