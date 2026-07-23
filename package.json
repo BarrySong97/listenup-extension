@@ -10,6 +10,7 @@
     "build:chrome": "pnpm --filter @listenup/extension build:chrome",
     "build:firefox": "pnpm --filter @listenup/extension build:firefox",
     "build:website": "pnpm --filter @listenup/website build",
+    "build:web:static": "BUILD_STATIC=1 pnpm --filter @listenup/website build",
     "build:desktop": "pnpm --filter @listenup/desktop tauri:build",
     "build:desktop:dev": "pnpm --filter @listenup/desktop tauri:build:dev",
     "dev": "turbo run dev --parallel",
