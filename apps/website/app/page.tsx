@@ -61,7 +61,7 @@ export default function Home() {
               target="_blank"
               rel="noreferrer"
               aria-label="Download the latest ListenUp for macOS"
-              className="inline-flex items-center gap-2.5 rounded-[12px] bg-[#141416] px-6 py-[13px] text-[15.5px] font-semibold text-white no-underline shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-px hover:opacity-100"
+              className="inline-flex items-center gap-2.5 rounded-[12px] bg-[#141416] px-6 py-[13px] text-[15.5px] font-semibold text-white no-underline shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition duration-100 data-[hovered]:opacity-90 active:scale-[0.97] data-[pressed]:scale-[0.97]"
             >
               <AppleIcon />
               Download for macOS
