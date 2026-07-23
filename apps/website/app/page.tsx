@@ -1,3 +1,4 @@
+import { Link } from "@heroui/react";
 import { LogoMark, SubtitlePanelMock } from "@listenup/mock-ui";
 
 // Always resolves to the newest published GitHub Release (the macOS DMG).
@@ -55,19 +56,19 @@ export default function Home() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <a
+            <Link
               href={DOWNLOAD_URL}
               target="_blank"
               rel="noreferrer"
-              title="Download the latest ListenUp for macOS"
-              className="inline-flex items-center gap-2.5 rounded-[12px] bg-[#141416] px-6 py-[13px] text-[15.5px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-px"
+              aria-label="Download the latest ListenUp for macOS"
+              className="inline-flex items-center gap-2.5 rounded-[12px] bg-[#141416] px-6 py-[13px] text-[15.5px] font-semibold text-white no-underline shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-px hover:opacity-100"
             >
               <AppleIcon />
               Download for macOS
               <span className="font-mono text-[12px] font-normal text-white/55">
                 {VERSION}
               </span>
-            </a>
+            </Link>
           </div>
 
           <p className="mt-4 font-mono text-[12.5px] text-black/45">
