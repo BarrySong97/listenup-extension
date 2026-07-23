@@ -1,7 +1,9 @@
 import { LogoMark, SubtitlePanelMock } from "@listenup/mock-ui";
 
-const DOWNLOAD_URL = "#";
-const GITHUB_URL = "#";
+// Always resolves to the newest published GitHub Release (the macOS DMG).
+const DOWNLOAD_URL =
+  "https://github.com/BarrySong97/listenup-extension/releases/latest";
+const GITHUB_URL = "https://github.com/BarrySong97/listenup-extension";
 const VERSION = "v0.1.0";
 
 export default function Home() {
@@ -18,7 +20,12 @@ export default function Home() {
             ListenUp
           </a>
           <div className="flex items-center gap-6 text-[14px] text-black/55">
-            <a href={GITHUB_URL} className="transition-colors hover:text-black">
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-black"
+            >
               GitHub
             </a>
             <span className="font-mono text-[12.5px] text-black/40">{VERSION}</span>
@@ -50,6 +57,8 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
               href={DOWNLOAD_URL}
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex items-center gap-2.5 rounded-[12px] bg-[#141416] px-6 py-[13px] text-[15.5px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-px"
             >
               <AppleIcon />
