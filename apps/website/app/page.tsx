@@ -1,114 +1,96 @@
-import "./landing.css";
-import { ScriptedPanel } from "./_components/ScriptedPanel";
+import { LogoMark, SubtitlePanelMock } from "@listenup/mock-ui";
+
+const DOWNLOAD_URL = "#";
+const GITHUB_URL = "#";
+const VERSION = "v0.1.0";
 
 export default function Home() {
   return (
-    <div style={{ background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-sans)", minHeight: "100vh" }}>
-      {/* ── Nav ── */}
-      <nav className="nav">
-        <a href="/" className="nav-brand">
-          <div className="nav-logo" aria-hidden="true">
-            <svg viewBox="0 0 20 20" width="14" height="14">
-              <rect x="2" y="8" width="2" height="4" rx="1" fill="currentColor"/>
-              <rect x="6" y="5" width="2" height="10" rx="1" fill="currentColor"/>
-              <rect x="10" y="2" width="2" height="16" rx="1" fill="currentColor"/>
-              <rect x="14" y="6" width="2" height="8" rx="1" fill="currentColor"/>
-            </svg>
-          </div>
-          Listen Up
-        </a>
-        <div className="nav-links">
-          <a href="#features">Features</a>
-          <a href="#how">How it works</a>
-          <a href="#faq">FAQ</a>
-        </div>
-        <div className="nav-cta">
-          <a href="#" className="btn btn--ghost">Sign in</a>
-          <a href="#" className="btn btn--solid">
-            <ChromeIcon />
-            Add to Chrome
+    <main className="relative flex min-h-[100vh] flex-col bg-white font-sans text-[#16181d]">
+
+      {/* ── nav ── */}
+      <nav className="sticky top-0 z-20 border-b border-transparent bg-white/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-6">
+          <a href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+            <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#1b1d26] text-white">
+              <LogoMark size={17} />
+            </span>
+            ListenUp
           </a>
+          <div className="flex items-center gap-6 text-[14px] text-black/55">
+            <a href={GITHUB_URL} className="transition-colors hover:text-black">
+              GitHub
+            </a>
+            <span className="font-mono text-[12.5px] text-black/40">{VERSION}</span>
+          </div>
         </div>
       </nav>
 
-      {/* ── Hero B — Asymmetric split ── */}
-      <div className="hero hero-b">
-        <div className="hero-b-grid">
-          {/* Left — copy */}
-          <div className="hero-b-left">
-            <div className="overline">
-              <span className="dot" /> For language learners
-            </div>
-            <h1 className="hero-b-title">
-              Every YouTube video,<br/>
-              now <span className="underline">studyable</span>.
-            </h1>
-            <p className="hero-b-sub">
-              Click any line to jump there. Highlight a phrase to ask AI
-              what it means. Save the transcript when you&apos;re done. It just
-              lives in the sidebar where the recommendations used to be.
-            </p>
-            <div className="hero-b-ctas">
-              <a href="#" className="btn btn--solid btn--lg">
-                <ChromeIcon />
-                Add to Chrome
-              </a>
-              <a href="#" className="btn btn--ghost btn--lg">Watch 30s demo</a>
-            </div>
-            <ul className="hero-b-bullets">
-              <li>
-                <span className="check">✓</span>
-                <div><strong>Click-to-jump.</strong> Hop to any timestamp without scrubbing.</div>
-              </li>
-              <li>
-                <span className="check">✓</span>
-                <div><strong>AI explain.</strong> Idioms, grammar, slang — in plain English.</div>
-              </li>
-              <li>
-                <span className="check">✓</span>
-                <div><strong>Copy &amp; download.</strong> Full transcripts with timestamps.</div>
-              </li>
-            </ul>
+      {/* ── content ── */}
+      <section className="mx-auto grid w-full max-w-[1180px] flex-1 items-center gap-14 px-6 py-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-8 lg:py-16">
+        {/* left — copy */}
+        <div className="max-w-[560px]">
+          <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-[12.5px] font-medium text-black/60 backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#34c759] shadow-[0_0_7px_#34c759]" />
+            macOS menu-bar app
+          </span>
+
+          <h1 className="mt-6 text-[clamp(42px,6vw,66px)] font-semibold leading-[1.02] tracking-[-0.03em] text-balance">
+            Subtitles for anything.
+            <br />
+            One menu bar.
+          </h1>
+
+          <p className="mt-6 max-w-[500px] text-[18px] leading-[1.55] text-black/60 text-pretty">
+            ListenUp captions whatever&apos;s playing on YouTube in real time.
+            Click any line to replay it, and put your subtitles anywhere you
+            want. It lives quietly in your menu bar.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <a
+              href={DOWNLOAD_URL}
+              className="inline-flex items-center gap-2.5 rounded-[12px] bg-[#141416] px-6 py-[13px] text-[15.5px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-px"
+            >
+              <AppleIcon />
+              Download for macOS
+              <span className="font-mono text-[12px] font-normal text-white/55">
+                {VERSION}
+              </span>
+            </a>
           </div>
 
-          {/* Right — floating panel with annotations attached to panel edges */}
-          <div className="hero-b-right">
-            <div className="hero-b-floatwrap">
-              <div className="hero-b-shadow" />
-              <ScriptedPanel width={380} height={580} initialIndex={0} />
-
-              {/* Left annotations: dot sits on panel's left edge */}
-              <div className="annot annot-tl">
-                <span className="annot-label">Click any line to jump</span>
-                <span className="annot-line" />
-                <span className="annot-dot" />
-              </div>
-              <div className="annot annot-bl">
-                <span className="annot-label">Copy or download transcript</span>
-                <span className="annot-line" />
-                <span className="annot-dot" />
-              </div>
-              {/* Right annotation: dot sits on panel's right edge */}
-              <div className="annot annot-r">
-                <span className="annot-label">AI explains selected text</span>
-                <span className="annot-line" />
-                <span className="annot-dot" />
-              </div>
-            </div>
-          </div>
+          <p className="mt-4 font-mono text-[12.5px] text-black/45">
+            Free · macOS 13+
+          </p>
         </div>
-      </div>
-    </div>
+
+        {/* right — the menu-bar mock */}
+        <div className="flex justify-center lg:justify-end">
+          <SubtitlePanelMock />
+        </div>
+      </section>
+
+      {/* ── footer ── */}
+      <footer className="mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-6 py-8 text-[13px] text-black/45">
+        <span>© 2026 ListenUp</span>
+        <a
+          href="https://twitter.com/listenup"
+          className="hover:text-black/70"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Twitter
+        </a>
+      </footer>
+    </main>
   );
 }
 
-function ChromeIcon() {
+function AppleIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="4" fill="currentColor"/>
-      <path d="M12 8h8.66" stroke="#EA4335" strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M16.33 21A10 10 0 0 1 3.34 15" stroke="#34A853" strokeWidth="2.5" strokeLinecap="round"/>
-      <path d="M3.34 9A10 10 0 0 1 12 2" stroke="#4285F4" strokeWidth="2.5" strokeLinecap="round"/>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M16.36 12.9c.02 2.5 2.2 3.33 2.22 3.34-.02.06-.35 1.2-1.15 2.37-.69 1.02-1.4 2.03-2.53 2.05-1.1.02-1.46-.65-2.72-.65-1.26 0-1.66.63-2.7.67-1.09.04-1.92-1.1-2.62-2.11-1.42-2.06-2.5-5.83-1.05-8.38.72-1.27 2.01-2.07 3.41-2.09 1.07-.02 2.08.72 2.73.72.65 0 1.88-.89 3.17-.76.54.02 2.06.22 3.03 1.64-.08.05-1.81 1.06-1.79 3.15M14.3 5.4c.58-.7.97-1.67.86-2.64-.83.03-1.84.55-2.44 1.25-.54.62-1.01 1.6-.88 2.55.93.07 1.87-.47 2.46-1.16"/>
     </svg>
   );
 }

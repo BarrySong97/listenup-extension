@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+/* 深色毛玻璃：真正的模糊由 macOS vibrancy 提供，这里只做染色。
+   全局只用 glass 这一个背景色，header/footer/影院模式保持一致 */
+@theme {
+  --color-glass: rgba(10, 10, 13, 0.7);
+  /* 影院模式：无磨砂纯透明窗口 + 淡黑染色，视频画面清晰透过 */
+  --color-glass-cinema: rgba(8, 8, 8, 0.32);
+  --color-hairline: rgba(255, 255, 255, 0.09);
+  --color-fg: rgba(255, 255, 255, 0.94);
+  --color-fg-muted: rgba(255, 255, 255, 0.58);
+  --color-fg-faint: rgba(255, 255, 255, 0.34);
+  --color-wash: rgba(255, 255, 255, 0.08);
+  --color-wash-active: rgba(255, 255, 255, 0.11);
+  --color-yt: #ff0033;
+  --color-ok: #30d158;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 滚动条只在滚动时显示：轨道常驻占位，thumb 平时透明。
+   ::-webkit-scrollbar 伪元素无法用 utility 表达，保留原生 CSS */
+.subtitle-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.subtitle-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.subtitle-list::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  background-clip: content-box;
+  transition: background 200ms ease;
+}
+
+.subtitle-list.scrolling::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: content-box;
+}

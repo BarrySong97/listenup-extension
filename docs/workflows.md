@@ -22,11 +22,14 @@ pnpm build
 pnpm build:extension
 pnpm build:firefox
 pnpm build:website
-pnpm build:extension:native-demo
-pnpm build:native-host-demo
+pnpm build:extension:native-demo   # dev 扩展（带 nativeMessaging，输出 dist_chrome_dev/）
+pnpm build:desktop                 # production 桌面 app
+pnpm build:desktop:dev             # development 桌面 app（ListenUp Desktop DEV）
 pnpm dev:extension
 pnpm dev:website
 ```
+
+Desktop app 的 dev/production 是两个独立 app（不同 bundle id、深链接协议、Native host 名），通过 `LISTENUP_ENV` 在构建时区分，详见 `apps/listenup-desktop/README.md`。
 
 ## 什么时候必须更新文档
 

@@ -1,0 +1,844 @@
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    env,
+    io::{self, Read},
+    sync::Mutex,
+};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+const PROTOCOL_VERSION: u8 = 1;
+const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
+const UPDATE_EVENT: &str = "native-subtitle-update";
+const CONNECTION_EVENT: &str = "native-subtitle-connection";
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleItem {
+    id: serde_json::Value,
+    start_time: f64,
+    end_time: f64,
+    text: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleTrack {
+    language_code: String,
+    display_name: String,
+    kind: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorState {
+    session_id: String,
+    video_id: String,
+    current_time: f64,
+    current_index: i64,
+    is_paused: bool,
+    is_ad_playing: bool,
+    sent_at: u64,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionState {
+    tab_id: i64,
+    session_id: String,
+    video_id: String,
+    title: String,
+    status: String,
+    error: Option<String>,
+    track: Option<SubtitleTrack>,
+    subtitles: Vec<SubtitleItem>,
+    cursor: Option<CursorState>,
+    #[serde(skip)]
+    updated_order: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+enum NativeMessage {
+    Session {
+        version: u8,
+        tab_id: i64,
+        session_id: String,
+        video_id: String,
+        title: String,
+        status: String,
+        error: Option<String>,
+        track: Option<SubtitleTrack>,
+        subtitles: Vec<SubtitleItem>,
+    },
+    Cursor {
+        version: u8,
+        tab_id: i64,
+        session_id: String,
+        video_id: String,
+        current_time: f64,
+        current_index: i64,
+        is_paused: bool,
+        is_ad_playing: bool,
+        sent_at: u64,
+    },
+    End {
+        version: u8,
+        tab_id: i64,
+        session_id: String,
+        video_id: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct ViewerSnapshot {
+    connected: bool,
+    active_session: Option<SessionState>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(tag = "kind", content = "payload", rename_all = "camelCase")]
+enum UiUpdate {
+    Session(Option<SessionState>),
+    Cursor(CursorState),
+}
+
+#[derive(Default)]
+struct HostStore {
+    connected: bool,
+    bridge_connections: usize,
+    sessions: HashMap<String, SessionState>,
+    active_session_id: Option<String>,
+    sequence: u64,
+}
+
+impl HostStore {
+    fn snapshot(&self) -> ViewerSnapshot {
+        ViewerSnapshot {
+            connected: self.connected,
+            active_session: self
+                .active_session_id
+                .as_ref()
+                .and_then(|id| self.sessions.get(id))
+                .cloned(),
+        }
+    }
+
+    fn next_sequence(&mut self) -> u64 {
+        self.sequence += 1;
+        self.sequence
+    }
+
+    fn apply(&mut self, message: NativeMessage) -> Option<UiUpdate> {
+        match message {
+            NativeMessage::Session {
+                version,
+                tab_id,
+                session_id,
+                video_id,
+                title,
+                status,
+                error,
+                track,
+                subtitles,
+            } => {
+                if version != PROTOCOL_VERSION {
+                    return None;
+                }
+
+                let order = self.next_sequence();
+                let previous = self.sessions.remove(&session_id);
+                let session = SessionState {
+                    tab_id,
+                    session_id: session_id.clone(),
+                    video_id,
+                    title,
+                    status,
+                    error,
+                    track,
+                    subtitles,
+                    cursor: previous.and_then(|value| value.cursor),
+                    updated_order: order,
+                };
+                self.sessions.insert(session_id.clone(), session.clone());
+
+                if self.active_session_id.is_none() {
+                    self.active_session_id = Some(session_id.clone());
+                }
+
+                (self.active_session_id.as_deref() == Some(session_id.as_str()))
+                    .then_some(UiUpdate::Session(Some(session)))
+            }
+            NativeMessage::Cursor {
+                version,
+                tab_id,
+                session_id,
+                video_id,
+                current_time,
+                current_index,
+                is_paused,
+                is_ad_playing,
+                sent_at,
+            } => {
+                if version != PROTOCOL_VERSION {
+                    return None;
+                }
+
+                let cursor = CursorState {
+                    session_id: session_id.clone(),
+                    video_id: video_id.clone(),
+                    current_time,
+                    current_index,
+                    is_paused,
+                    is_ad_playing,
+                    sent_at,
+                };
+                let order = self.next_sequence();
+                let session = self.sessions.get_mut(&session_id)?;
+                if session.tab_id != tab_id || session.video_id != video_id {
+                    return None;
+                }
+                session.cursor = Some(cursor.clone());
+                session.updated_order = order;
+
+                let active_changed =
+                    !is_paused && self.active_session_id.as_deref() != Some(session_id.as_str());
+                if active_changed {
+                    self.active_session_id = Some(session_id.clone());
+                    return self
+                        .sessions
+                        .get(&session_id)
+                        .cloned()
+                        .map(|value| UiUpdate::Session(Some(value)));
+                }
+
+                (self.active_session_id.as_deref() == Some(session_id.as_str()))
+                    .then_some(UiUpdate::Cursor(cursor))
+            }
+            NativeMessage::End {
+                version,
+                tab_id,
+                session_id,
+                video_id,
+            } => {
+                if version != PROTOCOL_VERSION {
+                    return None;
+                }
+                let should_remove = self.sessions.get(&session_id).is_some_and(|session| {
+                    session.tab_id == tab_id && session.video_id == video_id
+                });
+                if !should_remove {
+                    return None;
+                }
+
+                self.sessions.remove(&session_id);
+                if self.active_session_id.as_deref() != Some(session_id.as_str()) {
+                    return None;
+                }
+
+                self.active_session_id = self
+                    .sessions
+                    .values()
+                    .max_by_key(|session| session.updated_order)
+                    .map(|session| session.session_id.clone());
+                Some(UiUpdate::Session(
+                    self.active_session_id
+                        .as_ref()
+                        .and_then(|id| self.sessions.get(id))
+                        .cloned(),
+                ))
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct SharedStore(Mutex<HostStore>);
+
+#[derive(Debug)]
+enum FrameError {
+    Io(io::Error),
+    InvalidLength(usize),
+    Json(serde_json::Error),
+}
+
+impl std::fmt::Display for FrameError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => write!(formatter, "I/O error: {error}"),
+            Self::InvalidLength(length) => write!(formatter, "invalid message length: {length}"),
+            Self::Json(error) => write!(formatter, "invalid JSON message: {error}"),
+        }
+    }
+}
+
+fn read_frame(reader: &mut impl Read) -> Result<Option<NativeMessage>, FrameError> {
+    let mut length_bytes = [0_u8; 4];
+    match reader.read_exact(&mut length_bytes) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(error) => return Err(FrameError::Io(error)),
+    }
+
+    let length = u32::from_ne_bytes(length_bytes) as usize;
+    if length == 0 || length > MAX_MESSAGE_BYTES {
+        return Err(FrameError::InvalidLength(length));
+    }
+
+    let mut payload = vec![0_u8; length];
+    reader.read_exact(&mut payload).map_err(FrameError::Io)?;
+    serde_json::from_slice(&payload)
+        .map(Some)
+        .map_err(FrameError::Json)
+}
+
+fn launched_by_chrome() -> bool {
+    env::args()
+        .skip(1)
+        .any(|argument| argument.starts_with("chrome-extension://"))
+}
+
+/// dev 和 production 是两个独立 app，bundle id / socket 路径都要分开
+fn app_bundle_id() -> &'static str {
+    if env!("LISTENUP_ENV") == "development" {
+        "com.listenup.desktop.dev"
+    } else {
+        "com.listenup.desktop"
+    }
+}
+
+/// GUI 实例监听的本地 socket。Chrome 拉起的桥接进程把字幕帧转发到这里。
+#[cfg(unix)]
+fn bridge_socket_path() -> std::path::PathBuf {
+    let base = env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    base.join(format!(
+        "Library/Application Support/{}/bridge.sock",
+        app_bundle_id()
+    ))
+}
+
+#[cfg(unix)]
+fn send_bridge_line(
+    stream: &mut std::os::unix::net::UnixStream,
+    message: &NativeMessage,
+) -> io::Result<()> {
+    use std::io::Write;
+
+    let mut line = serde_json::to_string(message)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    line.push('\n');
+    stream.write_all(line.as_bytes())
+}
+
+#[cfg(unix)]
+fn connect_bridge(
+    cached_sessions: &HashMap<String, NativeMessage>,
+) -> Option<std::os::unix::net::UnixStream> {
+    let mut stream = std::os::unix::net::UnixStream::connect(bridge_socket_path()).ok()?;
+    stream
+        .set_write_timeout(Some(std::time::Duration::from_millis(500)))
+        .ok();
+
+    // GUI 可能是播放中途才打开的，先补发缓存的 session 快照
+    for message in cached_sessions.values() {
+        if send_bridge_line(&mut stream, message).is_err() {
+            return None;
+        }
+    }
+    Some(stream)
+}
+
+/// Chrome Native Messaging 拉起的桥接模式：没有窗口，只把 stdin 的字幕帧
+/// 转发给正在运行的 GUI 实例；GUI 没开就缓存 session、静默丢弃 cursor，
+/// 等 GUI 打开后自动补发并续传。
+#[cfg(unix)]
+fn run_bridge() {
+    let stdin = io::stdin();
+    let mut reader = stdin.lock();
+    let mut cached_sessions: HashMap<String, NativeMessage> = HashMap::new();
+    let mut connection: Option<std::os::unix::net::UnixStream> = None;
+
+    loop {
+        match read_frame(&mut reader) {
+            Ok(Some(message)) => {
+                match &message {
+                    NativeMessage::Session { session_id, .. } => {
+                        cached_sessions.insert(session_id.clone(), message.clone());
+                    }
+                    NativeMessage::End { session_id, .. } => {
+                        cached_sessions.remove(session_id);
+                    }
+                    NativeMessage::Cursor { .. } => {}
+                }
+
+                if connection.is_none() {
+                    connection = connect_bridge(&cached_sessions);
+                }
+                if let Some(stream) = connection.as_mut() {
+                    if send_bridge_line(stream, &message).is_err() {
+                        connection = None;
+                    }
+                }
+            }
+            Ok(None) => break,
+            Err(FrameError::Json(error)) => {
+                eprintln!("ignored invalid Native Messaging JSON: {error}");
+            }
+            Err(error) => {
+                eprintln!("Native Messaging bridge stopped: {error}");
+                break;
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn set_bridge_connected(app: &AppHandle, delta: i32) {
+    let connected = {
+        let shared = app.state::<SharedStore>();
+        let Ok(mut store) = shared.0.lock() else {
+            return;
+        };
+        if delta > 0 {
+            store.bridge_connections += 1;
+        } else {
+            store.bridge_connections = store.bridge_connections.saturating_sub(1);
+        }
+        store.connected = store.bridge_connections > 0;
+        store.connected
+    };
+    let _ = app.emit(CONNECTION_EVENT, connected);
+}
+
+#[cfg(unix)]
+fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStream) {
+    use std::io::{BufRead, BufReader};
+
+    set_bridge_connected(&app, 1);
+    let reader = BufReader::new(stream);
+    for line in reader.lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let message = match serde_json::from_str::<NativeMessage>(&line) {
+            Ok(message) => message,
+            Err(error) => {
+                eprintln!("ignored invalid bridge message: {error}");
+                continue;
+            }
+        };
+        let update = {
+            let shared = app.state::<SharedStore>();
+            shared
+                .0
+                .lock()
+                .ok()
+                .and_then(|mut store| store.apply(message))
+        };
+        if let Some(update) = update {
+            if let Err(error) = app.emit(UPDATE_EVENT, update) {
+                eprintln!("failed to emit subtitle update: {error}");
+            }
+        }
+    }
+    set_bridge_connected(&app, -1);
+}
+
+#[cfg(unix)]
+fn run_socket_server(app: AppHandle) {
+    let path = bridge_socket_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::remove_file(&path);
+
+    let listener = match std::os::unix::net::UnixListener::bind(&path) {
+        Ok(listener) => listener,
+        Err(error) => {
+            eprintln!("failed to bind bridge socket: {error}");
+            return;
+        }
+    };
+
+    for incoming in listener.incoming() {
+        let Ok(stream) = incoming else { continue };
+        let handle = app.clone();
+        std::thread::spawn(move || handle_bridge_connection(handle, stream));
+    }
+}
+
+/// 让窗口盖在其他 app（如全屏的 Chrome）的全屏 Space 之上。必须主线程调用。
+///
+/// - `setLevel: 25`（NSStatusWindowLevel）：高于全屏视频画面
+/// - `collectionBehavior = canJoinAllSpaces(1<<0) | fullScreenAuxiliary(1<<8)`：
+///   整体**替换**默认行为——默认里带 fullScreenPrimary，它与 auxiliary 冲突，
+///   会导致窗口进不了别人的全屏 Space。不要用 set_visible_on_all_workspaces，
+///   它只 OR 进 canJoinAllSpaces、保留 Primary、丢失 auxiliary。
+#[cfg(target_os = "macos")]
+fn apply_overlay_window_style(window: &tauri::WebviewWindow) {
+    if let Ok(ns_window) = window.ns_window() {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+        let ns_window = ns_window as *mut AnyObject;
+        unsafe {
+            let _: () = msg_send![ns_window, setLevel: 25_isize];
+            let behavior: usize = (1 << 0) | (1 << 8);
+            let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+            let level: isize = msg_send![ns_window, level];
+            let applied: usize = msg_send![ns_window, collectionBehavior];
+            eprintln!("[listenup] overlay style: level={level} collectionBehavior={applied:#b}");
+        }
+    }
+}
+
+/// 列表模式开启 vibrancy 磨砂；影院模式关闭，让视频画面清晰透过。必须主线程调用。
+///
+/// window-vibrancy 的 apply 每次都会新叠一层磨砂 view 且不查重，clear 一次只移一层，
+/// 所以这里先循环清干净再按需加，保证幂等（否则 setup + 前端 mount 各加一层，
+/// 切影院模式只清掉一层，磨砂永远残留）。
+#[cfg(target_os = "macos")]
+fn set_vibrancy_on_main_thread(window: &tauri::WebviewWindow, enabled: bool) {
+    use window_vibrancy::{
+        apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial, NSVisualEffectState,
+    };
+
+    let mut removed = 0;
+    while let Ok(true) = clear_vibrancy(window) {
+        removed += 1;
+    }
+    if removed > 1 {
+        eprintln!("[listenup] removed {removed} stacked vibrancy views");
+    }
+
+    if enabled {
+        if let Err(error) = apply_vibrancy(
+            window,
+            NSVisualEffectMaterial::HudWindow,
+            Some(NSVisualEffectState::Active),
+            Some(16.0),
+        ) {
+            eprintln!("failed to apply window vibrancy: {error}");
+        }
+    }
+
+    // 每次模式切换顺带重申 overlay 属性，防止被系统或 tao 内部操作重置
+    apply_overlay_window_style(window);
+}
+
+/// Tauri command 默认跑在 worker 线程，而 AppKit 的 view/window 操作必须在主线程，
+/// 所以派发回主线程执行（否则 clear 的 removeFromSuperview 会静默失效）。
+#[tauri::command]
+fn set_vibrancy(window: tauri::WebviewWindow, enabled: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            set_vibrancy_on_main_thread(&target, enabled);
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (window, enabled);
+}
+
+#[tauri::command]
+fn get_snapshot(store: State<'_, SharedStore>) -> ViewerSnapshot {
+    store
+        .0
+        .lock()
+        .map(|store| store.snapshot())
+        .unwrap_or(ViewerSnapshot {
+            connected: false,
+            active_session: None,
+        })
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    // Chrome 通过 Native Messaging 拉起时进入无窗口桥接模式，
+    // 不再弹出 GUI；GUI 由用户通过 listenup:// 深链接或直接打开
+    #[cfg(unix)]
+    if launched_by_chrome() {
+        run_bridge();
+        return;
+    }
+
+    tauri::Builder::default()
+        .manage(SharedStore::default())
+        .invoke_handler(tauri::generate_handler![get_snapshot, set_vibrancy])
+        .setup(|app| {
+            // 关键（调研结论，tauri#11488）：普通 activation policy 下，NSWindow
+            // 即使有 canJoinAllSpaces + fullScreenAuxiliary + 高 level 也进不了
+            // 其他 app 的原生全屏 Space（实测 isOnActiveSpace 恒为 false）。
+            // Regular 形态：Dock 图标常驻（黑色 app 图标）、可 Cmd+Tab，
+            // 同时菜单栏 tray 图标也常驻——两个入口都保留。
+            // 盖全屏能力由下方 NSPanel(nonactivatingPanel) 配置提供，与 activation
+            // policy 无关（已实测 Regular 下字幕仍能盖住别的 app 的全屏）。
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Regular);
+
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("main") {
+                // 把 NSWindow 运行时换成 NSPanel（tauri-nspanel 同款 class-swap）。
+                // 实测（同屏严格测试）：Accessory + canJoinAllSpaces + fullScreenAuxiliary
+                // + level 25 的普通 NSWindow 仍进不了别人的全屏 Space；
+                // 只有 NSPanel + nonactivatingPanel 能被系统排进去。
+                // 副作用：点击字幕条不再抢走视频 app 的焦点，正合适。
+                if let Ok(ns_window) = window.ns_window() {
+                    use objc2::msg_send;
+                    use objc2::runtime::{AnyClass, AnyObject};
+                    let ns_window = ns_window as *mut AnyObject;
+                    unsafe {
+                        if let Some(panel_class) = AnyClass::get(c"NSPanel") {
+                            objc2::ffi::object_setClass(
+                                ns_window.cast(),
+                                (panel_class as *const AnyClass).cast(),
+                            );
+                            // nonactivatingPanel(1<<7)：进全屏 Space 的必要条件
+                            let style: usize = msg_send![ns_window, styleMask];
+                            let _: () = msg_send![ns_window, setStyleMask: style | (1 << 7)];
+                            let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: true];
+                            // NSPanel 默认在 app 失活时隐藏，字幕条必须常驻，显式关掉
+                            let _: () = msg_send![ns_window, setHidesOnDeactivate: false];
+                            let _: () = msg_send![ns_window, setReleasedWhenClosed: false];
+                            eprintln!("[listenup] window converted to NSPanel");
+                        }
+                    }
+                }
+
+                // setup 跑在主线程，直接调；默认按列表模式加磨砂，
+                // 前端 mount 后会按持久化的模式再调 set_vibrancy 纠正
+                set_vibrancy_on_main_thread(&window, true);
+
+                // 关闭按钮改为"收进菜单栏"：拦截关闭请求，隐藏窗口。
+                // 真正退出走菜单栏图标的"退出"。
+                let hide_target = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = hide_target.hide();
+                    }
+                });
+
+                // 周期性重申 overlay 属性并把窗口重新排到最前。
+                // 别人进原生全屏会创建新 Space，canJoinAllSpaces 窗口有时
+                // 不会被自动排进去，需要 orderFrontRegardless 重新入列。
+                // 注意窗口被隐藏（收进菜单栏）时跳过，否则会把它重新拉出来。
+                let keeper = window.clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    let target = keeper.clone();
+                    if keeper
+                        .run_on_main_thread(move || {
+                            if let Ok(ns_window) = target.ns_window() {
+                                use objc2::msg_send;
+                                use objc2::runtime::AnyObject;
+                                let ns_window = ns_window as *mut AnyObject;
+                                unsafe {
+                                    let visible: bool = msg_send![ns_window, isVisible];
+                                    if !visible {
+                                        return;
+                                    }
+                                    let _: () = msg_send![ns_window, setLevel: 25_isize];
+                                    let behavior: usize = (1 << 0) | (1 << 8);
+                                    let _: () =
+                                        msg_send![ns_window, setCollectionBehavior: behavior];
+                                    let _: () = msg_send![ns_window, orderFrontRegardless];
+                                }
+                            }
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                });
+            }
+
+            // 菜单栏（tray）图标：Accessory 形态下没有 Dock 图标，
+            // 菜单栏是唤出窗口和退出 app 的常驻入口
+            {
+                use tauri::menu::{Menu, MenuItem};
+                use tauri::tray::TrayIconBuilder;
+
+                let show_item =
+                    MenuItem::with_id(app, "show", "显示字幕窗口", true, None::<&str>)?;
+                let quit_item =
+                    MenuItem::with_id(app, "quit", "退出 ListenUp Desktop", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+                let mut tray = TrayIconBuilder::with_id("main-tray")
+                    .menu(&menu)
+                    .show_menu_on_left_click(true)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => app.exit(0),
+                        _ => {}
+                    });
+                // 专用黑白 template 图标（变体 A：字幕框 + 字幕条）；
+                // 设为 template 后，macOS 会按菜单栏明暗自动反色
+                match tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png")) {
+                    Ok(img) => {
+                        tray = tray.icon(img).icon_as_template(true);
+                    }
+                    Err(_) => {
+                        if let Some(icon) = app.default_window_icon() {
+                            tray = tray.icon(icon.clone());
+                        }
+                    }
+                }
+                tray.build(app)?;
+            }
+
+            #[cfg(unix)]
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || run_socket_server(handle));
+            }
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running ListenUp Desktop");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    struct ChunkedReader {
+        cursor: Cursor<Vec<u8>>,
+        chunk_size: usize,
+    }
+
+    impl Read for ChunkedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            let limit = buffer.len().min(self.chunk_size);
+            self.cursor.read(&mut buffer[..limit])
+        }
+    }
+
+    fn frame(json: &str) -> Vec<u8> {
+        let mut bytes = (json.len() as u32).to_ne_bytes().to_vec();
+        bytes.extend_from_slice(json.as_bytes());
+        bytes
+    }
+
+    fn session_message(session_id: &str, tab_id: i64) -> NativeMessage {
+        NativeMessage::Session {
+            version: PROTOCOL_VERSION,
+            tab_id,
+            session_id: session_id.to_string(),
+            video_id: format!("video-{session_id}"),
+            title: format!("Video {session_id}"),
+            status: "ready".to_string(),
+            error: None,
+            track: None,
+            subtitles: Vec::new(),
+        }
+    }
+
+    fn cursor_message(session_id: &str, tab_id: i64, is_paused: bool) -> NativeMessage {
+        NativeMessage::Cursor {
+            version: PROTOCOL_VERSION,
+            tab_id,
+            session_id: session_id.to_string(),
+            video_id: format!("video-{session_id}"),
+            current_time: 12.5,
+            current_index: 3,
+            is_paused,
+            is_ad_playing: false,
+            sent_at: 42,
+        }
+    }
+
+    #[test]
+    fn native_message_roundtrips_through_bridge_line() {
+        let message = session_message("one", 1);
+        let line = serde_json::to_string(&message).unwrap();
+        assert!(!line.contains('\n'));
+        let parsed: NativeMessage = serde_json::from_str(&line).unwrap();
+        assert_eq!(parsed, message);
+    }
+
+    #[test]
+    fn reads_a_fragmented_native_messaging_frame() {
+        let json = r#"{"kind":"end","version":1,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
+        let mut reader = ChunkedReader {
+            cursor: Cursor::new(frame(json)),
+            chunk_size: 2,
+        };
+        let message = read_frame(&mut reader).unwrap().unwrap();
+        assert_eq!(
+            message,
+            NativeMessage::End {
+                version: 1,
+                tab_id: 4,
+                session_id: "s1".to_string(),
+                video_id: "v1".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_empty_and_oversized_frames() {
+        let mut empty = Cursor::new(0_u32.to_ne_bytes());
+        assert!(matches!(
+            read_frame(&mut empty),
+            Err(FrameError::InvalidLength(0))
+        ));
+
+        let oversized = ((MAX_MESSAGE_BYTES + 1) as u32).to_ne_bytes();
+        assert!(matches!(
+            read_frame(&mut Cursor::new(oversized)),
+            Err(FrameError::InvalidLength(_))
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_json_without_losing_the_frame_boundary() {
+        let error = read_frame(&mut Cursor::new(frame("not-json"))).unwrap_err();
+        assert!(matches!(error, FrameError::Json(_)));
+    }
+
+    #[test]
+    fn playing_session_becomes_active_and_end_falls_back() {
+        let mut store = HostStore::default();
+        store.connected = true;
+        store.apply(session_message("one", 1));
+        store.apply(session_message("two", 2));
+        assert_eq!(store.active_session_id.as_deref(), Some("one"));
+
+        store.apply(cursor_message("two", 2, false));
+        assert_eq!(store.active_session_id.as_deref(), Some("two"));
+
+        let update = store.apply(NativeMessage::End {
+            version: PROTOCOL_VERSION,
+            tab_id: 2,
+            session_id: "two".to_string(),
+            video_id: "video-two".to_string(),
+        });
+        assert_eq!(store.active_session_id.as_deref(), Some("one"));
+        assert!(matches!(update, Some(UiUpdate::Session(Some(_)))));
+    }
+
+    #[test]
+    fn paused_background_session_does_not_steal_focus() {
+        let mut store = HostStore::default();
+        store.apply(session_message("one", 1));
+        store.apply(session_message("two", 2));
+        store.apply(cursor_message("two", 2, true));
+        assert_eq!(store.active_session_id.as_deref(), Some("one"));
+    }
+}

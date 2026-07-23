@@ -1,6 +1,14 @@
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 
-export const NATIVE_SUBTITLE_HOST = "com.listenup.native_subtitle_demo";
+// dev 和 production 是两个独立的桌面 app：
+// host 名、深链接协议都按构建环境区分，避免 dev 扩展连到生产 app
+export const NATIVE_SUBTITLE_HOST = __LISTENUP_DEV__
+  ? "com.listenup.desktop.dev"
+  : "com.listenup.desktop";
+
+export const DESKTOP_DEEP_LINK = __LISTENUP_DEV__
+  ? "listenup-dev://open"
+  : "listenup://open";
 export const NATIVE_SUBTITLE_PROTOCOL_VERSION = 1 as const;
 
 export type NativeSubtitleLoadStatus =

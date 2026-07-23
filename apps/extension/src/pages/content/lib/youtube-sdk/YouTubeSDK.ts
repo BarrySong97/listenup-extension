@@ -58,9 +58,17 @@ export class YouTubeSDK {
 
     const player = document.querySelector("#movie_player") || document.documentElement;
 
+    // 播放器子树的 DOM 变动非常频繁（进度条/字幕/悬浮层……），
+    // 广告状态没必要逐次检测：合并成 250ms 一次的尾随防抖
+    let debounceTimer = 0;
     this.observer = new MutationObserver(() => {
-      // Notify both detectors of changes
-      this.adDetector.notifyChange();
+      if (debounceTimer !== 0) {
+        return;
+      }
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = 0;
+        this.adDetector.notifyChange();
+      }, 250);
     });
 
     this.observer.observe(player, {

@@ -32,6 +32,9 @@ export const baseBuildOptions: BuildOptions = {
 };
 
 export default defineConfig({
+  define: {
+    __LISTENUP_DEV__: JSON.stringify(isDev),
+  },
   plugins: [
     tailwindcss(),
     tsconfigPaths(),

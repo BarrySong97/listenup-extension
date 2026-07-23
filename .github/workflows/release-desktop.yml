@@ -1,0 +1,112 @@
+name: Release ListenUp Desktop (macOS)
+
+# Builds the Apple Silicon (arm64) macOS app and publishes a DMG to a GitHub
+# Release. Signing & notarization are OPTIONAL — engaged only when the Apple
+# secrets are present; otherwise the build is unsigned (users right-click →
+# Open on first launch).
+#
+# Trigger by pushing a version tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# or run manually from the Actions tab (workflow_dispatch).
+#
+# Optional repository secrets for a signed + notarized build:
+#   Apple Developer ID signing:
+#     APPLE_CERTIFICATE            base64 of the exported Developer ID .p12
+#     APPLE_CERTIFICATE_PASSWORD   password for that .p12
+#     APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: Your Name (TEAMID)"
+#   Apple notarization (App Store Connect API key):
+#     APPLE_API_ISSUER             Issuer ID (UUID)
+#     APPLE_API_KEY                Key ID (e.g. ABC123DEF4)
+#     APPLE_API_KEY_P8             full contents of the AuthKey_XXXX.p8 file
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust (Apple Silicon)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/listenup-desktop/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The production deep-link scheme (listenup://) lives in a generated
+      # Info.plist. The committed copy targets the dev scheme, so regenerate it
+      # in production mode before bundling.
+      - name: Generate production Info.plist
+        run: node apps/listenup-desktop/scripts/gen-info-plist.mjs
+
+      # Apple signing/notarization is OPTIONAL: only engaged when APPLE_CERTIFICATE
+      # is set. Tauri treats a set-but-empty APPLE_CERTIFICATE as "import this cert"
+      # and fails, so we export the Apple env vars to $GITHUB_ENV only when the
+      # secret is actually present.
+      - name: Configure Apple signing (optional)
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "::warning::No APPLE_CERTIFICATE secret — building UNSIGNED and un-notarized."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
+            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
+          } >> "$GITHUB_ENV"
+          if [ -n "$APPLE_API_KEY" ]; then
+            # Tauri only enters the notarize path when APPLE_API_KEY_PATH is set
+            # explicitly. Write the .p8 to an absolute path and point at it.
+            KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+            printf '%s' "$APPLE_API_KEY_P8" > "$KEY_PATH"
+            {
+              echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+              echo "APPLE_API_KEY=$APPLE_API_KEY"
+              echo "APPLE_API_KEY_PATH=$KEY_PATH"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Build & publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Apple signing/notarization vars are injected via $GITHUB_ENV above,
+          # only when the corresponding secrets exist.
+        with:
+          projectPath: apps/listenup-desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "ListenUp Desktop ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: --target aarch64-apple-darwin --bundles app,dmg

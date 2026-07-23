@@ -35,7 +35,7 @@
 
 ## Native 字幕 Demo 数据流
 
-`useNativeSubtitleBridge` 只在 manifest 含 `nativeMessaging` 权限时工作。每个视频加载状态或字幕结果变化时，它发送一次 session 消息；播放期间最多每 250ms 发送一次 cursor，当前字幕索引变化则立即发送。background 为消息补充 `tabId`，只在 session 到达时懒连接 `com.listenup.native_subtitle_demo`，因此 Host 缺失或窗口关闭不会被高频 cursor 反复拉起。
+`useNativeSubtitleBridge` 只在 manifest 含 `nativeMessaging` 权限时工作。每个视频加载状态或字幕结果变化时，它发送一次 session 消息；播放期间最多每 250ms 发送一次 cursor，当前字幕索引变化则立即发送。background 为消息补充 `tabId`，只在 session 到达时懒连接 `com.listenup.desktop`。Chrome 拉起的是无窗口桥接进程（不会弹出 GUI），桥接通过本地 Unix socket 把数据转发给用户通过 popup 的 `listenup://open` 深链接打开的 ListenUp Desktop；GUI 未运行时桥接静默缓存 session。详见 `apps/listenup-desktop/README.md`。
 
 ## 字幕加载层
 

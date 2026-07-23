@@ -359,7 +359,12 @@ const Subtitles: FC<SubtitlesProps> = () => {
     };
   }, [videoId]);
 
+  // 网页内浮层面板已停用（字幕改由桌面 app 显示），因此不再把面板注入
+  // YouTube 的 #secondary，也不重排 #related。字幕抓取和桥接照常运行。
+  // 若要恢复网页浮层，删掉下面这个提前 return 即可。
   useEffect(() => {
+    return;
+    // eslint-disable-next-line no-unreachable
     let rafId = 0;
     const scheduleApplyInlineLayout = () => {
       if (rafId !== 0) {
@@ -471,6 +476,13 @@ const Subtitles: FC<SubtitlesProps> = () => {
 
   const panelMotionTarget = { opacity: 1, x: 0, height: panelTargetHeight };
 
+  // 网页内浮层面板已停用：字幕改由桌面 app 显示，这里不再渲染任何 UI。
+  // 上面的 useSubtitles / useSubtitleSync / useNativeSubtitleBridge 等 hook
+  // 照常运行，继续把字幕和播放游标喂给桌面 app。
+  // 若要恢复网页浮层，删掉下面这行 return null 即可。
+  return null;
+
+  // eslint-disable-next-line no-unreachable
   return (
     <div className={youtubeTheme === "dark" ? "dark" : "light"}>
       <motion.div

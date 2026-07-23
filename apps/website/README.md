@@ -42,10 +42,12 @@ Copy `.env.example` to `.env.local` when setting up a new machine and provide `F
 
 ## Key Files
 
-- `app/page.tsx`: homepage
+- `app/page.tsx`: homepage（CTA 使用 HeroUI `Button`）
 - `app/api/waitlist/route.ts`: Feishu waitlist API route
 - `app/provider.tsx`: app-level providers
 - `public/`: image and static assets
+
+HeroUI v3（`@heroui/react` / `@heroui/styles`）版本由 monorepo 根目录 `pnpm-workspace.yaml` 的 `catalog` 统一管理。
 
 ## Deploy
 

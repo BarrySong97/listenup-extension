@@ -26,12 +26,15 @@ export class YouTubeAdDetector {
    * Detect current ad state
    */
   public detectAdState(): AdState {
+    // 性能：所有查询都限定在 #movie_player 子树内，不做全文档扫描。
+    // 这个方法会被播放器 DOM 的 MutationObserver 高频触发，
+    // 全文档 querySelector 会随 YouTube SPA 的 DOM 膨胀越来越慢
     const player = this.getPlayer();
     const isAd =
       player?.classList?.contains("ad-showing") ||
-      !!document.querySelector(".ytp-ad-showing");
+      !!player?.querySelector(".ytp-ad-showing");
 
-    if (!isAd) {
+    if (!player || !isAd) {
       this.currentAdState = {
         isAdPlaying: false,
         adType: 'none',
@@ -42,21 +45,21 @@ export class YouTubeAdDetector {
     }
 
     // Determine ad type
-    const skipButton = document.querySelector(
+    const skipButton = player.querySelector(
       ".ytp-ad-skip-button, .ytp-ad-skip-button-modern"
     );
-    const adOverlay = document.querySelector(".ytp-ad-overlay-container");
+    const adOverlay = player.querySelector(".ytp-ad-overlay-container");
     const adType = skipButton ? "skippable" : adOverlay ? "overlay" : "non-skippable";
 
     // Get ad text (e.g., "Ad 1 of 2")
-    const adTextEl = document.querySelector(
+    const adTextEl = player.querySelector(
       ".ytp-ad-simple-ad-badge, .ytp-ad-badge-text"
     );
     const adText = adTextEl?.textContent || "";
 
     // Get ad time remaining
     let adRemainingTime = 0;
-    const timeEl = document.querySelector(".ytp-ad-duration-remaining");
+    const timeEl = player.querySelector(".ytp-ad-duration-remaining");
     if (timeEl?.textContent) {
       const match = timeEl.textContent.match(/(\d+):?(\d+)?/);
       if (match) {

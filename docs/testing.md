@@ -24,8 +24,8 @@ pnpm build
 pnpm build:extension
 pnpm build:firefox
 pnpm build:website
-pnpm --filter @listenup/native-subtitle-demo build
-cargo test --manifest-path apps/native-subtitle-demo/src-tauri/Cargo.toml
+pnpm --filter @listenup/desktop build
+cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
 ```
 
 Website 也提供 lint：
@@ -39,4 +39,4 @@ pnpm --filter @listenup/website lint
 - Extension: [apps/extension/docs/testing.md](../apps/extension/docs/testing.md)
 - Extension 内容脚本: [apps/extension/docs/pages/content/testing.md](../apps/extension/docs/pages/content/testing.md)
 - Website: [apps/website/README.md](../apps/website/README.md)
-- Native subtitle demo: [apps/native-subtitle-demo/README.md](../apps/native-subtitle-demo/README.md)
+- Native subtitle demo: [apps/listenup-desktop/README.md](../apps/listenup-desktop/README.md)

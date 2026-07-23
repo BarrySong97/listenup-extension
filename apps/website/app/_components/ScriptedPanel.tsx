@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { ExtensionPanel } from "./ExtensionPanel";
+import { RealExtensionPanel } from "./extension/RealExtensionPanel";
 
 function FakeCursor({ x, y, clicking, visible }: { x: number; y: number; clicking: boolean; visible: boolean }) {
   return (
@@ -65,16 +65,13 @@ export function ScriptedPanel({ width = 380, height = 580, initialIndex = 0 }: S
       while (!cancelled) {
         setView("list"); setShowSelection(false);
         setCursorVisible(false);
-        setCursor({ x: width - 30, y: height - 20 });
-        await sleep(500); if (cancelled) return;
+        setCursor({ x: width / 2, y: height / 2 });
+        await sleep(600); if (cancelled) return;
         setCursorVisible(true);
-        await sleep(400); if (cancelled) return;
+        await sleep(300); if (cancelled) return;
 
-        await moveTo('[data-idx="5"] .lu-text', { x: width / 2, y: 280 });
-        await sleep(1100); if (cancelled) return;
-
-        await moveTo('[data-lu-target="word"]', { x: width - 80, y: 100 });
-        await sleep(700); if (cancelled) return;
+        await moveTo('[data-lu-target="word"]', { x: width / 2, y: height / 2 });
+        await sleep(800); if (cancelled) return;
 
         setClicking(true);
         await sleep(180); if (cancelled) return;
@@ -112,14 +109,12 @@ export function ScriptedPanel({ width = 380, height = 580, initialIndex = 0 }: S
 
   return (
     <div ref={wrapRef} style={{ position: "relative", width, height }}>
-      <ExtensionPanel
+      <RealExtensionPanel
         width={width}
         height={height}
-        initialIndex={initialIndex}
         view={view}
         onViewChange={setView}
         showSelection={showSelection}
-        autoplay={false}
       />
       <FakeCursor x={cursor.x} y={cursor.y} clicking={clicking} visible={cursorVisible} />
     </div>

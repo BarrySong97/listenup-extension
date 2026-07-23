@@ -1,4 +1,6 @@
 {
+  "name": "listen up immers DEV",
+  "description": "listen up immers (development build)",
   "permissions": [
     "activeTab",
     "storage",

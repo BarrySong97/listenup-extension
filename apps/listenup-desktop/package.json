@@ -1,0 +1,33 @@
+{
+  "name": "@listenup/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "tauri": "tauri",
+    "tauri:dev": "LISTENUP_ENV=development VITE_LISTENUP_ENV=development tauri dev --config src-tauri/tauri.dev.conf.json",
+    "tauri:build": "node scripts/gen-info-plist.mjs && tauri build --bundles app",
+    "tauri:build:dev": "LISTENUP_ENV=development VITE_LISTENUP_ENV=development node scripts/gen-info-plist.mjs && LISTENUP_ENV=development VITE_LISTENUP_ENV=development tauri build --bundles app --config src-tauri/tauri.dev.conf.json",
+    "host:install": "node scripts/install-host.mjs",
+    "host:uninstall": "node scripts/uninstall-host.mjs"
+  },
+  "dependencies": {
+    "@iconify/react": "^6.0.0",
+    "@tauri-apps/api": "^2.11.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "virtua": "^0.41.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.7.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

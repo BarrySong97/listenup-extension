@@ -7,10 +7,23 @@ export class YouTubePlayerFacade {
   private cachedVideoElement: HTMLVideoElement | null = null;
   private stateListeners = new Set<PlayerStateListener>();
   private playStateListeners = new Set<PlayStateListener>();
-  private observer: MutationObserver | null = null;
   private currentVideoCleanup: (() => void) | null = null;
+  // 低频看门狗：万一 video 元素被整个替换（缓存失联导致事件停止），
+  // 2 秒内会重新捕获。isConnected 快路径下这基本是零成本
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private videoWatchdog = window.setInterval(() => {
+    this.getVideoElementInternal();
+  }, 2000);
 
   private getVideoElementInternal(): HTMLVideoElement | null {
+    // 性能关键：video 元素还挂在文档上就直接复用缓存，不做任何查询。
+    // 之前这里靠一个观察整个 document 的 MutationObserver 来刷新缓存，
+    // YouTube 的 DOM 变动极频繁且随 SPA 导航持续膨胀，每次变动都全文档
+    // querySelector("video")，是页面越用越卡的主要来源之一。
+    if (this.cachedVideoElement?.isConnected) {
+      return this.cachedVideoElement;
+    }
+
     const video = document.querySelector("video") as HTMLVideoElement | null;
     if (video !== this.cachedVideoElement) {
       this.detachCurrentVideo();
@@ -58,22 +71,7 @@ export class YouTubePlayerFacade {
     this.currentVideoCleanup = null;
   }
 
-  private ensureObserver() {
-    if (this.observer) {
-      return;
-    }
-
-    this.observer = new MutationObserver(() => {
-      this.getVideoElementInternal();
-    });
-    this.observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
-  }
-
   public getVideoElement() {
-    this.ensureObserver();
     return this.getVideoElementInternal();
   }
 

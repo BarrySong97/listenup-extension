@@ -2,8 +2,16 @@ import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
 import { EXTENSION_PAGE_URLS } from "@src/utils/extensionPages";
+import { DESKTOP_DEEP_LINK } from "@src/shared/nativeSubtitleProtocol";
 
 export default function Popup() {
+  const openDesktopApp = () => {
+    // 通过深链接打开 ListenUp Desktop（dev 构建打开 DEV app）；
+    // app 打开后播放视频即自动连接（Native Messaging 只做无窗口桥接）
+    chrome.tabs.create({ url: DESKTOP_DEEP_LINK });
+    window.close();
+  };
+
   const openPreviewPage = () => {
     chrome.tabs.create({ url: EXTENSION_PAGE_URLS.preview });
     window.close();
@@ -39,6 +47,17 @@ export default function Popup() {
           <Button
             color="primary"
             variant="solid"
+            className="h-11 w-full justify-center text-sm font-semibold"
+            startContent={
+              <Icon icon="mdi:monitor-shimmer" className={iconScale.secondaryAction} />
+            }
+            onPressStart={openDesktopApp}
+          >
+            Open ListenUp Desktop
+          </Button>
+          <Button
+            color="default"
+            variant="flat"
             className="h-11 w-full justify-center text-sm font-semibold"
             startContent={
               <Icon icon="mdi:cog-outline" className={iconScale.secondaryAction} />
