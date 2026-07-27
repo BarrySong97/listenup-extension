@@ -85,6 +85,12 @@ export default function PrivacyPolicy() {
               derived from the selected phrase may be sent directly to a
               supported image-search service such as Google, Bing, or Baidu.
             </p>
+            <p>
+              If you install and run the ListenUp desktop app, the extension
+              sends subtitle sessions and playback timing to that app through
+              Chrome Native Messaging on the same computer. This local
+              communication is not routed through a ListenUp server.
+            </p>
           </PolicySection>
 
           <PolicySection title="How information is used">

@@ -1,3 +1,7 @@
+// @purpose 桌面端全部 Rust 逻辑：GUI/桥接双模式、Unix socket 服务、活跃 session 状态机、NSPanel 与 tray 配置。
+// @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
+// @deps    tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
+// @gotcha  桥接模式下 stdout 被协议独占；GUI 启动要幂等注册本环境 Host；窗口覆盖全屏依赖 NSPanel。
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,6 +15,9 @@ const PROTOCOL_VERSION: u8 = 1;
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
+const EXTENSION_ID: &str = env!("LISTENUP_EXTENSION_ID");
+const NATIVE_HOST_NAME: &str = env!("LISTENUP_NATIVE_HOST_NAME");
+const PRODUCT_NAME: &str = env!("LISTENUP_PRODUCT_NAME");
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -305,11 +312,89 @@ fn launched_by_chrome() -> bool {
 
 /// dev 和 production 是两个独立 app，bundle id / socket 路径都要分开
 fn app_bundle_id() -> &'static str {
-    if env!("LISTENUP_ENV") == "development" {
-        "com.listenup.desktop.dev"
-    } else {
-        "com.listenup.desktop"
+    env!("LISTENUP_BUNDLE_ID")
+}
+
+#[cfg(target_os = "macos")]
+fn shell_quote(value: &std::path::Path) -> String {
+    format!("'{}'", value.to_string_lossy().replace('\'', "'\"'\"'"))
+}
+
+#[cfg(target_os = "macos")]
+fn native_host_manifest(wrapper_path: &std::path::Path) -> serde_json::Value {
+    serde_json::json!({
+        "name": NATIVE_HOST_NAME,
+        "description": format!("{PRODUCT_NAME} real-time subtitle viewer"),
+        "path": wrapper_path,
+        "type": "stdio",
+        "allowed_origins": [format!("chrome-extension://{EXTENSION_ID}/")],
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn write_registered_file(
+    path: &std::path::Path,
+    contents: &[u8],
+    executable: bool,
+) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temporary_path = path.with_extension(format!(
+        "{}.tmp",
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("file")
+    ));
+    std::fs::write(&temporary_path, contents)?;
+    if executable {
+        std::fs::set_permissions(&temporary_path, std::fs::Permissions::from_mode(0o755))?;
     }
+    std::fs::rename(temporary_path, path)
+}
+
+/// Chrome 的 manifest 位于用户级目录，且 path 必须是绝对路径。
+/// 因此不能把一份静态 JSON 直接塞进 app bundle；GUI 每次启动时按当前
+/// app 位置重写自己的 manifest / wrapper，移动 app 后也能自动修复路径。
+#[cfg(target_os = "macos")]
+fn register_native_messaging_host_at(
+    home: &std::path::Path,
+    executable_path: &std::path::Path,
+) -> io::Result<std::path::PathBuf> {
+    let host_directory =
+        home.join("Library/Application Support/Google/Chrome/NativeMessagingHosts");
+    let log_directory = home.join("Library/Logs");
+    std::fs::create_dir_all(&host_directory)?;
+    std::fs::create_dir_all(&log_directory)?;
+
+    let wrapper_path = host_directory.join(format!("{NATIVE_HOST_NAME}.sh"));
+    let manifest_path = host_directory.join(format!("{NATIVE_HOST_NAME}.json"));
+    let log_path = log_directory.join(format!("{PRODUCT_NAME}.log"));
+
+    let wrapper = format!(
+        "#!/bin/sh\nprintf '%s %s\\n' \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" \"$1\" >> {}\nexec {} \"$@\" 2>> {}\n",
+        shell_quote(&log_path),
+        shell_quote(executable_path),
+        shell_quote(&log_path),
+    );
+    write_registered_file(&wrapper_path, wrapper.as_bytes(), true)?;
+
+    let manifest = native_host_manifest(&wrapper_path);
+    let manifest_json = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let mut manifest_contents = manifest_json;
+    manifest_contents.push(b'\n');
+    write_registered_file(&manifest_path, &manifest_contents, false)?;
+
+    Ok(manifest_path)
+}
+
+#[cfg(target_os = "macos")]
+fn register_native_messaging_host() -> io::Result<std::path::PathBuf> {
+    let home = env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
+    let executable_path = env::current_exe()?;
+    register_native_messaging_host_at(&home, &executable_path)
 }
 
 /// GUI 实例监听的本地 socket。Chrome 拉起的桥接进程把字幕帧转发到这里。
@@ -574,6 +659,20 @@ pub fn run() {
         .manage(SharedStore::default())
         .invoke_handler(tauri::generate_handler![get_snapshot, set_vibrancy])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            match register_native_messaging_host() {
+                Ok(path) => {
+                    eprintln!(
+                        "[listenup] registered {NATIVE_HOST_NAME} for {EXTENSION_ID}: {}",
+                        path.display()
+                    );
+                }
+                Err(error) => {
+                    // Host 注册失败不能阻止字幕窗口本身启动。
+                    eprintln!("[listenup] failed to register {NATIVE_HOST_NAME}: {error}");
+                }
+            }
+
             // 关键（调研结论，tauri#11488）：普通 activation policy 下，NSWindow
             // 即使有 canJoinAllSpaces + fullScreenAuxiliary + 高 level 也进不了
             // 其他 app 的原生全屏 Space（实测 isOnActiveSpace 恒为 false）。
@@ -667,8 +766,7 @@ pub fn run() {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::TrayIconBuilder;
 
-                let show_item =
-                    MenuItem::with_id(app, "show", "显示字幕窗口", true, None::<&str>)?;
+                let show_item = MenuItem::with_id(app, "show", "显示字幕窗口", true, None::<&str>)?;
                 let quit_item =
                     MenuItem::with_id(app, "quit", "退出 ListenUp Desktop", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
@@ -840,5 +938,43 @@ mod tests {
         store.apply(session_message("two", 2));
         store.apply(cursor_message("two", 2, true));
         assert_eq!(store.active_session_id.as_deref(), Some("one"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn native_host_manifest_allows_only_the_compiled_extension() {
+        let wrapper = std::path::Path::new("/tmp/listenup-native-host.sh");
+        let manifest = native_host_manifest(wrapper);
+        assert_eq!(manifest["name"], NATIVE_HOST_NAME);
+        assert_eq!(manifest["path"], wrapper.to_string_lossy().as_ref());
+        assert_eq!(
+            manifest["allowed_origins"],
+            serde_json::json!([format!("chrome-extension://{EXTENSION_ID}/")])
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn native_host_registration_writes_isolated_manifest_and_wrapper() {
+        let test_root = std::env::temp_dir().join(format!(
+            "listenup-native-host-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let executable = test_root.join("ListenUp.app/Contents/MacOS/listenup-desktop");
+        let manifest_path = register_native_messaging_host_at(&test_root, &executable).unwrap();
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        let wrapper_path = manifest_path.with_extension("sh");
+        let wrapper = std::fs::read_to_string(&wrapper_path).unwrap();
+
+        assert_eq!(manifest["name"], NATIVE_HOST_NAME);
+        assert_eq!(
+            manifest["allowed_origins"],
+            serde_json::json!([format!("chrome-extension://{EXTENSION_ID}/")])
+        );
+        assert!(wrapper.contains(executable.to_string_lossy().as_ref()));
+
+        std::fs::remove_dir_all(test_root).unwrap();
     }
 }

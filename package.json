@@ -22,6 +22,7 @@
     "dev:desktop": "pnpm --filter @listenup/desktop tauri:dev",
     "install:desktop-host": "pnpm --filter @listenup/desktop host:install",
     "uninstall:desktop-host": "pnpm --filter @listenup/desktop host:uninstall",
+    "check:environments": "node scripts/check-environment-identifiers.mjs",
     "lint": "turbo run lint",
     "start:website": "pnpm --filter @listenup/website start"
   },

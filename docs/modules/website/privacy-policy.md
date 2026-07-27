@@ -4,7 +4,7 @@
 
 `apps/website/app/privacy/page.tsx` 在 `/privacy` 提供 ListenUp 的公开隐私政策，也是 Chrome Web Store 商品详情所填写的隐私政策地址。
 
-页面说明扩展处理的数据、本地存储、用户主动请求 AI 解释或视觉参考时发生的第三方传输、麦克风录音的本地处理、保留规则和用户控制方式。
+页面说明扩展处理的数据、本地存储、用户主动请求 AI 解释或视觉参考时发生的第三方传输、通过 Chrome Native Messaging 进行的本机 Desktop 字幕同步、麦克风录音的本地处理、保留规则和用户控制方式。
 
 ## 维护要求
 

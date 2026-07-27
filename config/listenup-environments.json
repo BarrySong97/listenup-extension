@@ -1,0 +1,16 @@
+{
+  "production": {
+    "extensionId": "nocahdalbgboblhbjkacpneakljldfjh",
+    "nativeHostName": "com.listenup.desktop",
+    "desktopBundleId": "com.listenup.desktop",
+    "desktopProductName": "ListenUp Desktop",
+    "deepLinkScheme": "listenup"
+  },
+  "development": {
+    "extensionId": "gbnneflaaakigllkomehhhaianjebljf",
+    "nativeHostName": "com.listenup.desktop.dev",
+    "desktopBundleId": "com.listenup.desktop.dev",
+    "desktopProductName": "ListenUp Desktop DEV",
+    "deepLinkScheme": "listenup-dev"
+  }
+}

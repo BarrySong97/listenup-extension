@@ -1,42 +1,85 @@
-# 全局测试规范
+# 测试 & 验证策略
 
-> 目的: 给 monorepo 定义当前真实可执行的测试底线和 app 级验证入口
->
-> 源码路径: `package.json`, `apps/`
->
-> 覆盖范围: 全局构建验证、app 级验证命令和后续测试要求
+## 原则
 
-## 当前测试现实
+- **真跑验证**：本仓库几乎没有自动化测试，"读代码觉得没问题"不算验证。改哪条路径就把那条路径跑一遍。
+- **别用截图判定**：要判定就读 DOM / 无障碍树 / stdout / JSON，确定性、可进 CI。
+- **聚焦子集**：只跑受影响 app 的构建，别每次 `pnpm build` 全量。
+- **完成闸门**：`node scripts/check-docs.mjs --hook` 已接到 Claude / Codex 的 Stop hook（`exit 2` 才真拦）。测试命令目前**没有**进闸门——这是当前 harness 的缺口，补自动化测试时一并接上。
 
-仓库当前没有成熟的自动化测试套件。可执行的基础验证主要是构建和 app 级手工回归。
+## 现状（诚实版）
+
+| 面 | 自动化 | 现有覆盖 |
+|---|---|---|
+| Extension | ❌ 无 | 构建 + 手工回归 |
+| Website | ⚠️ 只有 `eslint` | 构建 + 打开页面看 |
+| Desktop 前端 | ❌ 无 | 构建 + 手工回归 |
+| Desktop Rust | ✅ `cargo test` | 少量单测 |
+
+`apps/extension/src/pages/content/lib/subtitles/`（纯解析 / 清洗 / 合并）对 DOM 和 `chrome.*` 零依赖，是**最该先补单测**的一层。
 
 ## 最低命令
 
-全仓构建：
-
 ```bash
-pnpm build
+pnpm build:extension                                                     # 改扩展
+pnpm build:firefox                                                       # 改了 Firefox 相关
+pnpm build:website && pnpm --filter @listenup/website lint               # 改站点
+pnpm build:web:static                                                    # 改了可能影响静态导出的东西
+pnpm --filter @listenup/desktop build                                    # 改桌面前端
+cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml    # 改 Rust
+node scripts/check-docs.mjs                                              # 永远要跑
 ```
 
-按 app 验证：
+## 手工回归清单
 
-```bash
-pnpm build:extension
-pnpm build:firefox
-pnpm build:website
-pnpm --filter @listenup/desktop build
-cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
-```
+### 改内容脚本 UI / 交互
 
-Website 也提供 lint：
+- YouTube watch 页面能挂载面板；切视频后面板随新 `videoId` 重建
+- 字幕能加载，loading / empty / error / ad 四态合理
+- 点字幕能跳转；当前句高亮与自动滚动正常
+- 复制 / 解释 / 下载 / 循环 / 录音入口未被破坏
+- 麦克风菜单展开时，所选设备的电平会随说话变化
+- 连录多个 take 后，播放优先命中最新那段
 
-```bash
-pnpm --filter @listenup/website lint
-```
+### 改字幕加载链路
 
-## App 级测试入口
+- 首次加载命中正确字幕轨（含 `pot` 缺失重试）
+- 字幕缓存仍可复用（`chrome.storage.local`）
+- 页面桥接 fallback 仍可工作
+- 无字幕视频不报致命错误
 
-- Extension: [apps/extension/docs/testing.md](../apps/extension/docs/testing.md)
-- Extension 内容脚本: [apps/extension/docs/pages/content/testing.md](../apps/extension/docs/pages/content/testing.md)
-- Website: [apps/website/README.md](../apps/website/README.md)
-- Native subtitle demo: [apps/listenup-desktop/README.md](../apps/listenup-desktop/README.md)
+### 改 Shadow DOM / 样式注入
+
+- 样式不污染 YouTube 原生页面
+- Dropdown、hover、选区浮层等 overlay 没有错位
+- YouTube 深色 / 浅色主题都验证
+
+### 改 Explain / AI 设置
+
+- 缺 API key 时给出「Open AI Settings」入口而非裸报错
+- 缓存命中（同视频同选词，TTL 7 天）与 `refresh()` 绕过缓存都正常
+- 模型不支持结构化输出时能回退到文本 JSON 提取
+- 音标胶囊能朗读；Visual Reference 图片区能出图或优雅留空
+
+### 改 Native 同步链路
+
+- production 与 DEV manifest 都含 `nativeMessaging`，但连接不同 Host
+- production Host 只允许 `nocahdalbgboblhbjkacpneakljldfjh`，DEV Host 只允许 `gbnneflaaakigllkomehhhaianjebljf`
+- 两个 Chrome profile 同时播放时，正式/DEV Desktop 不串窗口、socket 或字幕
+- Host 未安装时字幕面板照常工作
+- Native 窗口随播放 / 暂停 / seek 高亮并滚动当前句
+- SPA 切视频后 Native 窗口替换为新字幕
+- 多标签页时窗口跟随最近播放的页面
+- 列表 / 影院模式切换、窗口尺寸恢复、影院模式拖动、毛玻璃在深浅桌面上的可读性
+
+### 改 Website
+
+- `pnpm build:web:static` 能产出 `apps/website/out/`（静态导出没被 API route / 动态渲染破坏）
+- 下载按钮指向 GitHub Releases latest，GitHub 链接可用
+- 首屏在窄屏下不横向滚动
+
+## 何时可以用预览页代替真实环境
+
+`newtab` / `options` 预览页能验证：面板尺寸、排版、单组件状态切换、mock 列表滚动。
+
+**不能**验证：YouTube 页面生命周期、播放器时间同步、广告检测、字幕抓取、页面桥接、Shadow DOM 真实行为。涉及这些必须回真实 YouTube 页面。

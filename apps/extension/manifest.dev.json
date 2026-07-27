@@ -1,6 +1,6 @@
 {
-  "name": "listen up immers DEV",
-  "description": "listen up immers (development build)",
+  "name": "ListenUp DEV",
+  "description": "ListenUp development build — interactive YouTube subtitles.",
   "permissions": [
     "activeTab",
     "storage",
@@ -8,23 +8,34 @@
     "nativeMessaging"
   ],
   "action": {
-    "default_icon": "public/dev-icon-32.png",
+    "default_icon": {
+      "16": "dev-icon-16.png",
+      "32": "dev-icon-32.png",
+      "48": "dev-icon-48.png",
+      "128": "dev-icon-128.png"
+    },
     "default_popup": "src/pages/popup/index.html"
   },
   "icons": {
-    "128": "public/dev-icon-128.png"
+    "16": "dev-icon-16.png",
+    "32": "dev-icon-32.png",
+    "48": "dev-icon-48.png",
+    "128": "dev-icon-128.png"
   },
   "web_accessible_resources": [
     {
       "resources": [
         "contentStyle.css",
-        "dev-icon-128.png",
+        "dev-icon-16.png",
         "dev-icon-32.png",
+        "dev-icon-48.png",
+        "dev-icon-128.png",
         "scripts/*.js"
       ],
       "matches": [
         "*://*.youtube.com/*"
       ]
     }
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArnlPcJYso+Cg0ViBADXZJEeCELIMZsM3jvJ7q7Anm2/4tPRFFsaQVaymktEylLEYdrqi7nItO/8Y3X20ld4k58qIs5XdjAlEu2pLmzeVuNBrQmzrpXtnpm0gOhMl+TfT8w/5fE6KYe8LttZxLwmD2IYeUgA35gTyUgf1HUwFoLbZoB5zkySqMDgvEzVBsA6OaZjfRI09R+xjq3fXEBe3f38WyJzhM1zqUeeDmbnbPmgGRopen6vuqQ3mVo86m/C1byYIev/ukY0nPxeet3qE4YakeFSllHGkjFo7mUQMMwb1G6HM4t+/TKffkkRVEv0ejlAfzS/lsiAscPUxtaNEqwIDAQAB"
 }

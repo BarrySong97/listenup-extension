@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "listen up immers",
-  "description": "listen up immers",
+  "name": "ListenUp",
+  "description": "Interactive YouTube subtitles: click any line to replay it, ask AI what a phrase means, and export the transcript.",
   "options_ui": {
     "page": "src/pages/options/index.html"
   },
@@ -12,16 +12,23 @@
   "action": {
     "default_popup": "src/pages/popup/index.html",
     "default_icon": {
-      "32": "icon-32.png"
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
     }
   },
   "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
     "128": "icon-128.png"
   },
   "permissions": [
     "activeTab",
     "storage",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "*://*.youtube.com/*",
@@ -53,8 +60,10 @@
     {
       "resources": [
         "contentStyle.css",
-        "icon-128.png",
+        "icon-16.png",
         "icon-32.png",
+        "icon-48.png",
+        "icon-128.png",
         "scripts/*.js"
       ],
       "matches": [
