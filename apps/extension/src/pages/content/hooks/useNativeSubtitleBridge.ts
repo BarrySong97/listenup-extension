@@ -1,3 +1,9 @@
+/**
+ * @purpose 把字幕 session 与播放游标发给 background，供桌面端同步。
+ * @role    内容脚本侧的 Native Messaging 发送端。
+ * @deps    src/shared/nativeSubtitleProtocol、chrome.runtime.sendMessage
+ * @gotcha  只有与当前 videoId 一致且 verified 的快照能携带字幕；pending/failed 必须发送空内容
+ */
 import { useEffect, useMemo, useRef } from "react";
 import type { CaptionTrackDescriptor } from "../lib/captions/types";
 import type { SubtitleItem } from "../lib/subtitles/subtitleTypes";
@@ -5,11 +11,14 @@ import {
   NATIVE_SUBTITLE_PROTOCOL_VERSION,
   NativeSubtitleCursorPayload,
   NativeSubtitleExtensionMessage,
+  NativeSubtitleIdentityStatus,
   NativeSubtitleLoadStatus,
 } from "@src/shared/nativeSubtitleProtocol";
 
 interface UseNativeSubtitleBridgeOptions {
   videoId: string | null;
+  snapshotVideoId: string | null;
+  identityStatus: NativeSubtitleIdentityStatus;
   subtitles: SubtitleItem[];
   track: CaptionTrackDescriptor | null;
   loading: boolean;
@@ -37,10 +46,13 @@ const sendNativeBridgeMessage = (message: NativeSubtitleExtensionMessage) => {
 };
 
 const resolveLoadStatus = (
+  identityStatus: NativeSubtitleIdentityStatus,
   loading: boolean,
   error: string | null,
   subtitles: SubtitleItem[]
 ): NativeSubtitleLoadStatus => {
+  if (identityStatus === "pending") return "loading";
+  if (identityStatus === "failed") return "error";
   if (loading) return "loading";
   if (error) return "error";
   return subtitles.length > 0 ? "ready" : "empty";
@@ -48,6 +60,8 @@ const resolveLoadStatus = (
 
 export const useNativeSubtitleBridge = ({
   videoId,
+  snapshotVideoId,
+  identityStatus,
   subtitles,
   track,
   loading,
@@ -65,11 +79,6 @@ export const useNativeSubtitleBridge = ({
   const cursorTimerRef = useRef<number | null>(null);
   const lastCursorSentAtRef = useRef(0);
   const lastSubtitleIndexRef = useRef(-1);
-  const hasSentReadySessionRef = useRef(false);
-
-  useEffect(() => {
-    hasSentReadySessionRef.current = false;
-  }, [sessionId]);
 
   useEffect(() => {
     if (
@@ -81,13 +90,22 @@ export const useNativeSubtitleBridge = ({
       return;
     }
 
-    const status = resolveLoadStatus(loading, error, subtitles);
-    if (status === "loading" && hasSentReadySessionRef.current) {
-      return;
-    }
-    if (status === "ready") {
-      hasSentReadySessionRef.current = true;
-    }
+    const isVerifiedSnapshot =
+      identityStatus === "verified" && snapshotVideoId === videoId;
+    const safeIdentityStatus =
+      snapshotVideoId === videoId ? identityStatus : "pending";
+    const safeSubtitles = isVerifiedSnapshot ? subtitles : [];
+    const safeTrack = isVerifiedSnapshot ? track : null;
+    const safeError =
+      safeIdentityStatus === "failed" && snapshotVideoId === videoId
+        ? error
+        : null;
+    const status = resolveLoadStatus(
+      safeIdentityStatus,
+      loading,
+      safeError,
+      safeSubtitles
+    );
 
     sendNativeBridgeMessage({
       type: "NATIVE_SUBTITLE_SESSION",
@@ -96,19 +114,30 @@ export const useNativeSubtitleBridge = ({
         sessionId,
         videoId,
         title: document.title.replace(/\s+-\s+YouTube$/, ""),
+        identityStatus: safeIdentityStatus,
         status,
-        error,
-        track: track
+        error: safeError,
+        track: safeTrack
           ? {
-              languageCode: track.languageCode,
-              displayName: track.displayName,
-              kind: track.kind,
+              languageCode: safeTrack.languageCode,
+              displayName: safeTrack.displayName,
+              kind: safeTrack.kind,
             }
           : null,
-        subtitles,
+        subtitles: safeSubtitles,
       },
     });
-  }, [error, isAdPlaying, loading, sessionId, subtitles, track, videoId]);
+  }, [
+    error,
+    identityStatus,
+    isAdPlaying,
+    loading,
+    sessionId,
+    snapshotVideoId,
+    subtitles,
+    track,
+    videoId,
+  ]);
 
   useEffect(() => {
     if (!videoId || !sessionId || !hasNativeMessagingPermission()) {

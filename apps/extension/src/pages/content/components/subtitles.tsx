@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕面板的编排根：启动 youtubeSDK、加载字幕、协调索引/滚动/循环/Explain/Native 同步。
+ * @role    内容脚本的主容器组件，被 app.tsx 渲染；向下装配所有面板组件与 hook。
+ * @deps    lib/youtube-sdk、hooks/useSubtitles 等全部面板 hook、SubtitlePanelShell、ExplainCard、AiSettingsCard
+ * @gotcha  写入 explainTarget 前会先暂停视频；这是面板里唯一该放跨组件编排逻辑的地方。见 docs/modules/extension/content.md
+ */
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { youtubeSDK, YouTubeTheme } from "@pages/content/lib/youtube-sdk";
 import { AnimatePresence, motion } from "framer-motion";
@@ -111,9 +117,18 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [videoId, setVideoId] = useState<string | null>(youtubeSDK.getVideoId());
   const playStateCleanup = useRef<(() => void) | null>(null);
   const inlineLayoutSnapshotRef = useRef<InlineLayoutSnapshot | null>(null);
-  const { subtitles, track, loading, error } = useSubtitles({
+  const {
+    subtitles,
+    track,
+    loading,
+    error,
+    snapshotVideoId,
+    identityStatus,
+  } = useSubtitles({
     enabled: !isAdPlaying,
     videoId,
+    snapshotVideoId,
+    identityStatus,
   });
   const { currentTime, currentSubtitleIndex, setCurrentTime } =
     useSubtitleSync(subtitles);

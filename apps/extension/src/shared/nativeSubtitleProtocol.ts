@@ -2,14 +2,16 @@
  * @purpose 扩展与桌面端之间 Native Messaging 的消息契约、host 名与深链接。
  * @role    内容脚本、background 与桌面端 Rust 三方对齐的唯一权威。
  * @deps    构建期环境常量、content 的 SubtitleItem 类型
- * @gotcha  改字段必须两端同步（Rust 侧在 apps/listenup-desktop/src-tauri/src/lib.rs）；Host 与深链接由环境矩阵注入。见 docs/topics/native-messaging.md
+ * @gotcha  v2 的 identityStatus 是 ready/empty 的前置条件；改字段必须同步 Rust 端。见 docs/topics/native-messaging.md
  */
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 
 // dev 和 production 功能相同，但连接不同 Host / app，避免跨环境串线。
 export const NATIVE_SUBTITLE_HOST = __LISTENUP_NATIVE_HOST__;
 export const DESKTOP_DEEP_LINK = __LISTENUP_DEEP_LINK__;
-export const NATIVE_SUBTITLE_PROTOCOL_VERSION = 1 as const;
+export const NATIVE_SUBTITLE_PROTOCOL_VERSION = 2 as const;
+
+export type NativeSubtitleIdentityStatus = "pending" | "verified" | "failed";
 
 export type NativeSubtitleLoadStatus =
   | "loading"
@@ -28,6 +30,7 @@ export interface NativeSubtitleSessionPayload {
   sessionId: string;
   videoId: string;
   title: string;
+  identityStatus: NativeSubtitleIdentityStatus;
   status: NativeSubtitleLoadStatus;
   error: string | null;
   track: NativeSubtitleTrack | null;

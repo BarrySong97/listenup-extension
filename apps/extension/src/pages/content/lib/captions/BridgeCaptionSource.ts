@@ -1,3 +1,9 @@
+/**
+ * @purpose 经页面桥接读取字幕轨（含当前音轨对应的轨道）。
+ * @role    另一个字幕轨来源，用于 player-response 拿不到或缺参数时。
+ * @deps    captions/PageBridge、captions/types、subtitleDebug
+ * @gotcha  payload 字段含混淆键名；playerVideoId 缺失时不能把轨道视为已验证
+ */
 import { pageBridge } from "./PageBridge";
 import {
   CaptionListResponse,
@@ -6,6 +12,7 @@ import {
 import { subtitleDebug } from "../subtitle-domain/subtitleDebug";
 
 interface BridgeTrackPayload {
+  playerVideoId?: string;
   currentTrack?: {
     d7?: {
       id?: string;
@@ -79,6 +86,15 @@ export class BridgeCaptionSource {
       const currentDefaultVssId =
         payload?.currentTrack?.B?.vssId || payload?.currentTrack?.d7?.id;
       const clientVersion = payload?.ytcfg?.INNERTUBE_CLIENT_VERSION;
+      const sourceVideoId = payload?.playerVideoId;
+
+      if (!sourceVideoId) {
+        return {
+          ok: false,
+          code: "PLAYER_NOT_READY",
+          message: "Page bridge player video identity is not ready",
+        };
+      }
 
       const normalizedFromCurrentTrack: CaptionTrackDescriptor[] = bridgeTracks
         .filter(
@@ -93,6 +109,7 @@ export class BridgeCaptionSource {
         )
         .map((track) => ({
           source: "page-bridge",
+          sourceVideoId,
           languageCode: track.languageCode!,
           displayName:
             track.displayName ||
@@ -123,6 +140,7 @@ export class BridgeCaptionSource {
         )
         .map((track, index) => ({
           source: "page-bridge",
+          sourceVideoId,
           languageCode: track.languageCode!,
           displayName: getTrackName(track) || track.languageCode!,
           kind: track.kind === "asr" ? "asr" : "manual",

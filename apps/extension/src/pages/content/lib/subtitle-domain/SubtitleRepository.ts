@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕加载的总编排：聚合两个轨道来源、选轨、下载、解析、处理、读写缓存。
+ * @role    subtitle-domain 的核心，useSubtitles 唯一调用的入口。
+ * @deps    captions/*、subtitles/subtitleParser、SubtitleCache、SubtitleProcessor、SubtitleTransport、youtube-sdk
+ * @gotcha  SPA 切换后五秒内只接受页面、playerResponse、字幕 URL 三方 videoId 一致的轨道；缓存前后都要复验
+ */
 import {
   bridgeCaptionSource,
 } from "../captions/BridgeCaptionSource";
@@ -11,6 +17,7 @@ import {
   CaptionListResponse,
   TrackPreference,
 } from "../captions/types";
+import { validateCaptionVideoIdentity } from "../captions/videoIdentity";
 import { youtubeSDK } from "../youtube-sdk";
 import { parseSubtitleContent } from "../subtitles/subtitleParser";
 import { SubtitleItem } from "../subtitles/subtitleTypes";
@@ -118,18 +125,21 @@ const shouldRetryForPot = (results: CaptionListResponse[]) =>
       )
   );
 
+const IDENTITY_RETRY_DELAYS_MS = [0, 250, 500, 750, 1_000, 1_250, 1_250];
+
+interface VerifiedTrackDiscovery {
+  tracks: CaptionTrackDescriptor[];
+  sourceResults: CaptionListResponse[];
+  sawIdentityMismatch: boolean;
+}
+
 export class SubtitleRepository {
   constructor(private readonly cache: SubtitleCache = subtitleCache) {}
 
-  private async listCaptionSources(
+  private async discoverVerifiedTracks(
+    expectedVideoId: string,
     signal?: AbortSignal
-  ): Promise<CaptionListResponse[]> {
-    const retryDelays = [250, 500];
-    let sourceResults = await Promise.all([
-      playerResponseCaptionSource.listTracks(),
-      bridgeCaptionSource.listTracks(),
-    ]);
-
+  ): Promise<VerifiedTrackDiscovery> {
     const summarizeResults = (results: CaptionListResponse[]) =>
       results
         .flatMap((result) => (result.ok ? result.tracks : []))
@@ -140,38 +150,77 @@ export class SubtitleRepository {
           kind: track.kind,
           urlSource: track.urlSource,
           hasPot: track.hasPot,
+          sourceVideoId: track.sourceVideoId,
         }));
+    let latestResults: CaptionListResponse[] = [];
+    let latestVerifiedTracks: CaptionTrackDescriptor[] = [];
+    let sawIdentityMismatch = false;
 
-    subtitleDebug.log("initial caption source attempt", {
-      tracks: summarizeResults(sourceResults),
-    });
-
-    for (const delayMs of retryDelays) {
-      const dedupedTracks = dedupeTracks(
-        sourceResults.flatMap((result) => (result.ok ? result.tracks : []))
-      );
-
-      if (hasUsablePotTrack(dedupedTracks) || !shouldRetryForPot(sourceResults)) {
-        break;
+    for (const delayMs of IDENTITY_RETRY_DELAYS_MS) {
+      if (delayMs > 0) {
+        await delay(delayMs, signal);
       }
 
-      subtitleDebug.warn("retry caption source lookup because pot is missing", {
-        delayMs,
-        tracks: summarizeResults(sourceResults),
-      });
-
-      await delay(delayMs, signal);
-      sourceResults = await Promise.all([
+      const sessionVideoId = youtubeSDK.getSessionState().videoId;
+      latestResults = await Promise.all([
         playerResponseCaptionSource.listTracks(),
         bridgeCaptionSource.listTracks(),
       ]);
-      subtitleDebug.log("caption source retry result", {
-        delayMs,
-        tracks: summarizeResults(sourceResults),
+      const discoveredTracks = dedupeTracks(
+        latestResults.flatMap((result) => (result.ok ? result.tracks : []))
+      );
+      latestVerifiedTracks = discoveredTracks.filter((track) => {
+        const identity = validateCaptionVideoIdentity({
+          expectedVideoId,
+          sessionVideoId,
+          track,
+        });
+        if (!identity.ok) {
+          sawIdentityMismatch = true;
+          subtitleDebug.warn("reject caption track with mismatched video identity", {
+            expectedVideoId,
+            sessionVideoId,
+            sourceVideoId: track.sourceVideoId,
+            trackVideoId: identity.trackVideoId,
+            vssId: track.vssId,
+          });
+        }
+        return identity.ok;
       });
+
+      subtitleDebug.log("caption source identity attempt", {
+        delayMs,
+        expectedVideoId,
+        sessionVideoId,
+        tracks: summarizeResults(latestResults),
+        verifiedTrackCount: latestVerifiedTracks.length,
+      });
+
+      if (
+        latestVerifiedTracks.length > 0 &&
+        (hasUsablePotTrack(latestVerifiedTracks) ||
+          !shouldRetryForPot(latestResults))
+      ) {
+        break;
+      }
     }
 
-    return sourceResults;
+    return {
+      tracks: latestVerifiedTracks,
+      sourceResults: latestResults,
+      sawIdentityMismatch,
+    };
+  }
+
+  private isTrackIdentityCurrent(
+    expectedVideoId: string,
+    track: CaptionTrackDescriptor
+  ) {
+    return validateCaptionVideoIdentity({
+      expectedVideoId,
+      sessionVideoId: youtubeSDK.getSessionState().videoId,
+      track,
+    }).ok;
   }
 
   public async load(input: {
@@ -208,7 +257,11 @@ export class SubtitleRepository {
       };
     }
 
-    const sourceResults = await this.listCaptionSources(input.signal);
+    const discovery = await this.discoverVerifiedTracks(
+      input.videoId,
+      input.signal
+    );
+    const sourceResults = discovery.sourceResults;
     subtitleDebug.log(
       "caption source results",
       sourceResults.map((result) =>
@@ -227,9 +280,7 @@ export class SubtitleRepository {
       )
     );
 
-    const availableTracks = dedupeTracks(
-      sourceResults.flatMap((result) => (result.ok ? result.tracks : []))
-    );
+    const availableTracks = discovery.tracks;
     subtitleDebug.log("deduped caption tracks", {
       trackCount: availableTracks.length,
       tracks: availableTracks.map((track) => ({
@@ -245,6 +296,17 @@ export class SubtitleRepository {
     });
 
     if (availableTracks.length === 0) {
+      if (
+        discovery.sawIdentityMismatch ||
+        youtubeSDK.getSessionState().videoId !== input.videoId
+      ) {
+        return {
+          ok: false,
+          code: "VIDEO_ID_MISMATCH",
+          message: "视频切换尚未完成",
+        };
+      }
+
       const bridgeFailure = sourceResults.find(
         (result) => !result.ok && result.code === "BRIDGE_TIMEOUT"
       );
@@ -267,6 +329,14 @@ export class SubtitleRepository {
       };
     }
 
+    if (!this.isTrackIdentityCurrent(input.videoId, selectedTrack)) {
+      return {
+        ok: false,
+        code: "VIDEO_ID_MISMATCH",
+        message: "视频切换尚未完成",
+      };
+    }
+
     const processingConfig = getSubtitleProcessingConfig();
     const configHash = createConfigHash(processingConfig);
     subtitleDebug.log("subtitle processing config", {
@@ -280,6 +350,14 @@ export class SubtitleRepository {
     );
 
     if (cached) {
+      if (!this.isTrackIdentityCurrent(input.videoId, selectedTrack)) {
+        return {
+          ok: false,
+          code: "VIDEO_ID_MISMATCH",
+          message: "视频切换尚未完成",
+        };
+      }
+
       subtitleDebug.log("subtitle cache hit", {
         videoId: input.videoId,
         track: selectedTrack,
@@ -312,6 +390,14 @@ export class SubtitleRepository {
       subtitleDebug.log("processed subtitles", {
         count: processedSubtitles.length,
       });
+
+      if (!this.isTrackIdentityCurrent(input.videoId, selectedTrack)) {
+        return {
+          ok: false,
+          code: "VIDEO_ID_MISMATCH",
+          message: "视频切换尚未完成",
+        };
+      }
 
       await this.cache.set(input.videoId, selectedTrack, configHash, {
         rawSubtitles,

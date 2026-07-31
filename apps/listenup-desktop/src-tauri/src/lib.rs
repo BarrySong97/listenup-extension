@@ -1,7 +1,7 @@
-// @purpose 桌面端全部 Rust 逻辑：GUI/桥接双模式、Unix socket 服务、活跃 session 状态机、NSPanel 与 tray 配置。
+// @purpose 桌面端全部 Rust 逻辑：GUI/桥接双模式、Unix socket、多视频 session 仲裁、NSPanel 与 tray 配置。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
-// @gotcha  桥接模式下 stdout 被协议独占；GUI 启动要幂等注册本环境 Host；窗口覆盖全屏依赖 NSPanel。
+// @gotcha  桥接 stdout 被协议独占；2+ 播放 session 必须尊重手动锁定，pending session 不可供用户选择。
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,7 +11,7 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const PROTOCOL_VERSION: u8 = 1;
+const PROTOCOL_VERSION: u8 = 2;
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
@@ -55,6 +55,7 @@ pub struct SessionState {
     session_id: String,
     video_id: String,
     title: String,
+    identity_status: String,
     status: String,
     error: Option<String>,
     track: Option<SubtitleTrack>,
@@ -77,6 +78,7 @@ enum NativeMessage {
         session_id: String,
         video_id: String,
         title: String,
+        identity_status: String,
         status: String,
         error: Option<String>,
         track: Option<SubtitleTrack>,
@@ -103,15 +105,28 @@ enum NativeMessage {
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+struct PlayingCandidate {
+    session_id: String,
+    tab_id: i64,
+    video_id: String,
+    title: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct ViewerSnapshot {
     connected: bool,
     active_session: Option<SessionState>,
+    playing_candidates: Vec<PlayingCandidate>,
+    playing_session_count: usize,
+    selected_session_id: Option<String>,
+    selection_required: bool,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "kind", content = "payload", rename_all = "camelCase")]
 enum UiUpdate {
-    Session(Option<SessionState>),
+    Snapshot(ViewerSnapshot),
     Cursor(CursorState),
 }
 
@@ -121,11 +136,106 @@ struct HostStore {
     bridge_connections: usize,
     sessions: HashMap<String, SessionState>,
     active_session_id: Option<String>,
+    manually_selected_session_id: Option<String>,
     sequence: u64,
 }
 
 impl HostStore {
+    fn is_playing(session: &SessionState) -> bool {
+        session
+            .cursor
+            .as_ref()
+            .is_some_and(|cursor| !cursor.is_paused && !cursor.is_ad_playing)
+    }
+
+    fn is_selectable(session: &SessionState) -> bool {
+        Self::is_playing(session) && session.identity_status == "verified"
+    }
+
+    fn ordered_session_ids_matching(
+        &self,
+        predicate: impl Fn(&SessionState) -> bool,
+    ) -> Vec<String> {
+        let mut sessions = self
+            .sessions
+            .values()
+            .filter(|session| predicate(session))
+            .collect::<Vec<_>>();
+        // 候选顺序必须稳定；若按 cursor 的 updated_order 排，每 250ms 都可能
+        // 交换顺序并把本该是增量 cursor 的事件放大成全量字幕 snapshot。
+        sessions.sort_by(|left, right| {
+            left.tab_id
+                .cmp(&right.tab_id)
+                .then_with(|| left.session_id.cmp(&right.session_id))
+        });
+        sessions
+            .into_iter()
+            .map(|session| session.session_id.clone())
+            .collect()
+    }
+
+    fn playing_session_ids(&self) -> Vec<String> {
+        self.ordered_session_ids_matching(Self::is_playing)
+    }
+
+    fn selectable_session_ids(&self) -> Vec<String> {
+        self.ordered_session_ids_matching(Self::is_selectable)
+    }
+
+    fn selection_required(&self) -> bool {
+        self.playing_session_ids().len() >= 2
+            && self.manually_selected_session_id.is_none()
+            && self.selectable_session_ids().len() >= 2
+    }
+
+    fn reconcile_active_session(&mut self) {
+        let playing_ids = self.playing_session_ids();
+        let selectable_ids = self.selectable_session_ids();
+        let manual_is_valid = self
+            .manually_selected_session_id
+            .as_ref()
+            .is_some_and(|id| selectable_ids.contains(id));
+
+        if !manual_is_valid {
+            self.manually_selected_session_id = None;
+        }
+
+        match playing_ids.len() {
+            0 => {
+                if self
+                    .active_session_id
+                    .as_ref()
+                    .is_none_or(|id| !self.sessions.contains_key(id))
+                {
+                    self.active_session_id = self
+                        .sessions
+                        .values()
+                        .max_by_key(|session| session.updated_order)
+                        .map(|session| session.session_id.clone());
+                }
+            }
+            1 => {
+                self.active_session_id = playing_ids.first().cloned();
+                self.manually_selected_session_id = None;
+            }
+            _ => {
+                self.active_session_id = self.manually_selected_session_id.clone();
+            }
+        }
+    }
+
     fn snapshot(&self) -> ViewerSnapshot {
+        let selectable_ids = self.selectable_session_ids();
+        let playing_candidates = selectable_ids
+            .iter()
+            .filter_map(|id| self.sessions.get(id))
+            .map(|session| PlayingCandidate {
+                session_id: session.session_id.clone(),
+                tab_id: session.tab_id,
+                video_id: session.video_id.clone(),
+                title: session.title.clone(),
+            })
+            .collect();
         ViewerSnapshot {
             connected: self.connected,
             active_session: self
@@ -133,6 +243,10 @@ impl HostStore {
                 .as_ref()
                 .and_then(|id| self.sessions.get(id))
                 .cloned(),
+            playing_candidates,
+            playing_session_count: self.playing_session_ids().len(),
+            selected_session_id: self.manually_selected_session_id.clone(),
+            selection_required: self.selection_required(),
         }
     }
 
@@ -149,6 +263,7 @@ impl HostStore {
                 session_id,
                 video_id,
                 title,
+                identity_status,
                 status,
                 error,
                 track,
@@ -165,6 +280,7 @@ impl HostStore {
                     session_id: session_id.clone(),
                     video_id,
                     title,
+                    identity_status,
                     status,
                     error,
                     track,
@@ -173,13 +289,8 @@ impl HostStore {
                     updated_order: order,
                 };
                 self.sessions.insert(session_id.clone(), session.clone());
-
-                if self.active_session_id.is_none() {
-                    self.active_session_id = Some(session_id.clone());
-                }
-
-                (self.active_session_id.as_deref() == Some(session_id.as_str()))
-                    .then_some(UiUpdate::Session(Some(session)))
+                self.reconcile_active_session();
+                Some(UiUpdate::Snapshot(self.snapshot()))
             }
             NativeMessage::Cursor {
                 version,
@@ -205,6 +316,7 @@ impl HostStore {
                     is_ad_playing,
                     sent_at,
                 };
+                let before = self.snapshot();
                 let order = self.next_sequence();
                 let session = self.sessions.get_mut(&session_id)?;
                 if session.tab_id != tab_id || session.video_id != video_id {
@@ -212,20 +324,24 @@ impl HostStore {
                 }
                 session.cursor = Some(cursor.clone());
                 session.updated_order = order;
+                self.reconcile_active_session();
+                let after = self.snapshot();
+                let structural_change = before
+                    .active_session
+                    .as_ref()
+                    .map(|value| &value.session_id)
+                    != after.active_session.as_ref().map(|value| &value.session_id)
+                    || before.playing_candidates != after.playing_candidates
+                    || before.playing_session_count != after.playing_session_count
+                    || before.selected_session_id != after.selected_session_id
+                    || before.selection_required != after.selection_required;
 
-                let active_changed =
-                    !is_paused && self.active_session_id.as_deref() != Some(session_id.as_str());
-                if active_changed {
-                    self.active_session_id = Some(session_id.clone());
-                    return self
-                        .sessions
-                        .get(&session_id)
-                        .cloned()
-                        .map(|value| UiUpdate::Session(Some(value)));
+                if structural_change {
+                    Some(UiUpdate::Snapshot(after))
+                } else {
+                    (self.active_session_id.as_deref() == Some(session_id.as_str()))
+                        .then_some(UiUpdate::Cursor(cursor))
                 }
-
-                (self.active_session_id.as_deref() == Some(session_id.as_str()))
-                    .then_some(UiUpdate::Cursor(cursor))
             }
             NativeMessage::End {
                 version,
@@ -244,23 +360,21 @@ impl HostStore {
                 }
 
                 self.sessions.remove(&session_id);
-                if self.active_session_id.as_deref() != Some(session_id.as_str()) {
-                    return None;
-                }
-
-                self.active_session_id = self
-                    .sessions
-                    .values()
-                    .max_by_key(|session| session.updated_order)
-                    .map(|session| session.session_id.clone());
-                Some(UiUpdate::Session(
-                    self.active_session_id
-                        .as_ref()
-                        .and_then(|id| self.sessions.get(id))
-                        .cloned(),
-                ))
+                self.reconcile_active_session();
+                Some(UiUpdate::Snapshot(self.snapshot()))
             }
         }
+    }
+
+    fn select_session(&mut self, session_id: &str) -> Result<ViewerSnapshot, String> {
+        let selectable_ids = self.selectable_session_ids();
+        if selectable_ids.len() < 2 || !selectable_ids.iter().any(|id| id == session_id) {
+            return Err("所选视频已不再是可用的播放候选".to_string());
+        }
+
+        self.manually_selected_session_id = Some(session_id.to_string());
+        self.reconcile_active_session();
+        Ok(self.snapshot())
     }
 }
 
@@ -642,7 +756,26 @@ fn get_snapshot(store: State<'_, SharedStore>) -> ViewerSnapshot {
         .unwrap_or(ViewerSnapshot {
             connected: false,
             active_session: None,
+            playing_candidates: Vec::new(),
+            playing_session_count: 0,
+            selected_session_id: None,
+            selection_required: false,
         })
+}
+
+#[tauri::command]
+fn select_subtitle_session(
+    app: AppHandle,
+    store: State<'_, SharedStore>,
+    session_id: String,
+) -> Result<ViewerSnapshot, String> {
+    let snapshot = store
+        .0
+        .lock()
+        .map_err(|_| "字幕会话状态暂时不可用".to_string())?
+        .select_session(&session_id)?;
+    let _ = app.emit(UPDATE_EVENT, UiUpdate::Snapshot(snapshot.clone()));
+    Ok(snapshot)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -657,7 +790,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(SharedStore::default())
-        .invoke_handler(tauri::generate_handler![get_snapshot, set_vibrancy])
+        .invoke_handler(tauri::generate_handler![
+            get_snapshot,
+            select_subtitle_session,
+            set_vibrancy
+        ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             match register_native_messaging_host() {
@@ -834,12 +971,21 @@ mod tests {
     }
 
     fn session_message(session_id: &str, tab_id: i64) -> NativeMessage {
+        session_message_with_identity(session_id, tab_id, "verified")
+    }
+
+    fn session_message_with_identity(
+        session_id: &str,
+        tab_id: i64,
+        identity_status: &str,
+    ) -> NativeMessage {
         NativeMessage::Session {
             version: PROTOCOL_VERSION,
             tab_id,
             session_id: session_id.to_string(),
             video_id: format!("video-{session_id}"),
             title: format!("Video {session_id}"),
+            identity_status: identity_status.to_string(),
             status: "ready".to_string(),
             error: None,
             track: None,
@@ -872,7 +1018,7 @@ mod tests {
 
     #[test]
     fn reads_a_fragmented_native_messaging_frame() {
-        let json = r#"{"kind":"end","version":1,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
+        let json = r#"{"kind":"end","version":2,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
         let mut reader = ChunkedReader {
             cursor: Cursor::new(frame(json)),
             chunk_size: 2,
@@ -881,7 +1027,7 @@ mod tests {
         assert_eq!(
             message,
             NativeMessage::End {
-                version: 1,
+                version: 2,
                 tab_id: 4,
                 session_id: "s1".to_string(),
                 video_id: "v1".to_string(),
@@ -911,33 +1057,106 @@ mod tests {
     }
 
     #[test]
-    fn playing_session_becomes_active_and_end_falls_back() {
+    fn two_playing_sessions_require_selection_and_choice_is_sticky() {
         let mut store = HostStore::default();
         store.connected = true;
         store.apply(session_message("one", 1));
         store.apply(session_message("two", 2));
         assert_eq!(store.active_session_id.as_deref(), Some("one"));
 
+        store.apply(cursor_message("one", 1, false));
         store.apply(cursor_message("two", 2, false));
-        assert_eq!(store.active_session_id.as_deref(), Some("two"));
+        assert_eq!(store.active_session_id, None);
+        assert!(store.snapshot().selection_required);
 
-        let update = store.apply(NativeMessage::End {
-            version: PROTOCOL_VERSION,
-            tab_id: 2,
-            session_id: "two".to_string(),
-            video_id: "video-two".to_string(),
-        });
+        store.select_session("one").unwrap();
         assert_eq!(store.active_session_id.as_deref(), Some("one"));
-        assert!(matches!(update, Some(UiUpdate::Session(Some(_)))));
+        assert_eq!(store.manually_selected_session_id.as_deref(), Some("one"));
+
+        store.apply(session_message("three", 3));
+        store.apply(cursor_message("three", 3, false));
+        assert_eq!(store.active_session_id.as_deref(), Some("one"));
+        assert!(!store.snapshot().selection_required);
     }
 
     #[test]
-    fn paused_background_session_does_not_steal_focus() {
+    fn selected_session_stopping_reprompts_or_auto_follows() {
         let mut store = HostStore::default();
         store.apply(session_message("one", 1));
         store.apply(session_message("two", 2));
+        store.apply(session_message("three", 3));
+        store.apply(cursor_message("one", 1, false));
+        store.apply(cursor_message("two", 2, false));
+        store.apply(cursor_message("three", 3, false));
+        store.select_session("one").unwrap();
+
+        store.apply(cursor_message("one", 1, true));
+        assert_eq!(store.active_session_id, None);
+        assert!(store.snapshot().selection_required);
+
+        store.apply(cursor_message("three", 3, true));
+        assert_eq!(store.active_session_id.as_deref(), Some("two"));
+        assert_eq!(store.manually_selected_session_id, None);
+        assert!(!store.snapshot().selection_required);
+    }
+
+    #[test]
+    fn pending_playing_session_is_not_selectable() {
+        let mut store = HostStore::default();
+        store.apply(session_message("verified", 1));
+        store.apply(session_message_with_identity("pending", 2, "pending"));
+        store.apply(cursor_message("verified", 1, false));
+        store.apply(cursor_message("pending", 2, false));
+
+        let snapshot = store.snapshot();
+        assert_eq!(snapshot.playing_session_count, 2);
+        assert_eq!(snapshot.playing_candidates.len(), 1);
+        assert!(!snapshot.selection_required);
+        assert_eq!(snapshot.active_session, None);
+        assert!(store.select_session("pending").is_err());
+    }
+
+    #[test]
+    fn invalid_or_stale_selection_is_rejected() {
+        let mut store = HostStore::default();
+        store.apply(session_message("one", 1));
+        store.apply(session_message("two", 2));
+        store.apply(cursor_message("one", 1, false));
         store.apply(cursor_message("two", 2, true));
-        assert_eq!(store.active_session_id.as_deref(), Some("one"));
+
+        assert!(store.select_session("one").is_err());
+        assert!(store.select_session("missing").is_err());
+    }
+
+    #[test]
+    fn cursor_updates_do_not_reorder_candidates_or_emit_full_snapshots() {
+        let mut store = HostStore::default();
+        store.apply(session_message("one", 1));
+        store.apply(session_message("two", 2));
+        store.apply(cursor_message("one", 1, false));
+        store.apply(cursor_message("two", 2, false));
+        store.select_session("one").unwrap();
+
+        let candidate_ids = store
+            .snapshot()
+            .playing_candidates
+            .into_iter()
+            .map(|candidate| candidate.session_id)
+            .collect::<Vec<_>>();
+        assert_eq!(candidate_ids, vec!["one", "two"]);
+
+        assert!(matches!(
+            store.apply(cursor_message("one", 1, false)),
+            Some(UiUpdate::Cursor(_))
+        ));
+        assert!(store.apply(cursor_message("two", 2, false)).is_none());
+        let candidate_ids_after = store
+            .snapshot()
+            .playing_candidates
+            .into_iter()
+            .map(|candidate| candidate.session_id)
+            .collect::<Vec<_>>();
+        assert_eq!(candidate_ids_after, vec!["one", "two"]);
     }
 
     #[cfg(target_os = "macos")]

@@ -1,3 +1,9 @@
+/**
+ * @purpose 注入 YouTube 页面上下文的桥接脚本：读播放器内部字幕轨、代拉字幕文档。
+ * @role    内容脚本经 PageBridge 用自定义事件与它通信；作为 web-accessible resource 暴露。
+ * @deps    YouTube 的 #movie_player API 与 window.ytInitialPlayerResponse
+ * @gotcha  与内容脚本是两个 JS 上下文，只能 postMessage/CustomEvent；改事件名要同时改 PageBridge.ts 和 manifest 的 web_accessible_resources。见 docs/modules/extension/build-and-manifest.md
+ */
 (function () {
   const REQUEST_EVENT = "listenup:list-caption-tracks:request";
   const RESPONSE_EVENT = "listenup:list-caption-tracks:response";
@@ -10,22 +16,18 @@
 
   window.__LISTENUP_BRIDGE_READY__ = true;
 
-  const getTracklistRenderer = function () {
+  const getPlayerResponse = function () {
     const player = document.getElementById("movie_player");
-    const playerResponseRenderer =
+    const playerResponse =
       player &&
       typeof player.getPlayerResponse === "function" &&
-      player.getPlayerResponse()?.captions?.playerCaptionsTracklistRenderer;
+      player.getPlayerResponse();
 
-    if (playerResponseRenderer) {
-      return playerResponseRenderer;
+    if (playerResponse) {
+      return playerResponse;
     }
 
-    return (
-      window.ytInitialPlayerResponse &&
-      window.ytInitialPlayerResponse.captions &&
-      window.ytInitialPlayerResponse.captions.playerCaptionsTracklistRenderer
-    );
+    return window.ytInitialPlayerResponse || null;
   };
 
   const getCurrentTrack = function () {
@@ -44,7 +46,11 @@
     }
 
     try {
-      const payload = getTracklistRenderer();
+      const playerResponse = getPlayerResponse();
+      const payload =
+        playerResponse &&
+        playerResponse.captions &&
+        playerResponse.captions.playerCaptionsTracklistRenderer;
       const currentTrack = getCurrentTrack();
       const ytcfg = window.ytcfg && window.ytcfg.data_;
       const responsePayload =
@@ -52,6 +58,10 @@
           ? {
               currentTrack,
               ytcfg,
+              playerVideoId:
+                playerResponse &&
+                playerResponse.videoDetails &&
+                playerResponse.videoDetails.videoId,
               captionTracks: payload && payload.captionTracks,
               audioTracks: payload && payload.audioTracks,
               translationLanguages: payload && payload.translationLanguages,

@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕窗口 UI：列表/影院模式、多视频选择、虚拟滚动、窗口尺寸与模式持久化。
+ * @role    桌面端唯一的页面组件，消费 Rust 推来的 session/cursor 事件。
+ * @deps    @tauri-apps/api、virtua、@iconify/react、VideoSessionPicker、./types
+ * @gotcha  多视频候选和锁定完全以 Rust snapshot 为准；selectionRequired 遮罩不可关闭
+ */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -5,6 +11,7 @@ import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VList, type VListHandle } from "virtua";
 import type { CursorState, SessionState, UiUpdate, ViewerSnapshot } from "./types";
+import { VideoSessionPicker } from "./VideoSessionPicker";
 
 type ViewMode = "list" | "cinema";
 
@@ -30,6 +37,14 @@ const DEFAULT_SIZES: Record<ViewMode, WindowSize> = {
 };
 
 const SCROLLBAR_IDLE_DELAY_MS = 700;
+const EMPTY_VIEWER_SNAPSHOT: ViewerSnapshot = {
+  connected: false,
+  activeSession: null,
+  playingCandidates: [],
+  playingSessionCount: 0,
+  selectedSessionId: null,
+  selectionRequired: false,
+};
 
 const IS_DEV_BUILD = import.meta.env.VITE_LISTENUP_ENV === "development";
 
@@ -128,11 +143,12 @@ const StatusDot = ({ connected }: { connected: boolean }) => (
 );
 
 export default function App() {
-  const [connected, setConnected] = useState(false);
-  const [session, setSession] = useState<SessionState | null>(null);
+  const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [busySessionId, setBusySessionId] = useState<string | null>(null);
   const [isListScrolling, setIsListScrolling] = useState(false);
-  const [showCinemaHint, setShowCinemaHint] = useState(false);
   const modeRef = useRef(mode);
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledSessionRef = useRef<string | null>(null);
@@ -147,30 +163,38 @@ export default function App() {
       unlistenConnection = await listen<boolean>(
         "native-subtitle-connection",
         (event) => {
-          setConnected(Boolean(event.payload));
+          setViewer((current) => ({
+            ...current,
+            connected: Boolean(event.payload),
+          }));
         }
       );
       unlisten = await listen<UiUpdate>("native-subtitle-update", (event) => {
-        setConnected(true);
         const update = event.payload;
-        if (update.kind === "session") {
-          setSession(update.payload);
+        if (update.kind === "snapshot") {
+          setViewer({ ...update.payload, connected: true });
           return;
         }
 
         const cursor = update.payload;
-        setSession((current) => {
-          if (!current || current.sessionId !== cursor.sessionId) {
+        setViewer((current) => {
+          if (
+            !current.activeSession ||
+            current.activeSession.sessionId !== cursor.sessionId
+          ) {
             return current;
           }
-          return { ...current, cursor };
+          return {
+            ...current,
+            connected: true,
+            activeSession: { ...current.activeSession, cursor },
+          };
         });
       });
 
       const snapshot = await invoke<ViewerSnapshot>("get_snapshot");
       if (!disposed) {
-        setConnected(snapshot.connected);
-        setSession(snapshot.activeSession);
+        setViewer(snapshot);
       }
     };
 
@@ -185,19 +209,72 @@ export default function App() {
     };
   }, []);
 
+  const session = viewer.activeSession;
+  const connected = viewer.connected;
+  const pickerVisible = viewer.selectionRequired || pickerOpen;
+  const canChooseVideo = viewer.playingCandidates.length >= 2;
+
+  useEffect(() => {
+    if (!canChooseVideo && !viewer.selectionRequired) {
+      setPickerOpen(false);
+      setPickerError(null);
+    }
+  }, [canChooseVideo, viewer.selectionRequired]);
+
+  useEffect(() => {
+    if (mode !== "cinema" || !pickerVisible) return;
+
+    const appWindow = getCurrentWindow();
+    void (async () => {
+      const [innerSize, scaleFactor] = await Promise.all([
+        appWindow.innerSize(),
+        appWindow.scaleFactor(),
+      ]);
+      if (scaleFactor <= 0) return;
+      const width = Math.round(innerSize.width / scaleFactor);
+      const height = Math.round(innerSize.height / scaleFactor);
+      await appWindow.setMinSize(new LogicalSize(MIN_SIZES.cinema.width, 220));
+      if (height < 220) {
+        await appWindow.setSize(new LogicalSize(width, 220));
+      }
+    })().catch((error) => {
+      console.error("failed to expand cinema video picker", error);
+    });
+
+    return () => {
+      if (modeRef.current === "cinema") {
+        void applyWindowSizeForMode("cinema");
+      }
+    };
+  }, [mode, pickerVisible]);
+
+  const openVideoPicker = useCallback(() => {
+    if (!canChooseVideo) return;
+    setPickerError(null);
+    setPickerOpen(true);
+  }, [canChooseVideo]);
+
+  const selectVideoSession = useCallback(async (sessionId: string) => {
+    setBusySessionId(sessionId);
+    setPickerError(null);
+    try {
+      const snapshot = await invoke<ViewerSnapshot>("select_subtitle_session", {
+        sessionId,
+      });
+      setViewer(snapshot);
+      setPickerOpen(false);
+    } catch (error) {
+      setPickerError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusySessionId(null);
+    }
+  }, []);
+
   useEffect(() => {
     applyWindowSizeForMode(modeRef.current).catch((error) => {
       console.error("failed to apply initial window size", error);
     });
   }, []);
-
-  // 刚进影院模式时先亮出工具条几秒，避免"面板突然变成一条空bar"的迷惑
-  useEffect(() => {
-    if (mode !== "cinema") return;
-    setShowCinemaHint(true);
-    const timer = window.setTimeout(() => setShowCinemaHint(false), 3000);
-    return () => window.clearTimeout(timer);
-  }, [mode]);
 
   const switchMode = useCallback(async (nextMode: ViewMode) => {
     if (nextMode === modeRef.current) return;
@@ -244,7 +321,10 @@ export default function App() {
 
   const cursor: CursorState | null = session?.cursor ?? null;
   const currentIndex = cursor?.currentIndex ?? -1;
-  const emptyMessage = statusText(session);
+  const emptyMessage =
+    !session && viewer.playingSessionCount >= 2
+      ? "正在确认视频…"
+      : statusText(session);
   const currentSubtitle =
     session && currentIndex >= 0 && currentIndex < session.subtitles.length
       ? session.subtitles[currentIndex]
@@ -286,11 +366,7 @@ export default function App() {
         >
           {currentSubtitle?.text ?? emptyMessage ?? "…"}
         </p>
-        <div
-          className={`absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 transition-opacity group-hover:opacity-100 ${
-            showCinemaHint ? "opacity-100" : "opacity-0"
-          }`}
-        >
+        <div className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
             className="flex h-6 cursor-pointer items-center gap-[5px] rounded-full border-none bg-transparent px-1.5 text-[11px] text-fg-muted transition-colors hover:text-fg"
@@ -299,6 +375,16 @@ export default function App() {
           >
             <Icon icon="mdi:format-list-bulleted" className="h-3.5 w-3.5 flex-none" />
             列表
+          </button>
+          <button
+            type="button"
+            className="flex h-6 cursor-pointer items-center rounded-full border-none bg-transparent px-1 text-fg-muted transition-colors enabled:hover:text-fg disabled:cursor-default disabled:opacity-35"
+            onClick={openVideoPicker}
+            disabled={!canChooseVideo}
+            title="选择字幕视频"
+            aria-label="选择字幕视频"
+          >
+            <Icon icon="mdi:swap-horizontal" className="h-4 w-4 flex-none" />
           </button>
           <DevBadge />
           <StatusDot connected={connected} />
@@ -316,13 +402,24 @@ export default function App() {
             <Icon icon="mdi:close" className="h-3.5 w-3.5 flex-none" />
           </button>
         </div>
+        {pickerVisible && (
+          <VideoSessionPicker
+            candidates={viewer.playingCandidates}
+            selectedSessionId={viewer.selectedSessionId}
+            required={viewer.selectionRequired}
+            busySessionId={busySessionId}
+            error={pickerError}
+            onSelect={(sessionId) => void selectVideoSession(sessionId)}
+            onClose={() => setPickerOpen(false)}
+          />
+        )}
       </main>
     );
   }
 
   return (
     <main
-      className={`${shellClassName} grid grid-rows-[auto_minmax(0,1fr)_auto]`}
+      className={`${shellClassName} relative grid grid-rows-[auto_minmax(0,1fr)_auto]`}
     >
       <header
         className="min-w-0 border-b border-hairline pb-2.5 pl-3.5 pr-3 pt-3"
@@ -441,9 +538,34 @@ export default function App() {
       </section>
 
       <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
-        <span>{session ? `YouTube · ${session.videoId}` : "本地内存 · 不联网"}</span>
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="truncate">
+            {session ? `YouTube · ${session.videoId}` : "本地内存 · 不联网"}
+          </span>
+          <button
+            type="button"
+            className="grid h-5 w-5 flex-none cursor-pointer place-items-center rounded-md border-none bg-transparent p-0 text-fg-faint transition-colors enabled:hover:bg-wash enabled:hover:text-fg disabled:cursor-default disabled:opacity-30"
+            onClick={openVideoPicker}
+            disabled={!canChooseVideo}
+            title="选择字幕视频"
+            aria-label="选择字幕视频"
+          >
+            <Icon icon="mdi:swap-horizontal" className="h-3.5 w-3.5" />
+          </button>
+        </span>
         <span>{session?.subtitles.length ?? 0} 条字幕</span>
       </footer>
+      {pickerVisible && (
+        <VideoSessionPicker
+          candidates={viewer.playingCandidates}
+          selectedSessionId={viewer.selectedSessionId}
+          required={viewer.selectionRequired}
+          busySessionId={busySessionId}
+          error={pickerError}
+          onSelect={(sessionId) => void selectVideoSession(sessionId)}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </main>
   );
 }
