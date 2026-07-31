@@ -15,7 +15,7 @@ const MAC_DOWNLOAD_URL =
 const CHROME_EXTENSION_URL =
   "https://chromewebstore.google.com/detail/nocahdalbgboblhbjkacpneakljldfjh";
 const GITHUB_URL = "https://github.com/BarrySong97/listenup-extension";
-const VERSION = "v0.2.0";
+const VERSION = "v0.2.1";
 
 export default function Home() {
   return (
