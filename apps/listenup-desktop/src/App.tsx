@@ -1,7 +1,7 @@
 /**
- * @purpose 字幕窗口 UI：列表/影院模式、多视频选择、虚拟滚动、窗口尺寸与模式持久化。
+ * @purpose 字幕窗口 UI：列表/影院模式、多视频选择、应用更新、虚拟滚动与窗口状态持久化。
  * @role    桌面端唯一的页面组件，消费 Rust 推来的 session/cursor 事件。
- * @deps    @tauri-apps/api、virtua、@iconify/react、VideoSessionPicker、./types
+ * @deps    @tauri-apps/api、virtua、@iconify/react、VideoSessionPicker、useDesktopUpdater、./types
  * @gotcha  多视频候选和锁定完全以 Rust snapshot 为准；selectionRequired 遮罩不可关闭
  */
 import { Icon } from "@iconify/react";
@@ -11,6 +11,7 @@ import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VList, type VListHandle } from "virtua";
 import type { CursorState, SessionState, UiUpdate, ViewerSnapshot } from "./types";
+import { useDesktopUpdater, type DesktopUpdateState } from "./useDesktopUpdater";
 import { VideoSessionPicker } from "./VideoSessionPicker";
 
 type ViewMode = "list" | "cinema";
@@ -142,6 +143,33 @@ const StatusDot = ({ connected }: { connected: boolean }) => (
   />
 );
 
+const UpdateNotice = ({ state }: { state: DesktopUpdateState }) => {
+  if (!state.message) return null;
+  const isError = state.phase === "error";
+  const isSuccess = state.phase === "current" || state.phase === "installed";
+
+  return (
+    <div
+      className={`pointer-events-none absolute left-1/2 top-3 z-40 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] shadow-lg backdrop-blur-xl ${
+        isError
+          ? "border-red-400/30 bg-red-950/90 text-red-100"
+          : isSuccess
+            ? "border-emerald-400/25 bg-emerald-950/90 text-emerald-100"
+            : "border-white/15 bg-black/85 text-fg"
+      }`}
+      role="status"
+      aria-live="polite"
+    >
+      {(state.phase === "checking" || state.phase === "downloading") && (
+        <Icon icon="mdi:loading" className="h-3.5 w-3.5 flex-none animate-spin" />
+      )}
+      {isError && <Icon icon="mdi:alert-circle-outline" className="h-3.5 w-3.5 flex-none" />}
+      {isSuccess && <Icon icon="mdi:check-circle-outline" className="h-3.5 w-3.5 flex-none" />}
+      <span className="truncate">{state.message}</span>
+    </div>
+  );
+};
+
 export default function App() {
   const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
@@ -152,6 +180,7 @@ export default function App() {
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledSessionRef = useRef<string | null>(null);
   const scrollIdleTimerRef = useRef<number | null>(null);
+  const updater = useDesktopUpdater({ enabled: !IS_DEV_BUILD });
 
   useEffect(() => {
     let disposed = false;
@@ -340,6 +369,7 @@ export default function App() {
         className="group relative flex h-full cursor-grab select-none items-center justify-center overflow-hidden rounded-2xl bg-glass-cinema px-5 py-2 active:cursor-grabbing"
         data-tauri-drag-region
       >
+        <UpdateNotice state={updater.state} />
         <p
           className={`m-0 line-clamp-2 text-center leading-[1.45] tracking-[0.005em] [text-shadow:0_1px_6px_rgba(0,0,0,0.6)] ${
             currentSubtitle
@@ -393,6 +423,7 @@ export default function App() {
     <main
       className={`${shellClassName} relative grid grid-rows-[auto_minmax(0,1fr)_auto]`}
     >
+      <UpdateNotice state={updater.state} />
       <header
         className="min-w-0 border-b border-hairline pb-2.5 pl-3.5 pr-3 pt-3"
         data-tauri-drag-region
@@ -411,6 +442,19 @@ export default function App() {
             {session?.title ?? "ListenUp Desktop"}
           </h1>
           <DevBadge />
+          <button
+            type="button"
+            className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
+            onClick={() => void updater.checkForUpdates()}
+            disabled={updater.isBusy}
+            title={updater.state.message ?? "检查更新"}
+            aria-label="检查更新"
+          >
+            <Icon
+              icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
+              className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
+            />
+          </button>
           <button
             type="button"
             className={iconButtonClassName}

@@ -18,5 +18,8 @@
         "shadow": true
       }
     ]
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false
   }
 }

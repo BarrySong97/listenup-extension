@@ -1,4 +1,4 @@
-// @purpose 桌面端全部 Rust 逻辑：GUI/桥接双模式、Unix socket、多视频 session 仲裁、NSPanel 与 tray 配置。
+// @purpose 桌面端全部 Rust 逻辑：GUI/桥接双模式、Unix socket、session 仲裁、更新插件、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
 // @gotcha  桥接 stdout 被协议独占；2+ 播放 session 必须尊重手动锁定，pending session 不可供用户选择。
@@ -15,6 +15,7 @@ const PROTOCOL_VERSION: u8 = 2;
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
+const CHECK_UPDATE_EVENT: &str = "desktop-check-for-update";
 const EXTENSION_ID: &str = env!("LISTENUP_EXTENSION_ID");
 const NATIVE_HOST_NAME: &str = env!("LISTENUP_NATIVE_HOST_NAME");
 const PRODUCT_NAME: &str = env!("LISTENUP_PRODUCT_NAME");
@@ -789,6 +790,8 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SharedStore::default())
         .invoke_handler(tauri::generate_handler![
             get_snapshot,
@@ -904,9 +907,11 @@ pub fn run() {
                 use tauri::tray::TrayIconBuilder;
 
                 let show_item = MenuItem::with_id(app, "show", "显示字幕窗口", true, None::<&str>)?;
+                let update_item =
+                    MenuItem::with_id(app, "check-update", "检查更新…", true, None::<&str>)?;
                 let quit_item =
                     MenuItem::with_id(app, "quit", "退出 ListenUp Desktop", true, None::<&str>)?;
-                let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+                let menu = Menu::with_items(app, &[&show_item, &update_item, &quit_item])?;
 
                 let mut tray = TrayIconBuilder::with_id("main-tray")
                     .menu(&menu)
@@ -917,6 +922,13 @@ pub fn run() {
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
+                        }
+                        "check-update" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                            let _ = app.emit(CHECK_UPDATE_EVENT, ());
                         }
                         "quit" => app.exit(0),
                         _ => {}
