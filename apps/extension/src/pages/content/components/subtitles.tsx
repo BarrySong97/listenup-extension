@@ -127,8 +127,6 @@ const Subtitles: FC<SubtitlesProps> = () => {
   } = useSubtitles({
     enabled: !isAdPlaying,
     videoId,
-    snapshotVideoId,
-    identityStatus,
   });
   const { currentTime, currentSubtitleIndex, setCurrentTime } =
     useSubtitleSync(subtitles);
@@ -148,6 +146,8 @@ const Subtitles: FC<SubtitlesProps> = () => {
 
   useNativeSubtitleBridge({
     videoId,
+    snapshotVideoId,
+    identityStatus,
     subtitles,
     track,
     loading,
