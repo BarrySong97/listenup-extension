@@ -25,5 +25,5 @@
 - 好处：dev 与 production 可同时安装、同时运行，互不抢连接
 - 好处：环境标识集中在 `config/listenup-environments.json`，构建脚本与 sensor 会阻止 ID 漂移
 - 代价：Tauri config 仍保留 identifier / productName overlay，因此 sensor 必须校验它们与环境矩阵一致
-- 代价：`src-tauri/Info.plist` 是生成物，committed 的那份是 dev scheme——发 production 必须先重新生成（CI 已处理，见 [release-and-distribution](../topics/release-and-distribution.md)）
+- 代价：`src-tauri/Info.plist` 是生成物，可能被最后一次本地构建切换 scheme——production CI 与 DEV 构建都必须按目标环境重新生成（见 [release-and-distribution](../topics/release-and-distribution.md)）
 - 完整对照表见 [listenup-desktop 模块文档](../modules/listenup-desktop/README.md)

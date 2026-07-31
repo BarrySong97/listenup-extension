@@ -11,7 +11,7 @@
 
 | 面 | 自动化 | 现有覆盖 |
 |---|---|---|
-| Extension | ❌ 无 | 构建 + 手工回归 |
+| Extension | ⚠️ 少量 Node test | videoId 三重身份校验 + 构建 + 手工回归 |
 | Website | ⚠️ 只有 `eslint` | 构建 + 打开页面看 |
 | Desktop 前端 | ❌ 无 | 构建 + 手工回归 |
 | Desktop Rust | ✅ `cargo test` | 少量单测 |
@@ -22,6 +22,7 @@
 
 ```bash
 pnpm build:extension                                                     # 改扩展
+pnpm --filter @listenup/extension test                                   # 改字幕身份校验
 pnpm build:firefox                                                       # 改了 Firefox 相关
 pnpm build:website && pnpm --filter @listenup/website lint               # 改站点
 pnpm build:web:static                                                    # 改了可能影响静态导出的东西
@@ -43,6 +44,7 @@ node scripts/check-docs.mjs                                              # 永�
 
 ### 改字幕加载链路
 
+- SPA 切换时旧字幕立即清空；页面 / playerResponse / track URL videoId 不一致不读写缓存
 - 首次加载命中正确字幕轨（含 `pot` 缺失重试）
 - 字幕缓存仍可复用（`chrome.storage.local`）
 - 页面桥接 fallback 仍可工作
@@ -68,9 +70,13 @@ node scripts/check-docs.mjs                                              # 永�
 - 两个 Chrome profile 同时播放时，正式/DEV Desktop 不串窗口、socket 或字幕
 - Host 未安装时字幕面板照常工作
 - Native 窗口随播放 / 暂停 / seek 高亮并滚动当前句
-- SPA 切视频后 Native 窗口替换为新字幕
-- 多标签页时窗口跟随最近播放的页面
+- SPA 切视频后 Native 窗口先 loading 再替换为新字幕，全程不闪上一视频字幕
+- 两个播放标签页出现选择遮罩，选定后第三个播放标签页不抢占
+- 所选视频暂停或关闭后，按剩余播放数量自动跟随或重新显示选择遮罩
 - 列表 / 影院模式切换、窗口尺寸恢复、影院模式拖动、毛玻璃在深浅桌面上的可读性
+- 标题栏和菜单栏“检查更新”都能触发同一流程；重复点击不会并行下载
+- 已是最新版、网络失败、下载进度都有明确反馈；有效签名更新能安装并重启，篡改签名必须拒绝
+- DEV app 点击更新只提示不会安装正式版，DEV build 不要求 updater 私钥
 
 ### 改 Website
 

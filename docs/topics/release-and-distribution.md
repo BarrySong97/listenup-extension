@@ -29,13 +29,18 @@
 推 `v*` tag 或手动触发。macOS runner + Rust `aarch64-apple-darwin`：
 
 1. 装依赖
-2. **重新生成 production Info.plist**（`node apps/listenup-desktop/scripts/gen-info-plist.mjs`）——仓库里 committed 的那份是 dev scheme，不重新生成就会发出带 `listenup-dev://` 的包
-3. 可选签名 / 公证：只有 `APPLE_CERTIFICATE` secret 存在时才启用；**Tauri 会把"设置了但为空"的 `APPLE_CERTIFICATE` 当成"导入这个证书"然后失败**，所以脚本只在 secret 真的非空时才写进 `$GITHUB_ENV`
-4. `tauri-action` 构建 `--bundles app,dmg`，发布为 **draft** release
+2. **重新生成 production Info.plist**（`node apps/listenup-desktop/scripts/gen-info-plist.mjs`）——不依赖开发者最后一次本地构建留下的 scheme，避免发出带 `listenup-dev://` 的包
+3. 可选 Apple 签名 / 公证：只有 `APPLE_CERTIFICATE` secret 存在时才启用；**Tauri 会把"设置了但为空"的 `APPLE_CERTIFICATE` 当成"导入这个证书"然后失败**，所以脚本只在 secret 真的非空时才写进 `$GITHUB_ENV`
+4. 强制检查 `TAURI_SIGNING_PRIVATE_KEY`，缺失就终止，避免发布一个后续无法被客户端信任的更新包
+5. `tauri-action` 构建 `--bundles app,dmg`，同时上传 `.app.tar.gz`、`.sig` 和 `latest.json`，发布为 **draft** release
 
 正式 Desktop 内含 Host 自动注册逻辑。用户安装后首次启动，app 会写入只允许正式扩展 `nocahdalbgboblhbjkacpneakljldfjh` 的 `com.listenup.desktop` manifest；DEV build 写入另一份 `.dev` manifest，不会覆盖正式环境。
 
-可选 secrets：`APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY`（签名），`APPLE_API_ISSUER` / `APPLE_API_KEY` / `APPLE_API_KEY_P8`（公证）。都不配就是未签名包，用户首次打开需要右键 → 打开。
+可选 Apple secrets：`APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY`（签名），`APPLE_API_ISSUER` / `APPLE_API_KEY` / `APPLE_API_KEY_P8`（公证）。都不配就是未签名包，用户首次打开需要右键 → 打开。
+
+updater 的 `TAURI_SIGNING_PRIVATE_KEY` 是必需项，和 Apple 证书不是同一套密钥。公钥内置在 Desktop；私钥只存在于 GitHub Secret 和发布者的安全备份。`releases/latest` 不会解析到 draft，所以发布前可先核对资产，只有把 draft 正式发布后应用内检查更新才会发现它。
+
+手动触发和 tag 触发都使用 Tauri 配置版本生成 `v__VERSION__` tag，避免 `workflow_dispatch` 从 `main` 运行时错误创建名为 `main` 的 Release。
 
 ## 官网部署（Cloudflare Pages）
 
