@@ -27,8 +27,7 @@ YouTube 是 SPA。切换视频时，地址栏里的 `v` 会先变化，播放器
    - 1 个播放 session：自动跟随；
    - 2 个及以上：若用户锁定仍在播放则保持，否则等待至少两个 verified 候选并要求选择；
    - 锁定 session 停止后，剩一个则自动跟随，仍有多个则重新选择。
-5. React 只消费 Rust snapshot。冲突时显示不可关闭的全遮罩；footer 的 YouTube ID
-   旁和影院 hover 工具条提供主动改选入口。
+5. React 只消费 Rust snapshot。冲突时显示不可关闭的全遮罩，不提供常驻列表入口。
 
 ## 理由
 

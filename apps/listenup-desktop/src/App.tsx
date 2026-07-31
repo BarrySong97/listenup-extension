@@ -145,7 +145,6 @@ const StatusDot = ({ connected }: { connected: boolean }) => (
 export default function App() {
   const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
   const [isListScrolling, setIsListScrolling] = useState(false);
@@ -211,15 +210,7 @@ export default function App() {
 
   const session = viewer.activeSession;
   const connected = viewer.connected;
-  const pickerVisible = viewer.selectionRequired || pickerOpen;
-  const canChooseVideo = viewer.playingCandidates.length >= 2;
-
-  useEffect(() => {
-    if (!canChooseVideo && !viewer.selectionRequired) {
-      setPickerOpen(false);
-      setPickerError(null);
-    }
-  }, [canChooseVideo, viewer.selectionRequired]);
+  const pickerVisible = viewer.selectionRequired;
 
   useEffect(() => {
     if (mode !== "cinema" || !pickerVisible) return;
@@ -248,12 +239,6 @@ export default function App() {
     };
   }, [mode, pickerVisible]);
 
-  const openVideoPicker = useCallback(() => {
-    if (!canChooseVideo) return;
-    setPickerError(null);
-    setPickerOpen(true);
-  }, [canChooseVideo]);
-
   const selectVideoSession = useCallback(async (sessionId: string) => {
     setBusySessionId(sessionId);
     setPickerError(null);
@@ -262,7 +247,6 @@ export default function App() {
         sessionId,
       });
       setViewer(snapshot);
-      setPickerOpen(false);
     } catch (error) {
       setPickerError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -376,16 +360,6 @@ export default function App() {
             <Icon icon="mdi:format-list-bulleted" className="h-3.5 w-3.5 flex-none" />
             列表
           </button>
-          <button
-            type="button"
-            className="flex h-6 cursor-pointer items-center rounded-full border-none bg-transparent px-1 text-fg-muted transition-colors enabled:hover:text-fg disabled:cursor-default disabled:opacity-35"
-            onClick={openVideoPicker}
-            disabled={!canChooseVideo}
-            title="选择字幕视频"
-            aria-label="选择字幕视频"
-          >
-            <Icon icon="mdi:swap-horizontal" className="h-4 w-4 flex-none" />
-          </button>
           <DevBadge />
           <StatusDot connected={connected} />
           <span className="text-[11px] text-fg-faint">{playbackLabel}</span>
@@ -406,11 +380,9 @@ export default function App() {
           <VideoSessionPicker
             candidates={viewer.playingCandidates}
             selectedSessionId={viewer.selectedSessionId}
-            required={viewer.selectionRequired}
             busySessionId={busySessionId}
             error={pickerError}
             onSelect={(sessionId) => void selectVideoSession(sessionId)}
-            onClose={() => setPickerOpen(false)}
           />
         )}
       </main>
@@ -538,20 +510,8 @@ export default function App() {
       </section>
 
       <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
-        <span className="flex min-w-0 items-center gap-1">
-          <span className="truncate">
-            {session ? `YouTube · ${session.videoId}` : "本地内存 · 不联网"}
-          </span>
-          <button
-            type="button"
-            className="grid h-5 w-5 flex-none cursor-pointer place-items-center rounded-md border-none bg-transparent p-0 text-fg-faint transition-colors enabled:hover:bg-wash enabled:hover:text-fg disabled:cursor-default disabled:opacity-30"
-            onClick={openVideoPicker}
-            disabled={!canChooseVideo}
-            title="选择字幕视频"
-            aria-label="选择字幕视频"
-          >
-            <Icon icon="mdi:swap-horizontal" className="h-3.5 w-3.5" />
-          </button>
+        <span className="min-w-0 truncate">
+          {session ? `YouTube · ${session.videoId}` : "本地内存 · 不联网"}
         </span>
         <span>{session?.subtitles.length ?? 0} 条字幕</span>
       </footer>
@@ -559,11 +519,9 @@ export default function App() {
         <VideoSessionPicker
           candidates={viewer.playingCandidates}
           selectedSessionId={viewer.selectedSessionId}
-          required={viewer.selectionRequired}
           busySessionId={busySessionId}
           error={pickerError}
           onSelect={(sessionId) => void selectVideoSession(sessionId)}
-          onClose={() => setPickerOpen(false)}
         />
       )}
     </main>

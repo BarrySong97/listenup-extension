@@ -1,6 +1,6 @@
 /**
- * @purpose 在多个 YouTube 视频同时播放时，让用户明确选择 Desktop 显示哪个视频的字幕。
- * @role    App 的全遮罩选择器；冲突态不可关闭，主动改选态可以返回。
+ * @purpose 多个 YouTube 视频同时播放时，让用户选择 Desktop 显示哪个视频的字幕。
+ * @role    App 的不可关闭全遮罩选择器，只在播放来源冲突时出现。
  * @deps    @iconify/react、./types
  * @gotcha  这里只展示 Rust 标记为 verified 且正在播放的候选，不自行推断播放状态。
  */
@@ -10,21 +10,17 @@ import type { PlayingCandidate } from "./types";
 interface VideoSessionPickerProps {
   candidates: PlayingCandidate[];
   selectedSessionId: string | null;
-  required: boolean;
   busySessionId: string | null;
   error: string | null;
   onSelect: (sessionId: string) => void;
-  onClose: () => void;
 }
 
 export const VideoSessionPicker = ({
   candidates,
   selectedSessionId,
-  required,
   busySessionId,
   error,
   onSelect,
-  onClose,
 }: VideoSessionPickerProps) => (
   <div className="absolute inset-0 z-30 flex flex-col bg-[#151517]/95 p-3 backdrop-blur-xl">
     <div className="mb-2 flex items-start gap-2">
@@ -34,19 +30,9 @@ export const VideoSessionPicker = ({
       <div className="min-w-0 flex-1">
         <h2 className="m-0 text-[13px] font-semibold text-fg">选择字幕视频</h2>
         <p className="m-0 mt-0.5 text-[10px] leading-normal text-fg-faint">
-          检测到多个视频正在播放，字幕会锁定到你的选择。
+          检测到多个视频正在播放，请选择字幕来源。
         </p>
       </div>
-      {!required && (
-        <button
-          type="button"
-          className="grid h-7 w-7 flex-none cursor-pointer place-items-center rounded-lg border-none bg-transparent text-fg-muted hover:bg-white/10 hover:text-fg"
-          onClick={onClose}
-          aria-label="关闭视频选择"
-        >
-          <Icon icon="mdi:close" className="h-4 w-4" />
-        </button>
-      )}
     </div>
 
     <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
