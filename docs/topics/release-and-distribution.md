@@ -60,7 +60,7 @@
 
 ## 官网下载按钮指向哪里
 
-`apps/website/app/page.tsx` 的 `DOWNLOAD_URL` 写死为 `https://github.com/BarrySong97/listenup-extension/releases/latest`，永远解析到最新已发布 Release 的 macOS 包。发 release 时**不需要**改官网。页面上的 `VERSION` 常量是手写的，发版后记得同步。
+`apps/website/app/page.tsx` 的 `MAC_DOWNLOAD_URL` 写死为 `https://github.com/BarrySong97/listenup-extension/releases/latest`，永远解析到最新已发布 Release 的 macOS 包；`CHROME_EXTENSION_URL` 指向正式 Chrome Web Store 条目。发 Desktop release 或在同一商店条目更新 Extension 时**不需要**改官网链接。页面上的 `VERSION` 常量是手写的，发版后记得同步。
 
 ## 相关
 
