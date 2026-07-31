@@ -31,7 +31,7 @@
 1. [x] 接入 Tauri updater/process 插件、最小权限、GitHub endpoint 与更新产物配置。
 2. [x] 实现标题栏与托盘“检查更新”，统一处理检查中、已是最新版、下载进度、失败、安装完成重启等状态。
 3. [x] 更新 Release workflow：沿用 Apple 签名/公证；强制校验 updater 私钥存在并发布 updater JSON/签名产物。
-4. [ ] 同步版本与文档，执行 Desktop 前端构建、Rust 检查、docs sensor 和真实应用手工回归。
+4. [x] 同步版本与文档，执行 Desktop 前端构建、Rust 检查、docs sensor 和真实应用手工回归。
 
 ## 风险 / 注意
 
