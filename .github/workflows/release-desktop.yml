@@ -1,12 +1,13 @@
 name: Release ListenUp Desktop (macOS)
 
 # Builds the Apple Silicon (arm64) macOS app and publishes a DMG to a GitHub
-# Release. Signing & notarization are OPTIONAL — engaged only when the Apple
+# Release. Apple signing & notarization are OPTIONAL — engaged only when the Apple
 # secrets are present; otherwise the build is unsigned (users right-click →
 # Open on first launch).
+# Tauri updater signing is REQUIRED so installed apps can verify every update.
 #
 # Trigger by pushing a version tag, e.g.:
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v0.2.0 && git push origin v0.2.0
 # or run manually from the Actions tab (workflow_dispatch).
 #
 # Optional repository secrets for a signed + notarized build:
@@ -18,6 +19,8 @@ name: Release ListenUp Desktop (macOS)
 #     APPLE_API_ISSUER             Issuer ID (UUID)
 #     APPLE_API_KEY                Key ID (e.g. ABC123DEF4)
 #     APPLE_API_KEY_P8             full contents of the AuthKey_XXXX.p8 file
+# Required updater artifact signing secret:
+#   TAURI_SIGNING_PRIVATE_KEY      minisign private key
 
 on:
   push:
@@ -58,8 +61,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # The production deep-link scheme (listenup://) lives in a generated
-      # Info.plist. The committed copy targets the dev scheme, so regenerate it
-      # in production mode before bundling.
+      # Info.plist. Regenerate it explicitly so release output never depends on
+      # whichever environment was built last in a developer worktree.
       - name: Generate production Info.plist
         run: node apps/listenup-desktop/scripts/gen-info-plist.mjs
 
@@ -97,16 +100,28 @@ jobs:
             } >> "$GITHUB_ENV"
           fi
 
+      - name: Require updater signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is required for signed updater artifacts."
+            exit 1
+          fi
+
       - name: Build & publish
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           # Apple signing/notarization vars are injected via $GITHUB_ENV above,
           # only when the corresponding secrets exist.
         with:
           projectPath: apps/listenup-desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: "ListenUp Desktop ${{ github.ref_name }}"
+          tagName: "v__VERSION__"
+          releaseName: "ListenUp Desktop v__VERSION__"
           releaseDraft: true
           prerelease: false
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
           args: --target aarch64-apple-darwin --bundles app,dmg
