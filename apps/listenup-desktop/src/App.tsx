@@ -1,8 +1,8 @@
 /**
- * @purpose 字幕窗口 UI：列表/影院模式、多视频选择、应用更新、虚拟滚动与窗口状态持久化。
- * @role    桌面端唯一的页面组件，消费 Rust 推来的 session/cursor 事件。
- * @deps    @tauri-apps/api、virtua、@iconify/react、VideoSessionPicker、useDesktopUpdater、./types
- * @gotcha  多视频候选和锁定完全以 Rust snapshot 为准；selectionRequired 遮罩不可关闭
+ * @purpose 字幕窗口 UI：实时同步、SQLite 冷启动、原语/译文/双语、列表/影院与多视频选择。
+ * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
+ * @deps    @tauri-apps/api、@tanstack/react-query、virtua、VideoSessionPicker、useSubtitleView、./types
+ * @gotcha  新 live session 立即接管缓存；CLI 译文只靠 query focus refetch，不监听 SQLite。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -10,8 +10,15 @@ import { listen } from "@tauri-apps/api/event";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VList, type VListHandle } from "virtua";
-import type { CursorState, SessionState, UiUpdate, ViewerSnapshot } from "./types";
+import type {
+  CursorState,
+  SessionState,
+  SubtitleDisplayMode,
+  UiUpdate,
+  ViewerSnapshot,
+} from "./types";
 import { useDesktopUpdater, type DesktopUpdateState } from "./useDesktopUpdater";
+import { useSubtitleView } from "./useSubtitleView";
 import { VideoSessionPicker } from "./VideoSessionPicker";
 
 type ViewMode = "list" | "cinema";
@@ -21,7 +28,17 @@ interface WindowSize {
   height: number;
 }
 
+interface DisplayBlock {
+  id: string;
+  startTime: number;
+  endTime: number;
+  sourceText: string | null;
+  translationText: string | null;
+}
+
 const MODE_STORAGE_KEY = "listenup-view-mode";
+const SUBTITLE_MODE_STORAGE_KEY = "listenup-subtitle-display-mode";
+const TARGET_LANGUAGE_STORAGE_KEY = "listenup-target-language";
 const SIZE_STORAGE_KEYS: Record<ViewMode, string> = {
   list: "listenup-window-size-list",
   cinema: "listenup-window-size-cinema",
@@ -64,6 +81,42 @@ const iconButtonClassName =
 
 const loadStoredMode = (): ViewMode =>
   localStorage.getItem(MODE_STORAGE_KEY) === "cinema" ? "cinema" : "list";
+
+const loadStoredSubtitleMode = (): SubtitleDisplayMode => {
+  const stored = localStorage.getItem(SUBTITLE_MODE_STORAGE_KEY);
+  return stored === "translation" || stored === "bilingual" ? stored : "source";
+};
+
+const groupTranslationBlocks = (
+  segments: NonNullable<ReturnType<typeof useSubtitleView>["data"]>["translation"]
+): DisplayBlock[] => {
+  if (!segments) return [];
+  const blocks: DisplayBlock[] = [];
+  for (const segment of segments.segments) {
+    const startTime = segment.startTimeMs / 1000;
+    const endTime = segment.endTimeMs / 1000;
+    const previous = blocks.at(-1);
+    if (
+      previous &&
+      previous.startTime === startTime &&
+      previous.endTime === endTime &&
+      previous.sourceText === segment.sourceText
+    ) {
+      previous.translationText = [previous.translationText, segment.text]
+        .filter(Boolean)
+        .join("\n");
+      continue;
+    }
+    blocks.push({
+      id: segment.id,
+      startTime,
+      endTime,
+      sourceText: segment.sourceText,
+      translationText: segment.text,
+    });
+  }
+  return blocks;
+};
 
 const loadStoredSize = (mode: ViewMode): WindowSize | null => {
   try {
@@ -173,6 +226,15 @@ const UpdateNotice = ({ state }: { state: DesktopUpdateState }) => {
 export default function App() {
   const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
+  const [subtitleMode, setSubtitleMode] =
+    useState<SubtitleDisplayMode>(loadStoredSubtitleMode);
+  const [targetLanguage, setTargetLanguage] = useState<string | null>(() =>
+    localStorage.getItem(TARGET_LANGUAGE_STORAGE_KEY)
+  );
+  const [knownRevision, setKnownRevision] = useState<{
+    scope: string;
+    revision: string;
+  } | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
   const [isListScrolling, setIsListScrolling] = useState(false);
@@ -181,6 +243,14 @@ export default function App() {
   const lastScrolledSessionRef = useRef<string | null>(null);
   const scrollIdleTimerRef = useRef<number | null>(null);
   const updater = useDesktopUpdater({ enabled: !IS_DEV_BUILD });
+  const liveSession = viewer.activeSession;
+  const queryScope = liveSession?.videoId ?? "latest";
+  const subtitleQuery = useSubtitleView(
+    liveSession?.videoId ?? null,
+    knownRevision?.scope === queryScope ? knownRevision.revision : null,
+    subtitleMode,
+    targetLanguage
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -237,9 +307,32 @@ export default function App() {
     };
   }, []);
 
-  const session = viewer.activeSession;
+  const session = liveSession;
   const connected = viewer.connected;
   const pickerVisible = viewer.selectionRequired;
+
+  useEffect(() => {
+    const revision = subtitleQuery.data?.source.revision;
+    if (!revision) return;
+    setKnownRevision((current) =>
+      current?.scope === queryScope && current.revision === revision
+        ? current
+        : { scope: queryScope, revision }
+    );
+  }, [queryScope, subtitleQuery.data?.source.revision]);
+
+  useEffect(() => {
+    if (targetLanguage || !subtitleQuery.data?.translations.length) return;
+    const firstLanguage = subtitleQuery.data.translations[0].languageCode;
+    setTargetLanguage(firstLanguage);
+    localStorage.setItem(TARGET_LANGUAGE_STORAGE_KEY, firstLanguage);
+  }, [subtitleQuery.data?.translations, targetLanguage]);
+
+  useEffect(() => {
+    if (session?.status === "ready") {
+      void subtitleQuery.refetch();
+    }
+  }, [session?.sessionId, session?.status, session?.subtitles.length]);
 
   useEffect(() => {
     if (mode !== "cinema" || !pickerVisible) return;
@@ -309,6 +402,16 @@ export default function App() {
     }
   }, []);
 
+  const switchSubtitleMode = useCallback((nextMode: SubtitleDisplayMode) => {
+    setSubtitleMode(nextMode);
+    localStorage.setItem(SUBTITLE_MODE_STORAGE_KEY, nextMode);
+  }, []);
+
+  const selectTargetLanguage = useCallback((language: string) => {
+    setTargetLanguage(language);
+    localStorage.setItem(TARGET_LANGUAGE_STORAGE_KEY, language);
+  }, []);
+
   const closeWindow = useCallback(() => {
     void getCurrentWindow().close();
   }, []);
@@ -333,14 +436,66 @@ export default function App() {
   }, []);
 
   const cursor: CursorState | null = session?.cursor ?? null;
-  const currentIndex = cursor?.currentIndex ?? -1;
-  const emptyMessage =
-    !session && viewer.playingSessionCount >= 2
+  const requestedTranslationMissing = Boolean(
+    subtitleMode !== "source" &&
+      targetLanguage &&
+      subtitleQuery.data &&
+      !subtitleQuery.data.translation
+  );
+  const effectiveSubtitleMode: SubtitleDisplayMode = requestedTranslationMissing
+    ? "source"
+    : subtitleMode;
+  const displayBlocks = useMemo<DisplayBlock[]>(() => {
+    if (
+      effectiveSubtitleMode !== "source" &&
+      subtitleQuery.data?.translation
+    ) {
+      return groupTranslationBlocks(subtitleQuery.data.translation).map((block) => ({
+        ...block,
+        sourceText:
+          effectiveSubtitleMode === "bilingual" ? block.sourceText : null,
+      }));
+    }
+    if (session?.status === "ready") {
+      return session.subtitles.map((subtitle, index) => ({
+        id: `${subtitle.id}-${index}`,
+        startTime: subtitle.startTime,
+        endTime: subtitle.endTime,
+        sourceText: subtitle.text,
+        translationText: null,
+      }));
+    }
+    return (
+      subtitleQuery.data?.source.segments.map((subtitle) => ({
+        id: subtitle.id,
+        startTime: subtitle.startTimeMs / 1000,
+        endTime: subtitle.endTimeMs / 1000,
+        sourceText: subtitle.text,
+        translationText: null,
+      })) ?? []
+    );
+  }, [effectiveSubtitleMode, session, subtitleQuery.data]);
+  const currentIndex = useMemo(() => {
+    if (!cursor) return -1;
+    return displayBlocks.findIndex(
+      (block) =>
+        cursor.currentTime >= block.startTime && cursor.currentTime < block.endTime
+    );
+  }, [cursor, displayBlocks]);
+  const emptyMessage = session
+    ? statusText(session)
+    : viewer.playingSessionCount >= 2
       ? "正在确认视频…"
-      : statusText(session);
+      : subtitleQuery.isPending
+        ? "正在读取本地字幕…"
+        : subtitleQuery.isError
+          ? `本地字幕读取失败：${String(subtitleQuery.error)}`
+          : displayBlocks.length === 0
+            ? "等待 YouTube 字幕…"
+            : null;
   const currentSubtitle =
-    session && currentIndex >= 0 && currentIndex < session.subtitles.length
-      ? session.subtitles[currentIndex]
+    currentIndex >= 0 && currentIndex < displayBlocks.length
+      ? displayBlocks[currentIndex]
       : null;
 
   useEffect(() => {
@@ -370,16 +525,43 @@ export default function App() {
         data-tauri-drag-region
       >
         <UpdateNotice state={updater.state} />
-        <p
-          className={`m-0 line-clamp-2 text-center leading-[1.45] tracking-[0.005em] [text-shadow:0_1px_6px_rgba(0,0,0,0.6)] ${
-            currentSubtitle
-              ? "text-xl font-[550] text-fg"
-              : "text-sm font-normal text-fg-muted"
-          }`}
+        <div
+          className="min-w-0 text-center [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]"
           data-tauri-drag-region
         >
-          {currentSubtitle?.text ?? emptyMessage ?? "…"}
-        </p>
+          {currentSubtitle ? (
+            <>
+              {currentSubtitle.sourceText && (
+                <p
+                  className={`m-0 line-clamp-2 whitespace-pre-line tracking-[0.005em] text-fg ${
+                    effectiveSubtitleMode === "bilingual"
+                      ? "text-base font-medium leading-[1.4]"
+                      : "text-xl font-[550] leading-[1.45]"
+                  }`}
+                  data-tauri-drag-region
+                >
+                  {currentSubtitle.sourceText}
+                </p>
+              )}
+              {currentSubtitle.translationText && (
+                <p
+                  className={`m-0 line-clamp-2 whitespace-pre-line text-fg ${
+                    effectiveSubtitleMode === "bilingual"
+                      ? "mt-1 text-xl font-[600] leading-[1.35]"
+                      : "text-xl font-[550] leading-[1.45]"
+                  }`}
+                  data-tauri-drag-region
+                >
+                  {currentSubtitle.translationText}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="m-0 text-sm font-normal text-fg-muted">
+              {emptyMessage ?? "…"}
+            </p>
+          )}
+        </div>
         <div className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             type="button"
@@ -439,7 +621,7 @@ export default function App() {
             className="m-0 min-w-0 flex-1 truncate text-[13px] font-[650] tracking-[-0.01em] text-fg"
             data-tauri-drag-region
           >
-            {session?.title ?? "ListenUp Desktop"}
+            {session?.title ?? subtitleQuery.data?.source.title ?? "ListenUp Desktop"}
           </h1>
           <DevBadge />
           <button
@@ -482,7 +664,9 @@ export default function App() {
           <span className="flex-none">{connectionLabel}</span>
           <span className="flex-none">·</span>
           <span className="min-w-0 truncate">
-            {session?.track?.displayName ?? "字幕同步 Demo"}
+            {session?.track?.displayName ??
+              subtitleQuery.data?.source.displayName ??
+              "字幕同步 Demo"}
           </span>
           <span className="flex-1" />
           <span>{playbackLabel}</span>
@@ -490,6 +674,55 @@ export default function App() {
             {formatTime(cursor?.currentTime ?? 0)}
           </span>
         </div>
+        <div className="mt-2 flex min-w-0 items-center gap-1.5">
+          {(
+            [
+              ["source", "原语"],
+              ["translation", "译文"],
+              ["bilingual", "双语"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`h-6 cursor-pointer rounded-md border px-2 text-[10px] transition-colors ${
+                subtitleMode === value
+                  ? "border-white/20 bg-white/15 text-fg"
+                  : "border-transparent bg-transparent text-fg-faint hover:bg-wash hover:text-fg"
+              }`}
+              onClick={() => switchSubtitleMode(value)}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="flex-1" />
+          {subtitleMode !== "source" && (
+            <select
+              className="h-6 max-w-[132px] cursor-pointer rounded-md border border-white/10 bg-black/30 px-1.5 text-[10px] text-fg outline-none"
+              value={targetLanguage ?? ""}
+              onChange={(event) => selectTargetLanguage(event.target.value)}
+              aria-label="目标字幕语言"
+              disabled={!subtitleQuery.data?.translations.length}
+            >
+              {!subtitleQuery.data?.translations.length && (
+                <option value="">无可用译文</option>
+              )}
+              {subtitleQuery.data?.translations.map((translation) => (
+                <option
+                  key={translation.languageCode}
+                  value={translation.languageCode}
+                >
+                  {translation.displayName}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {requestedTranslationMissing && (
+          <p className="m-0 mt-1.5 truncate text-[10px] text-amber-200/80">
+            尚无 {targetLanguage} 译文，已显示原语
+          </p>
+        )}
       </header>
 
       <section className="relative min-h-0 overflow-hidden" aria-live="polite">
@@ -513,12 +746,14 @@ export default function App() {
             onScroll={handleListScroll}
             onScrollEnd={handleListScrollEnd}
           >
-            {session?.subtitles.map((subtitle, index) => {
+            {displayBlocks.map((subtitle, index) => {
               const isActive = index === currentIndex;
-              const isPlayed = currentIndex >= 0 && index < currentIndex;
+              const isPlayed = Boolean(
+                cursor && subtitle.endTime <= cursor.currentTime && !isActive
+              );
               return (
                 <div
-                  key={`${session.sessionId}-${subtitle.id}-${index}`}
+                  key={`${subtitle.id}-${index}`}
                   className={`mx-2 grid grid-cols-[12px_40px_minmax(0,1fr)] items-start gap-2 rounded-[10px] py-2 pl-2.5 pr-2 transition-colors ${
                     isActive ? "bg-wash-active" : ""
                   }`}
@@ -539,13 +774,30 @@ export default function App() {
                   >
                     {formatTime(subtitle.startTime)}
                   </time>
-                  <p
-                    className={`m-0 text-[13px] leading-[1.55] ${
-                      isActive ? "font-medium text-fg" : "text-fg-muted"
-                    }`}
-                  >
-                    {subtitle.text}
-                  </p>
+                  <div className="min-w-0">
+                    {subtitle.sourceText && (
+                      <p
+                        className={`m-0 whitespace-pre-line text-[13px] leading-[1.55] ${
+                          isActive ? "font-medium text-fg" : "text-fg-muted"
+                        }`}
+                      >
+                        {subtitle.sourceText}
+                      </p>
+                    )}
+                    {subtitle.translationText && (
+                      <p
+                        className={`m-0 whitespace-pre-line leading-[1.55] ${
+                          subtitle.sourceText ? "mt-1 text-[12px]" : "text-[13px]"
+                        } ${
+                          isActive
+                            ? "font-medium text-white"
+                            : "text-white/75"
+                        }`}
+                      >
+                        {subtitle.translationText}
+                      </p>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -555,9 +807,13 @@ export default function App() {
 
       <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
         <span className="min-w-0 truncate">
-          {session ? `YouTube · ${session.videoId}` : "本地内存 · 不联网"}
+          {session
+            ? `YouTube · ${session.videoId}`
+            : subtitleQuery.data
+              ? `SQLite 缓存 · ${subtitleQuery.data.source.videoId}`
+              : "SQLite 本地字幕库"}
         </span>
-        <span>{session?.subtitles.length ?? 0} 条字幕</span>
+        <span>{displayBlocks.length} 个语义块</span>
       </footer>
       {pickerVisible && (
         <VideoSessionPicker

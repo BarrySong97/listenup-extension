@@ -1,7 +1,14 @@
-// @purpose 桌面端全部 Rust 逻辑：GUI/桥接双模式、Unix socket、session 仲裁、更新插件、NSPanel 与 tray。
+// @purpose 桌面端 Rust 入口：GUI/桥接双模式、字幕持久化、session 仲裁、更新插件、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
-// @deps    tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
-// @gotcha  桥接 stdout 被协议独占；2+ 播放 session 必须尊重手动锁定，pending session 不可供用户选择。
+// @deps    database、domain、tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
+// @gotcha  桥接 stdout 被协议独占；ready 字幕先入 SQLite 再发 UI 事件；2+ 播放 session 必须尊重手动锁定。
+pub mod cli;
+pub mod database;
+pub mod domain;
+
+use database::{
+    DatabaseState, SourceSnapshot, SourceSnapshotSegment, SubtitleDatabase, SubtitleView,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,7 +18,7 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const PROTOCOL_VERSION: u8 = 2;
+const PROTOCOL_VERSION: u8 = 3;
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
@@ -35,6 +42,8 @@ pub struct SubtitleTrack {
     language_code: String,
     display_name: String,
     kind: String,
+    vss_id: String,
+    is_default: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -635,6 +644,15 @@ fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStre
                 continue;
             }
         };
+        if let Some(snapshot) = source_snapshot_from_message(&message) {
+            let database = app.state::<DatabaseState>().0.clone();
+            if let Some(database) = database {
+                if let Err(error) = tauri::async_runtime::block_on(database.store_source(snapshot))
+                {
+                    eprintln!("failed to cache subtitle source: {error}");
+                }
+            }
+        }
         let update = {
             let shared = app.state::<SharedStore>();
             shared
@@ -650,6 +668,48 @@ fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStre
         }
     }
     set_bridge_connected(&app, -1);
+}
+
+fn source_snapshot_from_message(message: &NativeMessage) -> Option<SourceSnapshot> {
+    let NativeMessage::Session {
+        version,
+        video_id,
+        title,
+        identity_status,
+        status,
+        track: Some(track),
+        subtitles,
+        ..
+    } = message
+    else {
+        return None;
+    };
+    if *version != PROTOCOL_VERSION
+        || identity_status != "verified"
+        || status != "ready"
+        || subtitles.is_empty()
+    {
+        return None;
+    }
+    Some(SourceSnapshot {
+        video_id: video_id.clone(),
+        title: title.clone(),
+        language_code: track.language_code.clone(),
+        display_name: track.display_name.clone(),
+        kind: track.kind.clone(),
+        vss_id: track.vss_id.clone(),
+        is_default: track.is_default,
+        segments: subtitles
+            .iter()
+            .map(|subtitle| SourceSnapshotSegment {
+                source_id: serde_json::to_string(&subtitle.id)
+                    .unwrap_or_else(|_| "null".to_string()),
+                start_time_ms: (subtitle.start_time * 1_000.0).round() as i64,
+                end_time_ms: (subtitle.end_time * 1_000.0).round() as i64,
+                text: subtitle.text.clone(),
+            })
+            .collect(),
+    })
 }
 
 #[cfg(unix)]
@@ -765,6 +825,21 @@ fn get_snapshot(store: State<'_, SharedStore>) -> ViewerSnapshot {
 }
 
 #[tauri::command]
+async fn get_subtitle_view(
+    database: State<'_, DatabaseState>,
+    video_id: Option<String>,
+    target_language: Option<String>,
+) -> Result<Option<SubtitleView>, String> {
+    let database = database
+        .0
+        .as_ref()
+        .ok_or_else(|| "字幕数据库暂时不可用".to_string())?;
+    database
+        .subtitle_view(video_id.as_deref(), target_language.as_deref())
+        .await
+}
+
+#[tauri::command]
 fn select_subtitle_session(
     app: AppHandle,
     store: State<'_, SharedStore>,
@@ -795,10 +870,40 @@ pub fn run() {
         .manage(SharedStore::default())
         .invoke_handler(tauri::generate_handler![
             get_snapshot,
+            get_subtitle_view,
             select_subtitle_session,
             set_vibrancy
         ])
         .setup(|app| {
+            let database_path = app.path().app_data_dir()?.join("listenup.sqlite");
+            let database =
+                match tauri::async_runtime::block_on(SubtitleDatabase::connect(&database_path)) {
+                    Ok(database) => {
+                        eprintln!(
+                            "[listenup] subtitle database: {}",
+                            database.path().display()
+                        );
+                        Some(database)
+                    }
+                Err(error) => {
+                    eprintln!("[listenup] failed to open subtitle database: {error}");
+                    // 磁盘不可写时仍保留当前进程内的字幕查询能力；CLI 持久化会明确失败。
+                    match tauri::async_runtime::block_on(SubtitleDatabase::connect_ephemeral()) {
+                        Ok(database) => {
+                            eprintln!("[listenup] using ephemeral subtitle database");
+                            Some(database)
+                        }
+                        Err(fallback_error) => {
+                            eprintln!(
+                                "[listenup] failed to initialize ephemeral subtitle database: {fallback_error}"
+                            );
+                            None
+                        }
+                    }
+                }
+                };
+            app.manage(DatabaseState(database));
+
             #[cfg(target_os = "macos")]
             match register_native_messaging_host() {
                 Ok(path) => {
@@ -1030,7 +1135,7 @@ mod tests {
 
     #[test]
     fn reads_a_fragmented_native_messaging_frame() {
-        let json = r#"{"kind":"end","version":2,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
+        let json = r#"{"kind":"end","version":3,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
         let mut reader = ChunkedReader {
             cursor: Cursor::new(frame(json)),
             chunk_size: 2,
@@ -1039,7 +1144,7 @@ mod tests {
         assert_eq!(
             message,
             NativeMessage::End {
-                version: 2,
+                version: 3,
                 tab_id: 4,
                 session_id: "s1".to_string(),
                 video_id: "v1".to_string(),

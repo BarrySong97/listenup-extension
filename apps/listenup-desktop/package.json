@@ -8,13 +8,15 @@
     "build": "tsc && vite build",
     "tauri": "tauri",
     "tauri:dev": "LISTENUP_ENV=development VITE_LISTENUP_ENV=development tauri dev --config src-tauri/tauri.dev.conf.json",
-    "tauri:build": "node scripts/gen-info-plist.mjs && tauri build --bundles app",
+    "tauri:build": "node scripts/gen-info-plist.mjs && tauri build --bundles app --config src-tauri/tauri.cli.conf.json",
     "tauri:build:dev": "LISTENUP_ENV=development VITE_LISTENUP_ENV=development node scripts/gen-info-plist.mjs && LISTENUP_ENV=development VITE_LISTENUP_ENV=development tauri build --bundles app --config src-tauri/tauri.dev.conf.json",
+    "cli:build": "cargo build --manifest-path src-tauri/Cargo.toml --bin listenup",
     "host:install": "node scripts/install-host.mjs",
     "host:uninstall": "node scripts/uninstall-host.mjs"
   },
   "dependencies": {
     "@iconify/react": "^6.0.0",
+    "@tanstack/react-query": "^5.101.4",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",

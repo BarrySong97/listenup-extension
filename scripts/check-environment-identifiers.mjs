@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验正式/DEV 的扩展 ID、Host、Desktop 标识和 Native Messaging 权限不会漂移。
+ * @purpose 校验正式/DEV 标识、Native 协议、原语选轨和 Desktop/CLI 数据边界不会漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
- * @deps    config/listenup-environments.json、extension manifests、Tauri configs、node assert/crypto/fs
- * @gotcha  正式扩展 ID 固定为 Chrome Web Store 条目 nocah…；生产 manifest 不得携带本地 key。
+ * @deps    环境矩阵、extension manifests/protocol/selector、Tauri/CLI/Query 配置、node assert/crypto/fs
+ * @gotcha  ADR-0008：不得恢复英语优先、协议 v2、环境串库、SQLite watcher 或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -79,10 +79,22 @@ const productionTauri = await readJson(
 const developmentTauri = await readJson(
   "apps/listenup-desktop/src-tauri/tauri.dev.conf.json"
 );
+const cliTauri = await readJson(
+  "apps/listenup-desktop/src-tauri/tauri.cli.conf.json"
+);
 assert.equal(productionTauri.identifier, production.desktopBundleId);
 assert.equal(productionTauri.productName, production.desktopProductName);
+assert.equal(
+  productionTauri.mainBinaryName,
+  "listenup-desktop",
+  "ADR-0008: the CLI binary must never replace the Tauri GUI executable"
+);
 assert.equal(developmentTauri.identifier, development.desktopBundleId);
 assert.equal(developmentTauri.productName, development.desktopProductName);
+assert.deepEqual(developmentTauri.bundle.externalBin, [
+  "target/sidecars/listenup",
+]);
+assert.deepEqual(cliTauri.bundle.externalBin, ["target/sidecars/listenup"]);
 
 const protocolSource = await readFile(
   resolve(
@@ -93,5 +105,43 @@ const protocolSource = await readFile(
 );
 assert.match(protocolSource, /__LISTENUP_NATIVE_HOST__/);
 assert.match(protocolSource, /__LISTENUP_DEEP_LINK__/);
+assert.match(protocolSource, /NATIVE_SUBTITLE_PROTOCOL_VERSION = 3/);
+assert.match(protocolSource, /vssId: string/);
+assert.match(protocolSource, /isDefault: boolean/);
+
+const selectorSource = await readFile(
+  resolve(
+    ROOT,
+    "apps/extension/src/pages/content/lib/captions/SubtitleTrackSelector.ts"
+  ),
+  "utf8"
+);
+assert.match(
+  selectorSource,
+  /preferredLanguages:\s*\[\]/,
+  "ADR-0008: default caption selection must follow the video's source language"
+);
+assert.doesNotMatch(selectorSource, /preferredLanguages:\s*\[\s*["']en["']/);
+
+const rustSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/src/lib.rs"),
+  "utf8"
+);
+assert.match(rustSource, /const PROTOCOL_VERSION: u8 = 3/);
+
+const cliSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/src/cli/mod.rs"),
+  "utf8"
+);
+assert.match(cliSource, /"com\.listenup\.desktop"/);
+assert.match(cliSource, /"com\.listenup\.desktop\.dev"/);
+assert.match(cliSource, /conflicts_with = "commit"/);
+
+const querySource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src/useSubtitleView.ts"),
+  "utf8"
+);
+assert.match(querySource, /refetchOnWindowFocus: true/);
+assert.doesNotMatch(querySource, /refetchInterval\s*:|PRAGMA\s+data_version|watchFile\s*\(/);
 
 console.log("✅ production/development environment identifiers are isolated");

@@ -2,7 +2,7 @@
  * @purpose 把字幕 session 与播放游标发给 background，供桌面端同步。
  * @role    内容脚本侧的 Native Messaging 发送端。
  * @deps    src/shared/nativeSubtitleProtocol、chrome.runtime.sendMessage
- * @gotcha  只有与当前 videoId 一致且 verified 的快照能携带字幕；pending/failed 必须发送空内容
+ * @gotcha  只有与当前 videoId 一致且 verified 的快照能携带字幕和完整轨道身份；pending/failed 必须发送空内容。
  */
 import { useEffect, useMemo, useRef } from "react";
 import type { CaptionTrackDescriptor } from "../lib/captions/types";
@@ -122,6 +122,8 @@ export const useNativeSubtitleBridge = ({
               languageCode: safeTrack.languageCode,
               displayName: safeTrack.displayName,
               kind: safeTrack.kind,
+              vssId: safeTrack.vssId,
+              isDefault: safeTrack.isDefault,
             }
           : null,
         subtitles: safeSubtitles,

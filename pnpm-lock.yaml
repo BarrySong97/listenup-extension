@@ -132,6 +132,9 @@ importers:
       '@iconify/react':
         specifier: ^6.0.0
         version: 6.0.0(react@19.2.4)
+      '@tanstack/react-query':
+        specifier: ^5.101.4
+        version: 5.101.4(react@19.2.4)
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
@@ -2387,6 +2390,14 @@ packages:
     resolution: {integrity: sha512-RHYhrR3hku0MJFRV+fN2gNbDNEh3dwKvY8XJvTxCSXeMOsCRSr+uKvDWQcbizrHgjML6ZmTE5OwMrl5wKcujCw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
+
+  '@tanstack/query-core@5.101.4':
+    resolution: {integrity: sha512-gNwcvOJcRbLWPOLG/2OBm+zM+Yv+MKsXKEOWC57USuZDEsI71hEErQsiEGx5wX9rzWWkfwM0fVSPoiIFSsxfiw==}
+
+  '@tanstack/react-query@5.101.4':
+    resolution: {integrity: sha512-yRg2pfOCxIs4ZJW3XYYHU/WgtD04FHSnfHlpRT7h7pR77hwkdRG4wxbKe4aq6P0RvXUTBSQpQeadS1SUYUe+KA==}
+    peerDependencies:
+      react: ^18 || ^19
 
   '@tanstack/react-virtual@3.11.3':
     resolution: {integrity: sha512-vCU+OTylXN3hdC8RKg68tPlBPjjxtzon7Ys46MgrSLE+JhSjSTPvoQifV6DQJeJmA8Q3KT6CphJbejupx85vFw==}
@@ -7610,6 +7621,13 @@ snapshots:
       '@tailwindcss/oxide': 4.1.11
       tailwindcss: 4.1.11
       vite: 6.3.5(@types/node@24.2.1)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  '@tanstack/query-core@5.101.4': {}
+
+  '@tanstack/react-query@5.101.4(react@19.2.4)':
+    dependencies:
+      '@tanstack/query-core': 5.101.4
+      react: 19.2.4
 
   '@tanstack/react-virtual@3.11.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:

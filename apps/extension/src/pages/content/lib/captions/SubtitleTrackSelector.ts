@@ -1,4 +1,10 @@
-import {
+/**
+ * @purpose 在合并去重后的轨道集合里选择视频原语轨，并支持显式语言偏好覆盖。
+ * @role    SubtitleRepository 的选轨策略。
+ * @deps    captions/types
+ * @gotcha  默认语言来自 YouTube default/首轨，不能重新写死英语；同语言才比较 manual/ASR。
+ */
+import type {
   CaptionTrackDescriptor,
   TrackPreference,
 } from "./types";
@@ -16,11 +22,14 @@ const matchesLanguage = (
     return false;
   }
 
-  return track.languageCode.startsWith(`${preferredLanguage}-`);
+  return (
+    track.languageCode.startsWith(`${preferredLanguage}-`) ||
+    preferredLanguage.startsWith(`${track.languageCode}-`)
+  );
 };
 
 export const DEFAULT_TRACK_PREFERENCE: TrackPreference = {
-  preferredLanguages: ["en"],
+  preferredLanguages: [],
   preferManual: true,
   allowRegionFallback: true,
 };
@@ -73,11 +82,13 @@ export const selectCaptionTrack = (
     }
   }
 
-  const manualFallback = tracks.find((track) => track.kind === "manual");
-  if (manualFallback) {
-    return manualFallback;
-  }
+  const sourceLanguageTrack = tracks.find((track) => track.isDefault) ?? tracks[0];
+  const sourceLanguageCandidates = tracks.filter((track) =>
+    matchesLanguage(track, sourceLanguageTrack.languageCode, true)
+  );
 
-  const asrFallback = tracks.find((track) => track.kind === "asr");
-  return asrFallback || tracks[0];
+  return sortTracks(
+    sourceLanguageCandidates,
+    resolvedPreference.preferManual
+  )[0];
 };
