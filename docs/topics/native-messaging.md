@@ -13,6 +13,7 @@
 | `apps/extension/src/pages/background/index.ts` | 补 `tabId`、懒连接 native host |
 | `apps/extension/manifest.json` / `manifest.dev.json` | 两套环境都声明 `nativeMessaging`，功能一致 |
 | `apps/listenup-desktop/src-tauri/src/lib.rs` | 桥接模式、socket 服务、活跃 session 状态机 |
+| `apps/listenup-desktop/src-tauri/src/database/` | verified ready 原字幕的 SQLite revision 写入 |
 | `config/listenup-environments.json` | Extension ID / Host / bundle / scheme 的唯一环境矩阵 |
 | `apps/listenup-desktop/scripts/install-host.mjs` | 自动注册之外的手动修复工具 |
 
@@ -24,13 +25,16 @@ YouTube content script
   → chrome.runtime.connectNative()
   → 桥接进程（同一个二进制，无窗口，stdin 读长度前缀 JSON）
   → Unix socket (~/Library/Application Support/com.listenup.desktop[.dev]/bridge.sock)
-  → GUI 实例（Tauri event）
-  → React 字幕列表
+  → GUI 实例（ready session 先写 listenup.sqlite，再发 Tauri event）
+  → React 实时状态 + React Query 持久字幕视图
 ```
 
-## 两种消息
+## 消息与身份状态
 
-- **session** —— 一次字幕快照（videoId + 标题 + 全量字幕）。每个视频的加载状态或字幕结果变化时发一次。
+- **session** —— 一次字幕快照（videoId + 标题 + 身份状态 + 全量字幕）。协议 v3 的
+  `identityStatus` 为 `pending | verified | failed`；只有 verified session 可以携带
+  ready / empty 结果和字幕。ready track 还带 `languageCode`、`displayName`、`kind`、
+  `vssId` 和 `isDefault`，用于建立不会跨语言覆盖的持久轨道身份。
 - **cursor** —— 播放游标。播放期间**最多 250ms 一次**；当前字幕索引变化则立即发。
 
 background 为每条消息补 `tabId`，并且**只在 session 到达时才懒连接**当前构建对应的 Host——所以没有字幕的页面不会白白拉起进程。
@@ -51,7 +55,12 @@ Chrome profile 能隔离两套扩展安装，但 Native Host manifest 是同一 
 
 - **GUI 没开** → 桥接进程缓存最新 session、丢弃 cursor。GUI 打开后下一帧到来时自动连接并先补发缓存的 session。**播放视频永远不会自动弹出窗口。**
 - **Host 没装 / 连接断开** → 扩展字幕面板完全不受影响。这是硬要求。
-- **多个 YouTube 标签页** → 窗口跟随最近产生"播放中"游标的标签页；暂停中的后台 session 不抢焦点（Rust 侧有单测覆盖）。
+- **一个 YouTube 视频播放** → 自动跟随；即使身份还在 pending，也只显示 loading，不显示旧字幕。
+- **多个 YouTube 视频播放** → Desktop 显示 verified 候选供用户选择。选择保持锁定，
+  第三个视频开始播放也不抢占；所选视频停止后，剩一个自动跟随，仍有多个则重新选择。
+  暂停和广告中的 session 不算播放候选，不提供常驻列表入口。
+- **verified + ready + 非空 session** → GUI 在发 UI snapshot 前事务写入 SQLite；其他状态和
+  cursor 不写。CLI 改译文后不走这条 socket，也不发事件；Desktop 重新聚焦时自行查询。
 
 ## Host 自动注册
 
@@ -63,8 +72,10 @@ Desktop GUI 每次启动都会按编译环境重写自己的 manifest 与 wrappe
 - 两套 Host 的 `allowed_origins` 只能包含各自固定 Extension ID
 - 桥接模式的 **stdout 专供 Native Messaging 协议**，诊断只能写 stderr
 - 改 `nativeSubtitleProtocol.ts` 的字段必须两端同步改
+- v3 原语轨身份字段不可删除；默认选轨不得恢复固定英语优先
 
-见 [ADR-0003](../decisions/0003-native-messaging-single-binary.md)。
+见 [ADR-0003](../decisions/0003-native-messaging-single-binary.md) 与
+[ADR-0007](../decisions/0007-desktop-owned-video-session-selection.md)。
 
 ## 联调步骤（dev 环境）
 
@@ -89,6 +100,9 @@ Desktop GUI 每次启动都会按编译环境重写自己的 manifest 与 wrappe
 
 5. Reload 扩展，打开带字幕的 YouTube `/watch` 页面。
 
+6. 日语视频确认 Desktop track/SQLite 原语是日语，英语视频是英语；再用 `listenup
+   subtitle get <video-id> --env dev --json` 验证 revision 和 segment IDs。
+
 卸载（dev 加 `-- --dev`）：
 
 ```bash
@@ -102,6 +116,7 @@ pnpm uninstall:desktop-host -- --dev
 - Desktop 自动注册会生成可执行 wrapper，并把 Host 启动记录写进 `~/Library/Logs/ListenUp Desktop[ DEV].log`——Chrome 拉不起 Host 时先看这个文件
 - 深链接打不开 app：确认该 app 已手动启动过至少一次（LaunchServices 注册）
 - 窗口连上但没字幕：先确认扩展面板自己有字幕，再看是不是 session 还没发（切一次视频会强制重发）
+- 多视频没有出现候选：pending session 不可选择，先确认每个页面都完成 videoId 三重校验
 
 ## 相关
 

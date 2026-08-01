@@ -1,7 +1,7 @@
 # Desktop 双语字幕与 AI CLI — 设计
 
 - 日期：2026-08-01
-- 状态：待书面确认
+- 状态：已确认并实施
 - 影响模块：Extension、ListenUp Desktop、CLI、Native Messaging、SQLite
 
 ## 摘要

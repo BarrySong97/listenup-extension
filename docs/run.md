@@ -41,14 +41,16 @@ pnpm build:website                # Next 默认（server）构建
 pnpm build:web:static             # BUILD_STATIC=1，静态导出到 apps/website/out/（Cloudflare Pages 用）
 pnpm build:desktop                # ListenUp Desktop.app（production）
 pnpm build:desktop:dev            # ListenUp Desktop DEV.app（development）
+pnpm --filter @listenup/desktop cli:build  # 仅构建 target/debug/listenup CLI
 ```
 
 ## 测试
 
-本仓库**没有 JS 侧自动化测试**。当前可跑的自动检查只有：
+本仓库已有少量 Extension Node test、Desktop Rust/SQLite/CLI test；前端 UI 仍以构建和手工回归为主：
 
 ```bash
 cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml   # Rust 单测
+pnpm --filter @listenup/extension test                                  # 选轨与 videoId 身份
 pnpm --filter @listenup/website lint                                    # 只有 website 配了 eslint
 pnpm lint                                                               # turbo 转发，实际只有 website 有 lint task
 ```
@@ -76,9 +78,25 @@ pnpm uninstall:desktop-host -- --dev
 
 完整联调步骤见 [topics/native-messaging.md](topics/native-messaging.md)。
 
+## 字幕数据库 CLI
+
+本地开发 binary 在 `apps/listenup-desktop/src-tauri/target/debug/listenup`。默认访问 production
+数据库；联调 DEV app 必须加 `--env dev`。也可用 `--db /path/to/test.sqlite` 明确指定：
+
+```bash
+apps/listenup-desktop/src-tauri/target/debug/listenup video list --env dev --json
+apps/listenup-desktop/src-tauri/target/debug/listenup subtitle get VIDEO_ID --env dev --json
+apps/listenup-desktop/src-tauri/target/debug/listenup translation apply translation.json --env dev --dry-run --json
+apps/listenup-desktop/src-tauri/target/debug/listenup translation apply translation.json --env dev --commit --json
+```
+
+写命令默认只校验，必须 `--commit` 才落库。让 AI 操作时把 CLI 命令面和 `subtitle get` JSON
+交给它，不要给任意 SQLite 写权限。CLI 提交后切回 Desktop，窗口 focus 会触发重新查询。
+
 ## 常用脚本
 
 - `apps/listenup-desktop/scripts/gen-info-plist.mjs` — 按 `LISTENUP_ENV` 生成深链接 scheme 的 Info.plist，构建前自动跑
+- `apps/listenup-desktop/scripts/prepare-cli.mjs` — release build 前构建并嵌入 `listenup` sidecar
 - `scripts/check-docs.mjs` — 文档防漂移检查器
 - `scripts/hooks/` — Claude / Codex 共享的 hook 脚本（guard / guard-files / format-lint / pre-commit）
 

@@ -11,7 +11,7 @@
 | Chrome 扩展 | `pnpm build:extension` | `apps/extension/dist_chrome/` | 手工 zip / 商店（尚未自动化） |
 | Firefox 扩展 | `pnpm build:firefox` | `apps/extension/dist_firefox/` | 手工 |
 | Dev 扩展（DEV ID / Host） | `pnpm build:extension:native-demo` | `apps/extension/dist_chrome_dev/` | 只本地 Load unpacked |
-| 桌面 app | `pnpm build:desktop` | `.app` / `.dmg` | GitHub Release |
+| 桌面 app + `listenup` CLI | `pnpm build:desktop` | `.app` / `.dmg`（CLI sidecar 位于 app 内） | GitHub Release |
 | 官网 | `pnpm build:web:static` | `apps/website/out/` | Cloudflare Pages |
 
 以上全是生成物，都不要手工编辑或提交（`.gitignore` 已覆盖 `dist*/`、`apps/website/out/`、`*.zip`）。
@@ -32,7 +32,8 @@
 2. **重新生成 production Info.plist**（`node apps/listenup-desktop/scripts/gen-info-plist.mjs`）——不依赖开发者最后一次本地构建留下的 scheme，避免发出带 `listenup-dev://` 的包
 3. 可选 Apple 签名 / 公证：只有 `APPLE_CERTIFICATE` secret 存在时才启用；**Tauri 会把"设置了但为空"的 `APPLE_CERTIFICATE` 当成"导入这个证书"然后失败**，所以脚本只在 secret 真的非空时才写进 `$GITHUB_ENV`
 4. 强制检查 `TAURI_SIGNING_PRIVATE_KEY`，缺失就终止，避免发布一个后续无法被客户端信任的更新包
-5. `tauri-action` 构建 `--bundles app,dmg`，同时上传 `.app.tar.gz`、`.sig` 和 `latest.json`，发布为 **draft** release
+5. `prepare-cli.mjs` 先按 Apple Silicon target 构建 `listenup` sidecar；`tauri-action` 再构建
+   `--bundles app,dmg`，同时上传 `.app.tar.gz`、`.sig` 和 `latest.json`，发布为 **draft** release
 
 正式 Desktop 内含 Host 自动注册逻辑。用户安装后首次启动，app 会写入只允许正式扩展 `nocahdalbgboblhbjkacpneakljldfjh` 的 `com.listenup.desktop` manifest；DEV build 写入另一份 `.dev` manifest，不会覆盖正式环境。
 

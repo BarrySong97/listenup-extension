@@ -14,7 +14,7 @@
 | Extension | ⚠️ 少量 Node test | videoId 三重身份校验 + 构建 + 手工回归 |
 | Website | ⚠️ 只有 `eslint` | 构建 + 打开页面看 |
 | Desktop 前端 | ❌ 无 | 构建 + 手工回归 |
-| Desktop Rust | ✅ `cargo test` | 少量单测 |
+| Desktop Rust | ✅ `cargo test` | session 状态机、SQLite repository、翻译校验、CLI dry-run/commit 往返 |
 
 `apps/extension/src/pages/content/lib/subtitles/`（纯解析 / 清洗 / 合并）对 DOM 和 `chrome.*` 零依赖，是**最该先补单测**的一层。
 
@@ -28,6 +28,7 @@ pnpm build:website && pnpm --filter @listenup/website lint               # 改�
 pnpm build:web:static                                                    # 改了可能影响静态导出的东西
 pnpm --filter @listenup/desktop build                                    # 改桌面前端
 cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml    # 改 Rust
+cargo build --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml --bin listenup # 改 CLI
 node scripts/check-docs.mjs                                              # 永远要跑
 ```
 
@@ -77,6 +78,20 @@ node scripts/check-docs.mjs                                              # 永�
 - 标题栏和菜单栏“检查更新”都能触发同一流程；重复点击不会并行下载
 - 已是最新版、网络失败、下载进度都有明确反馈；有效签名更新能安装并重启，篡改签名必须拒绝
 - DEV app 点击更新只提示不会安装正式版，DEV build 不要求 updater 私钥
+
+### 改 SQLite / 双语 / CLI
+
+- 日语视频默认缓存日语原字幕，英语视频默认缓存英语；同语言人工字幕优先于 ASR
+- 只有 verified + ready + 非空 session 入库；loading/empty/error/cursor 不创建空 revision
+- 关闭并重开 Desktop，在没有 live session 时能显示最近一条 SQLite 缓存
+- `subtitle get` 的 video/track/revision/segment ID 能组成版本 1 translation document
+- `translation apply --dry-run` 不改变 `translation list`；`--commit` 后能 get 到完整译文
+- 合并相邻原句、拆分同一原句可导入；漏句、倒序、部分交叉、过期 revision 被拒绝且旧译文不变
+- 原语、译文、双语三种模式正确；无首选译文时明确回退原语
+- CLI 提交期间 Desktop 不自动变化；切回 Desktop 后 focus refetch 显示新译文
+- 没有 `refetchInterval`、SQLite watcher、`PRAGMA data_version` 或 CLI 通知链路
+- production/DEV 默认数据库不同，`--env dev` 不会写入 production
+- production/DEV `.app` 都包含 `listenup` sidecar，CLI 构建不修改 shell profile
 
 ### 改 Website
 

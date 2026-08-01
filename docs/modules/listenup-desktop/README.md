@@ -2,28 +2,36 @@
 
 ## 职责
 
-macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标，同步显示在一个可以浮在任何窗口（包括别的 app 的全屏）之上的独立窗口里。Tauri v2，Rust 后端 + React 前端。
+macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标，同步显示在一个可以浮在任何窗口（包括别的 app 的全屏）之上的独立窗口里；同时将原字幕保存到 SQLite，并显示用户通过 CLI 导入的 AI 译文。Tauri v2，Rust 后端 + React 前端。
 
-边界：**管** 窗口渲染、Native Messaging Host、菜单栏入口；**不管** 字幕抓取（那是扩展的事），也**不能**反向控制 YouTube——同步是单向的。
+边界：**管** 窗口渲染、Native Messaging Host、字幕持久化、安全 CLI 和菜单栏入口；**不管** 字幕抓取（那是扩展的事），不内置翻译模型，也**不能**反向控制 YouTube——同步是单向的。
 
 跨模块的协议与联调流程写在 [Native Messaging 专题](../../topics/native-messaging.md)，本文只讲这个 app 自身。
 
 ## 文件清单与关系
 
 ```
-src/App.tsx        窗口 UI：列表 / 影院模式、多视频选择、检查更新、虚拟滚动、状态栏
+src/App.tsx        窗口 UI：原语 / 译文 / 双语、列表 / 影院、多视频选择、虚拟滚动
 src/VideoSessionPicker.tsx  多视频冲突与主动改选的全遮罩
 src/useDesktopUpdater.ts    标题栏 / tray 共用的检查、下载、安装、重启更新流程
-src/main.tsx       React 挂载
-src/types.ts       与 Rust 侧共享的快照 / 更新类型
+src/useSubtitleView.ts      React Query → Tauri SQLite 只读查询
+src/queryClient.ts          窗口 focus refetch；无轮询 / watcher
+src/main.tsx       React 挂载与 QueryClientProvider
+src/types.ts       与 Rust 侧共享的实时快照 / 持久字幕视图类型
 src/styles.css     Tailwind v4 @theme（唯一的设计 token 权威，见 design.md）
-src-tauri/src/lib.rs   全部 Rust 逻辑：双模式入口、socket 服务、状态机、NSPanel/tray 配置、单测
+src-tauri/src/lib.rs   Tauri 入口、socket、状态机、SQLite composition、NSPanel/tray
+src-tauri/src/database/ SQLite repository、WAL 连接、原语 revision 与译文事务
+src-tauri/src/domain/   版本化翻译 JSON 与句段映射校验
+src-tauri/src/cli/      listenup CLI 参数、受限命令与机器输出
+src-tauri/src/bin/listenup.rs  CLI 薄入口
+src-tauri/migrations/   SQLite schema 的唯一迁移来源
 src-tauri/src/main.rs  薄入口，调 lib::run()
 src-tauri/build.rs     把 LISTENUP_ENV 透传给 Rust（socket 路径按 bundle id 区分）
-src-tauri/tauri.conf.json / tauri.dev.conf.json   production / development 两套配置
+src-tauri/tauri.conf.json / tauri.dev.conf.json / tauri.cli.conf.json   环境与 CLI sidecar 配置
 src-tauri/Info.plist   深链接 scheme（由 gen-info-plist.mjs 生成，不要手改）
 src-tauri/capabilities/default.json   窗口尺寸、updater 安装与进程重启权限声明
 scripts/gen-info-plist.mjs      按 LISTENUP_ENV 生成 Info.plist，构建前自动跑
+scripts/prepare-cli.mjs         构建 listenup sidecar 并放入 .app
 scripts/native-environment.mjs  读取正式/DEV 单一环境矩阵
 scripts/install-host.mjs        自动注册之外的 Host manifest 手动修复工具
 scripts/uninstall-host.mjs      卸载
@@ -39,6 +47,60 @@ scripts/uninstall-host.mjs      卸载
 GUI 没开时，桥接进程缓存最新的 session 快照、丢弃 cursor；GUI 打开后下一帧到来时自动连接并补发缓存的 session。
 
 🚨 桥接模式下 **stdout 被 Native Messaging 协议独占**，任何诊断只能写 stderr。见 [ADR-0003](../../decisions/0003-native-messaging-single-binary.md)。
+
+## SQLite 字幕库
+
+GUI 使用 Tauri app-data 目录下的 `listenup.sqlite`：
+
+- production：`~/Library/Application Support/com.listenup.desktop/listenup.sqlite`
+- development：`~/Library/Application Support/com.listenup.desktop.dev/listenup.sqlite`
+
+连接开启 WAL、foreign keys 和 5 秒 busy timeout，migration 编译进 Rust。只有协议 v3 中
+`identityStatus=verified`、`status=ready` 且字幕非空的 session 才写库；cursor、pending、
+loading、empty 和 error 都不写。写库发生在对应 UI snapshot event 之前。
+
+原字幕按 video/track 保存不可变 revision，译文绑定 revision。AI 可以合并连续原句，或让
+连续译文块重复引用完全相同的原句来拆分；不能漏句、倒序、部分交叉或引用过期 revision。
+磁盘初始化失败时 GUI 会降级到内存 SQLite，保住实时字幕，但不会假装已持久化。
+
+## 原语 / 译文 / 双语与刷新
+
+列表 header 提供三种模式和当前 revision 已导入的目标语言。选择保存在 `localStorage`。
+当前视频没有首选译文时回退原语并提示，不拿其他语言代替。列表按 AI 重组后的语义时间块
+显示；影院模式在双语时显示上下两层。
+
+持久字幕通过 TanStack React Query 调 `get_subtitle_view`。query key 包含 video、模式和
+目标语言；窗口重新聚焦时由 Tauri focus event 触发 refetch。没有 SQLite 文件监测、定时
+polling 或 CLI 通知。没有 live session 时冷启动显示最近缓存；新的 live pending/loading
+session 会立即盖住旧缓存。
+
+## `listenup` CLI
+
+CLI 不启动 GUI、不内置 AI、不接受任意 SQL。开发构建：
+
+```bash
+pnpm --filter @listenup/desktop cli:build
+apps/listenup-desktop/src-tauri/target/debug/listenup info --env dev --json
+```
+
+命令面：
+
+```bash
+listenup info --json
+listenup video list --json
+listenup subtitle get <video-id> --json
+listenup translation list <video-id> --json
+listenup translation get <video-id> --language zh-CN --json
+listenup translation apply translation.json --dry-run --json
+listenup translation apply translation.json --commit --json
+listenup translation delete <video-id> --language zh-CN --commit --json
+```
+
+`subtitle get` 给 AI 提供 source track/revision 和带 ID、时间的原句。AI 生成版本 1 的完整
+translation document 后交给 `translation apply`。apply/delete 默认 dry-run，只有
+`--commit` 写库；`--db <path>` 优先于默认的 `--env prod|dev`。production/DEV Tauri bundle
+都会把 CLI 作为 `listenup` sidecar 放进 `.app`，主程序由 `mainBinaryName` / `default-run`
+明确锁定为 `listenup-desktop`，不修改用户 shell profile。
 
 ## 窗口
 
