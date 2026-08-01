@@ -67,7 +67,8 @@ loading、empty 和 error 都不写。写库发生在对应 UI snapshot event �
 
 列表 header 提供三种模式和当前 revision 已导入的目标语言。选择保存在 `localStorage`。
 当前视频没有首选译文时回退原语并提示，不拿其他语言代替。列表按 AI 重组后的语义时间块
-显示；影院模式在双语时显示上下两层。
+显示；影院模式在双语时显示上下两层，并在 hover 工具条中提供原语、译文、双语切换，
+与列表模式共用同一份显示偏好。
 
 持久字幕通过 TanStack React Query 调 `get_subtitle_view`。query key 包含 video、模式和
 目标语言；窗口重新聚焦时由 Tauri focus event 触发 refetch。没有 SQLite 文件监测、定时
@@ -117,7 +118,7 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 |---|---|---|
 | 形态 | YouTube 标志 + 标题 + 状态 + 完整字幕列表 + footer | 整窗缩成一条字幕带（当前句，最多两行） |
 | 背景 | vibrancy 磨砂 + `--color-glass` | **运行时关掉 vibrancy**（`set_vibrancy` 命令）+ 纯透明 + `--color-glass-cinema` |
-| 工具条 | 常驻 header | 默认隐藏；hover 整条影院字幕窗口时显示，鼠标离开窗口后隐藏 |
+| 工具条 | 常驻 header | 默认隐藏；hover 整条影院字幕窗口时显示，可切换原语 / 译文 / 双语，鼠标离开窗口后隐藏 |
 
 切换用 `setMinSize` + `setSize`，权限在 `capabilities/default.json`。
 

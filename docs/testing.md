@@ -87,7 +87,7 @@ node scripts/check-docs.mjs                                              # 永�
 - `subtitle get` 的 video/track/revision/segment ID 能组成版本 1 translation document
 - `translation apply --dry-run` 不改变 `translation list`；`--commit` 后能 get 到完整译文
 - 合并相邻原句、拆分同一原句可导入；漏句、倒序、部分交叉、过期 revision 被拒绝且旧译文不变
-- 原语、译文、双语三种模式正确；无首选译文时明确回退原语
+- 列表和影院工具条都能切换原语、译文、双语，且两种窗口形态共享当前模式；无首选译文时明确回退原语
 - CLI 提交期间 Desktop 不自动变化；切回 Desktop 后 focus refetch 显示新译文
 - 没有 `refetchInterval`、SQLite watcher、`PRAGMA data_version` 或 CLI 通知链路
 - production/DEV 默认数据库不同，`--env dev` 不会写入 production

@@ -55,6 +55,13 @@ const DEFAULT_SIZES: Record<ViewMode, WindowSize> = {
 };
 
 const SCROLLBAR_IDLE_DELAY_MS = 700;
+const SUBTITLE_MODE_OPTIONS: ReadonlyArray<
+  readonly [SubtitleDisplayMode, string]
+> = [
+  ["source", "原语"],
+  ["translation", "译文"],
+  ["bilingual", "双语"],
+];
 const EMPTY_VIEWER_SNAPSHOT: ViewerSnapshot = {
   connected: false,
   activeSession: null,
@@ -572,6 +579,27 @@ export default function App() {
             <Icon icon="mdi:format-list-bulleted" className="h-3.5 w-3.5 flex-none" />
             列表
           </button>
+          <div
+            className="flex items-center gap-0.5 rounded-full border border-white/10 bg-black/25 p-0.5"
+            role="group"
+            aria-label="字幕显示模式"
+          >
+            {SUBTITLE_MODE_OPTIONS.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`h-5 cursor-pointer rounded-full border px-1.5 text-[10px] transition-colors ${
+                  subtitleMode === value
+                    ? "border-white/15 bg-white/15 text-fg"
+                    : "border-transparent bg-transparent text-fg-faint hover:bg-white/10 hover:text-fg"
+                }`}
+                onClick={() => switchSubtitleMode(value)}
+                aria-pressed={subtitleMode === value}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <DevBadge />
           <StatusDot connected={connected} />
           <span className="text-[11px] text-fg-faint">{playbackLabel}</span>
@@ -675,13 +703,7 @@ export default function App() {
           </span>
         </div>
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
-          {(
-            [
-              ["source", "原语"],
-              ["translation", "译文"],
-              ["bilingual", "双语"],
-            ] as const
-          ).map(([value, label]) => (
+          {SUBTITLE_MODE_OPTIONS.map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -691,6 +713,7 @@ export default function App() {
                   : "border-transparent bg-transparent text-fg-faint hover:bg-wash hover:text-fg"
               }`}
               onClick={() => switchSubtitleMode(value)}
+              aria-pressed={subtitleMode === value}
             >
               {label}
             </button>
