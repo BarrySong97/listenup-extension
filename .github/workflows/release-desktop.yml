@@ -114,6 +114,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          LISTENUP_CLI_TARGET: aarch64-apple-darwin
           # Apple signing/notarization vars are injected via $GITHUB_ENV above,
           # only when the corresponding secrets exist.
         with:
@@ -124,4 +125,4 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
-          args: --target aarch64-apple-darwin --bundles app,dmg
+          args: --target aarch64-apple-darwin --bundles app,dmg --config src-tauri/tauri.cli.conf.json
