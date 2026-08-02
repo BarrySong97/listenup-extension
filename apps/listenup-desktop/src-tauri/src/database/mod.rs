@@ -1,12 +1,13 @@
-// @purpose 管理 Desktop SQLite 字幕库，持久化 YouTube 原字幕与用户通过 AI 导入的翻译。
+// @purpose 管理 Desktop SQLite 字幕库、迁移兼容，持久化原字幕与用户 AI 翻译。
 // @role    Native Messaging 写入、Tauri 查询和 listenup CLI 的共享数据访问层。
 // @deps    sqlx、sha2、domain、migrations
-// @gotcha  翻译绑定 source revision；写入前必须经过 domain 校验，禁止直接绕过映射约束。
+// @gotcha  已发布 migration 不可改写；仅对已知旧 checksum 且 schema 完整的数据库做元数据修复。
 
 use crate::domain::{validate_translation_document, TranslationDocument, TranslationSourceSegment};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{
+    migrate::Migrator,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     SqlitePool,
 };
@@ -15,6 +16,27 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+
+static MIGRATOR: Migrator = sqlx::migrate!();
+const INITIAL_MIGRATION_VERSION: i64 = 20_260_801_000_000;
+const LEGACY_INITIAL_MIGRATION_CHECKSUM: &[u8] = &[
+    0x6f, 0xa3, 0x54, 0x2a, 0x5d, 0xe4, 0x39, 0x7f, 0xd9, 0xbb, 0xdf, 0x45, 0xbb, 0x86, 0x04, 0xe7,
+    0x6c, 0x0d, 0x32, 0x2e, 0x6e, 0x6d, 0xdd, 0xfb, 0x60, 0x65, 0x5b, 0x84, 0x49, 0x74, 0x05, 0x8a,
+    0xa7, 0x96, 0x99, 0x38, 0x4f, 0xe6, 0x99, 0xca, 0xec, 0x15, 0xde, 0xbb, 0x0b, 0x83, 0x8c, 0xb9,
+];
+const INITIAL_SCHEMA_OBJECTS: &[&str] = &[
+    "videos",
+    "source_tracks",
+    "source_revisions",
+    "source_segments",
+    "translation_sets",
+    "translation_segments",
+    "translation_segment_sources",
+    "idx_source_tracks_video",
+    "idx_source_segments_revision_ordinal",
+    "idx_translation_sets_revision",
+    "idx_translation_sources_segment",
+];
 
 #[cfg(test)]
 mod tests;
@@ -174,7 +196,8 @@ impl SubtitleDatabase {
             .connect_with(options)
             .await
             .map_err(|error| error.to_string())?;
-        sqlx::migrate!()
+        repair_known_initial_migration_checksum(&pool).await?;
+        MIGRATOR
             .run(&pool)
             .await
             .map_err(|error| error.to_string())?;
@@ -752,6 +775,73 @@ impl SubtitleDatabase {
             segments,
         }))
     }
+}
+
+async fn repair_known_initial_migration_checksum(pool: &SqlitePool) -> Result<(), String> {
+    let migrations_table_exists: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|error| error.to_string())?;
+    if migrations_table_exists == 0 {
+        return Ok(());
+    }
+
+    let applied: Option<(Vec<u8>, bool)> =
+        sqlx::query_as("SELECT checksum, success FROM _sqlx_migrations WHERE version = ?")
+            .bind(INITIAL_MIGRATION_VERSION)
+            .fetch_optional(pool)
+            .await
+            .map_err(|error| error.to_string())?;
+    let Some((checksum, success)) = applied else {
+        return Ok(());
+    };
+    if checksum != LEGACY_INITIAL_MIGRATION_CHECKSUM {
+        return Ok(());
+    }
+    if !success {
+        return Err("legacy_migration_incomplete: initial subtitle migration failed".into());
+    }
+
+    let placeholders = (0..INITIAL_SCHEMA_OBJECTS.len())
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(", ");
+    let object_count_sql = format!(
+        "SELECT COUNT(*) FROM sqlite_schema WHERE name IN ({placeholders}) AND sql IS NOT NULL"
+    );
+    let mut object_count_query = sqlx::query_scalar::<_, i64>(&object_count_sql);
+    for object in INITIAL_SCHEMA_OBJECTS {
+        object_count_query = object_count_query.bind(object);
+    }
+    let object_count = object_count_query
+        .fetch_one(pool)
+        .await
+        .map_err(|error| error.to_string())?;
+    if object_count != INITIAL_SCHEMA_OBJECTS.len() as i64 {
+        return Err(
+            "legacy_migration_schema_mismatch: refusing to repair migration metadata".into(),
+        );
+    }
+
+    let current = MIGRATOR
+        .iter()
+        .find(|migration| migration.version == INITIAL_MIGRATION_VERSION)
+        .ok_or_else(|| "initial_migration_missing: embedded migration not found".to_string())?;
+    let mut transaction = pool.begin().await.map_err(|error| error.to_string())?;
+    sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = ? AND checksum = ?")
+        .bind(current.checksum.as_ref())
+        .bind(INITIAL_MIGRATION_VERSION)
+        .bind(LEGACY_INITIAL_MIGRATION_CHECKSUM)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| error.to_string())?;
+    transaction
+        .commit()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn validate_source_snapshot(snapshot: &SourceSnapshot) -> Result<(), String> {

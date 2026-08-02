@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验正式/DEV 标识、Native 协议、原语选轨和 Desktop/CLI 数据边界不会漂移。
+ * @purpose 校验环境标识、Native 协议、原语选轨、CLI 数据边界与 migration 不会漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/selector、Tauri/CLI/Query 配置、node assert/crypto/fs
  * @gotcha  ADR-0008：不得恢复英语优先、协议 v2、环境串库、SQLite watcher 或轮询。
@@ -143,5 +143,17 @@ const querySource = await readFile(
 );
 assert.match(querySource, /refetchOnWindowFocus: true/);
 assert.doesNotMatch(querySource, /refetchInterval\s*:|PRAGMA\s+data_version|watchFile\s*\(/);
+
+const initialMigration = await readFile(
+  resolve(
+    ROOT,
+    "apps/listenup-desktop/src-tauri/migrations/20260801000000_subtitle_library.sql"
+  )
+);
+assert.equal(
+  createHash("sha384").update(initialMigration).digest("hex"),
+  "19a225ad81360da4c6e8082f15762c47599b4bf90f92f7a9fb9331901cee7b5eaf439c600898afbc76421fb64f2bcbdc",
+  "ADR-0008: published migrations are immutable; add a new migration instead"
+);
 
 console.log("✅ production/development environment identifiers are isolated");

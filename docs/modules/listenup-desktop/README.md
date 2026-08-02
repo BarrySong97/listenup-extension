@@ -63,6 +63,10 @@ loading、empty 和 error 都不写。写库发生在对应 UI snapshot event �
 连续译文块重复引用完全相同的原句来拆分；不能漏句、倒序、部分交叉或引用过期 revision。
 磁盘初始化失败时 GUI 会降级到内存 SQLite，保住实时字幕，但不会假装已持久化。
 
+SQLx migration 一经发布不可修改，`check-environment-identifiers.mjs` 固定首个 migration 的
+SHA-384。早期开发数据库存在一条已知旧 checksum；连接层仅在该 checksum 命中且所有预期
+schema 对象完整时原子修复 migration 元数据，未知不匹配仍拒绝打开。
+
 ## 原语 / 译文 / 双语与刷新
 
 列表 header 提供三种模式和当前 revision 已导入的目标语言。选择保存在 `localStorage`。

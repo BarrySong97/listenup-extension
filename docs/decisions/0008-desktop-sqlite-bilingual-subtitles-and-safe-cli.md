@@ -46,3 +46,6 @@ source revision 能阻止旧译文静默套到变化后的 YouTube 字幕上。�
 - 磁盘数据库初始化失败时 GUI 降级到进程内 SQLite，实时字幕仍可用，但 CLI 持久化不可用。
 - `scripts/check-environment-identifiers.mjs` 锁定协议 v3、原语默认策略、环境数据路径、CLI
   sidecar 与无轮询查询规则，防止架构回退。
+- 已发布的 SQLx migration 内容不可改写，sensor 固定其 SHA-384；早期开发版曾用同一完整
+  schema 写入另一条 checksum，因此 database 层只对这条已知 checksum 且全部 schema
+  对象完整的数据库修复 migration 元数据，其他 checksum 不匹配仍然拒绝打开。

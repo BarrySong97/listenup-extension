@@ -1,10 +1,46 @@
-// @purpose 验证 SQLite 字幕缓存幂等性，以及 AI 翻译合并、拆分、顺序与覆盖约束。
+// @purpose 验证 SQLite migration 兼容、字幕幂等性与翻译映射约束。
 // @role    database 模块的单元级集成测试。
 // @deps    super、domain
-// @gotcha  使用单连接内存 SQLite，避免不同连接各自拥有独立数据库。
+// @gotcha  migration 兼容测试使用磁盘临时库，其余用单连接内存库。
 
 use super::*;
 use crate::domain::{TranslationDocument, TranslationDocumentSegment, TranslationLanguage};
+
+#[tokio::test]
+async fn repairs_the_known_legacy_migration_checksum_when_schema_is_complete() {
+    let unique = format!(
+        "listenup-legacy-migration-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    );
+    let database_path = std::env::temp_dir().join(format!("{unique}.sqlite"));
+    let database = SubtitleDatabase::connect(&database_path).await.unwrap();
+    sqlx::query("UPDATE _sqlx_migrations SET checksum = ? WHERE version = ?")
+        .bind(LEGACY_INITIAL_MIGRATION_CHECKSUM)
+        .bind(INITIAL_MIGRATION_VERSION)
+        .execute(&database.pool)
+        .await
+        .unwrap();
+    database.pool.close().await;
+
+    let repaired = SubtitleDatabase::connect(&database_path).await.unwrap();
+    let checksum: Vec<u8> =
+        sqlx::query_scalar("SELECT checksum FROM _sqlx_migrations WHERE version = ?")
+            .bind(INITIAL_MIGRATION_VERSION)
+            .fetch_one(&repaired.pool)
+            .await
+            .unwrap();
+    let current = MIGRATOR
+        .iter()
+        .find(|migration| migration.version == INITIAL_MIGRATION_VERSION)
+        .unwrap();
+    assert_eq!(checksum, current.checksum.as_ref());
+    repaired.pool.close().await;
+    let _ = std::fs::remove_file(database_path);
+}
 
 fn snapshot() -> SourceSnapshot {
     SourceSnapshot {
