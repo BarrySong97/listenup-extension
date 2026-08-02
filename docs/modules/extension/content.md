@@ -41,9 +41,11 @@ pending 快照，避免一帧内把旧字幕发布给 Native。
 
 两个来源：`PlayerResponseCaptionSource`（读 `ytInitialPlayerResponse`）与 `BridgeCaptionSource`（经 `PageBridge` 进页面上下文取）。`SubtitleRepository` 合并去重后按来源能力择优。
 
-默认选轨跟随 YouTube `defaultCaptionTrackIndex` 所代表的视频原语，不再固定优先英语；同一
-语言存在人工字幕和 ASR 时优先人工字幕。没有 default 时采用 YouTube 返回的第一条可用轨
-所代表的语言。显式传入 `preferredLanguages` 的调用仍可覆盖默认策略。
+默认选轨先读取同一 player response 的 `streamingData.*.audioTrack.audioIsDefault=true`，把
+该原始音轨的 BCP 47 语言映射到字幕轨；这不受用户当前选择的自动配音或字幕列表顺序影响。
+原始音轨元数据缺失时才回退 `defaultCaptionTrackIndex`，再回退 YouTube 返回的第一条可用
+字幕。调用方不能覆盖原文语言；同语言存在人工字幕和 ASR 时才继续优先人工字幕。用户选择
+只影响 Desktop 的目标译文语言与原文/译文/双语显示模式。
 
 其中有一段**针对 `pot` 参数缺失的短延迟重试**——刚进视频页时 YouTube 给的 track URL 可能不完整，直接用会拿不到字幕。别把这段当无用重试删掉。
 

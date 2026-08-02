@@ -1,38 +1,11 @@
 /**
- * @purpose 在合并去重后的轨道集合里选择视频原语轨，并支持显式语言偏好覆盖。
+ * @purpose 在合并去重后的轨道集合里按原始音频语言选择原语轨。
  * @role    SubtitleRepository 的选轨策略。
- * @deps    captions/types
- * @gotcha  默认语言来自 YouTube default/首轨，不能重新写死英语；同语言才比较 manual/ASR。
+ * @deps    captions/types、originalAudioLanguage
+ * @gotcha  原文语言只认原始音轨；元数据缺失才回退 default/首轨，同语言才比较 manual/ASR。
  */
-import type {
-  CaptionTrackDescriptor,
-  TrackPreference,
-} from "./types";
-
-const matchesLanguage = (
-  track: CaptionTrackDescriptor,
-  preferredLanguage: string,
-  allowRegionFallback: boolean
-) => {
-  if (track.languageCode === preferredLanguage) {
-    return true;
-  }
-
-  if (!allowRegionFallback) {
-    return false;
-  }
-
-  return (
-    track.languageCode.startsWith(`${preferredLanguage}-`) ||
-    preferredLanguage.startsWith(`${track.languageCode}-`)
-  );
-};
-
-export const DEFAULT_TRACK_PREFERENCE: TrackPreference = {
-  preferredLanguages: [],
-  preferManual: true,
-  allowRegionFallback: true,
-};
+import type { CaptionTrackDescriptor } from "./types";
+import { matchesLanguageCode } from "./originalAudioLanguage.ts";
 
 const sortTracks = (
   tracks: CaptionTrackDescriptor[],
@@ -60,35 +33,19 @@ const sortTracks = (
 };
 
 export const selectCaptionTrack = (
-  tracks: CaptionTrackDescriptor[],
-  preference: Partial<TrackPreference> = {}
+  tracks: CaptionTrackDescriptor[]
 ): CaptionTrackDescriptor | null => {
   if (tracks.length === 0) {
     return null;
   }
 
-  const resolvedPreference = {
-    ...DEFAULT_TRACK_PREFERENCE,
-    ...preference,
-  };
-
-  for (const language of resolvedPreference.preferredLanguages) {
-    const candidates = tracks.filter((track) =>
-      matchesLanguage(track, language, resolvedPreference.allowRegionFallback)
-    );
-
-    if (candidates.length > 0) {
-      return sortTracks(candidates, resolvedPreference.preferManual)[0];
-    }
-  }
-
-  const sourceLanguageTrack = tracks.find((track) => track.isDefault) ?? tracks[0];
+  const sourceLanguageTrack =
+    tracks.find((track) => track.isOriginalAudioLanguage) ??
+    tracks.find((track) => track.isDefault) ??
+    tracks[0];
   const sourceLanguageCandidates = tracks.filter((track) =>
-    matchesLanguage(track, sourceLanguageTrack.languageCode, true)
+    matchesLanguageCode(track.languageCode, sourceLanguageTrack.languageCode, true)
   );
 
-  return sortTracks(
-    sourceLanguageCandidates,
-    resolvedPreference.preferManual
-  )[0];
+  return sortTracks(sourceLanguageCandidates, true)[0];
 };

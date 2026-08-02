@@ -1,14 +1,18 @@
 /**
- * @purpose 从 ytInitialPlayerResponse / player 响应里解析可用字幕轨。
+ * @purpose 从 ytInitialPlayerResponse / player 响应里解析字幕轨与原始音轨语言。
  * @role    两个字幕轨来源之一，直接在内容脚本上下文读取。
- * @deps    captions/types、subtitleDebug
- * @gotcha  renderer 必须和同一 playerResponse 的 videoDetails.videoId 一起读取，身份缺失时不可返回轨道
+ * @deps    captions/types、originalAudioLanguage、subtitleDebug
+ * @gotcha  renderer、videoId 与 streamingData 必须来自同一 response；不能把当前配音当原始语言
  */
 import {
   CaptionListResponse,
   CaptionTrackDescriptor,
 } from "./types";
 import { subtitleDebug } from "../subtitle-domain/subtitleDebug";
+import {
+  getOriginalAudioLanguageCode,
+  matchesLanguageCode,
+} from "./originalAudioLanguage";
 
 interface CaptionTrackRenderer {
   baseUrl?: string;
@@ -45,7 +49,8 @@ const getSimpleText = (
 const normalizeTracks = (
   renderer: PlayerCaptionsTracklistRenderer,
   source: CaptionTrackDescriptor["source"],
-  sourceVideoId: string
+  sourceVideoId: string,
+  originalAudioLanguageCode: string | null
 ): CaptionTrackDescriptor[] => {
   const tracks = renderer.captionTracks || [];
   const defaultIndex = renderer.audioTracks?.[0]?.defaultCaptionTrackIndex;
@@ -66,6 +71,14 @@ const normalizeTracks = (
       urlSource: "renderer-base-url",
       hasPot: false,
       isDefault: defaultIndex === index,
+      isOriginalAudioLanguage: Boolean(
+        originalAudioLanguageCode &&
+          matchesLanguageCode(
+            track.languageCode!,
+            originalAudioLanguageCode,
+            true
+          )
+      ),
       isTranslatable: Boolean(track.isTranslatable),
     }));
 };
@@ -74,6 +87,7 @@ const getTracklistRenderer = (): {
   renderer: PlayerCaptionsTracklistRenderer | null;
   source: CaptionTrackDescriptor["source"] | null;
   sourceVideoId: string | null;
+  originalAudioLanguageCode: string | null;
 } => {
   const player = document.querySelector("#movie_player") as
     | (HTMLElement & { getPlayerResponse?: () => any })
@@ -88,6 +102,9 @@ const getTracklistRenderer = (): {
       renderer: playerResponseRenderer,
       source: "player-response",
       sourceVideoId: playerVideoId,
+      originalAudioLanguageCode: getOriginalAudioLanguageCode(
+        playerResponse?.streamingData
+      ),
     };
   }
 
@@ -100,6 +117,9 @@ const getTracklistRenderer = (): {
       renderer: initialRenderer,
       source: "initial-player-response",
       sourceVideoId: initialVideoId,
+      originalAudioLanguageCode: getOriginalAudioLanguageCode(
+        initialResponse?.streamingData
+      ),
     };
   }
 
@@ -107,16 +127,23 @@ const getTracklistRenderer = (): {
     renderer: null,
     source: null,
     sourceVideoId: null,
+    originalAudioLanguageCode: null,
   };
 };
 
 export class PlayerResponseCaptionSource {
   public async listTracks(): Promise<CaptionListResponse> {
-    const { renderer, source, sourceVideoId } = getTracklistRenderer();
+    const {
+      renderer,
+      source,
+      sourceVideoId,
+      originalAudioLanguageCode,
+    } = getTracklistRenderer();
     subtitleDebug.log("player response caption source lookup", {
       hasRenderer: Boolean(renderer),
       source,
       sourceVideoId,
+      originalAudioLanguageCode,
     });
 
     if (!renderer || !source || !sourceVideoId) {
@@ -127,7 +154,12 @@ export class PlayerResponseCaptionSource {
       };
     }
 
-    const tracks = normalizeTracks(renderer, source, sourceVideoId);
+    const tracks = normalizeTracks(
+      renderer,
+      source,
+      sourceVideoId,
+      originalAudioLanguageCode
+    );
     subtitleDebug.log("player response caption source normalized tracks", {
       source,
       trackCount: tracks.length,

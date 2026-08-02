@@ -1,8 +1,8 @@
 /**
- * @purpose 注入 YouTube 页面上下文的桥接脚本：读播放器内部字幕轨、代拉字幕文档。
+ * @purpose 注入 YouTube 页面上下文的桥接脚本：读播放器内部字幕轨与原始音轨、代拉字幕文档。
  * @role    内容脚本经 PageBridge 用自定义事件与它通信；作为 web-accessible resource 暴露。
  * @deps    YouTube 的 #movie_player API 与 window.ytInitialPlayerResponse
- * @gotcha  与内容脚本是两个 JS 上下文，只能 postMessage/CustomEvent；改事件名要同时改 PageBridge.ts 和 manifest 的 web_accessible_resources。见 docs/modules/extension/build-and-manifest.md
+ * @gotcha  原始音轨只取 streamingData 中 audioIsDefault=true；与内容脚本是两个 JS 上下文，改 payload 要同步 BridgeCaptionSource。见 docs/modules/extension/build-and-manifest.md
  */
 (function () {
   const REQUEST_EVENT = "listenup:list-caption-tracks:request";
@@ -39,6 +39,20 @@
     return player.getAudioTrack();
   };
 
+  const getOriginalAudioTrack = function (playerResponse) {
+    const streamingData = playerResponse && playerResponse.streamingData;
+    const formats = [
+      ...((streamingData && streamingData.adaptiveFormats) || []),
+      ...((streamingData && streamingData.formats) || []),
+    ];
+
+    const originalFormat = formats.find(function (format) {
+      return format.audioTrack && format.audioTrack.audioIsDefault === true;
+    });
+
+    return (originalFormat && originalFormat.audioTrack) || null;
+  };
+
   window.addEventListener(REQUEST_EVENT, function (event) {
     const data = event.detail;
     if (!data || !data.requestId) {
@@ -62,6 +76,7 @@
                 playerResponse &&
                 playerResponse.videoDetails &&
                 playerResponse.videoDetails.videoId,
+              originalAudioTrack: getOriginalAudioTrack(playerResponse),
               captionTracks: payload && payload.captionTracks,
               audioTracks: payload && payload.audioTracks,
               translationLanguages: payload && payload.translationLanguages,

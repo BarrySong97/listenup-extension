@@ -48,15 +48,16 @@ Desktop，也不监测 SQLite、不轮询数据库；用户重新聚焦 Desktop 
 
 ### 原语字幕
 
-“原语”指当前视频音轨对应的 YouTube 默认字幕语言。日语视频默认取日语，英语视频默认
-取英语，不再以 `preferredLanguages: ["en"]` 作为全局优先级。
+“原语”指 YouTube player response 中 `audioIsDefault=true` 的原始音轨对应的字幕语言。
+日语视频默认取日语，英语视频默认取英语，不受当前自动配音影响，也不再以
+`preferredLanguages: ["en"]` 作为全局优先级。
 
 选轨顺序：
 
 1. 只考虑通过页面、player response 与字幕 URL 三重 videoId 校验的轨道。
-2. 优先采用 YouTube `defaultCaptionTrackIndex` 标记的默认轨道所代表的语言。
+2. 优先采用 `streamingData.*.audioTrack.audioIsDefault=true` 标记的原始音轨语言。
 3. 同一语言有多条轨时，在身份和请求能力都有效的前提下优先人工字幕，再选 ASR。
-4. YouTube 没有默认标记时，按 YouTube 返回的第一条可用轨确定原语，不再额外偏向英语。
+4. 原始音轨元数据缺失时回退 `defaultCaptionTrackIndex`，再按第一条可用轨确定原语。
 5. 找不到可用字幕时保持现有 empty/error 降级，不伪造原语。
 
 语言代码统一保存为 BCP 47 tag，例如 `ja`、`en`、`zh-CN`；用户可读名称独立保存，

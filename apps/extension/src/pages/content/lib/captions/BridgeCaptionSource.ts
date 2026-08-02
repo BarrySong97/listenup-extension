@@ -1,8 +1,8 @@
 /**
- * @purpose 经页面桥接读取字幕轨（含当前音轨对应的轨道）。
+ * @purpose 经页面桥接读取字幕轨，并用 streamingData 原始音轨标记视频原语。
  * @role    另一个字幕轨来源，用于 player-response 拿不到或缺参数时。
- * @deps    captions/PageBridge、captions/types、subtitleDebug
- * @gotcha  payload 字段含混淆键名；playerVideoId 缺失时不能把轨道视为已验证
+ * @deps    captions/PageBridge、captions/types、originalAudioLanguage、subtitleDebug
+ * @gotcha  getAudioTrack 是当前配音而非原始音轨；只能使用桥接的 audioIsDefault 元数据判定原语
  */
 import { pageBridge } from "./PageBridge";
 import {
@@ -10,6 +10,11 @@ import {
   CaptionTrackDescriptor,
 } from "./types";
 import { subtitleDebug } from "../subtitle-domain/subtitleDebug";
+import {
+  getAudioTrackLanguageCode,
+  matchesLanguageCode,
+  type YouTubeAudioTrackMetadata,
+} from "./originalAudioLanguage";
 
 interface BridgeTrackPayload {
   playerVideoId?: string;
@@ -37,6 +42,7 @@ interface BridgeTrackPayload {
   ytcfg?: {
     INNERTUBE_CLIENT_VERSION?: string;
   };
+  originalAudioTrack?: YouTubeAudioTrackMetadata;
   captionTracks?: Array<{
     baseUrl?: string;
     languageCode?: string;
@@ -87,6 +93,9 @@ export class BridgeCaptionSource {
         payload?.currentTrack?.B?.vssId || payload?.currentTrack?.d7?.id;
       const clientVersion = payload?.ytcfg?.INNERTUBE_CLIENT_VERSION;
       const sourceVideoId = payload?.playerVideoId;
+      const originalAudioLanguageCode = getAudioTrackLanguageCode(
+        payload?.originalAudioTrack
+      );
 
       if (!sourceVideoId) {
         return {
@@ -124,6 +133,14 @@ export class BridgeCaptionSource {
           urlSource: "current-track-url",
           hasPot: hasPotToken(track.url!),
           isDefault: Boolean(track.isDefault || currentDefaultVssId === track.vssId),
+          isOriginalAudioLanguage: Boolean(
+            originalAudioLanguageCode &&
+              matchesLanguageCode(
+                track.languageCode!,
+                originalAudioLanguageCode,
+                true
+              )
+          ),
           isTranslatable: Boolean(track.isTranslateable),
         }));
 
@@ -150,6 +167,14 @@ export class BridgeCaptionSource {
           urlSource: "renderer-base-url",
           hasPot: hasPotToken(track.baseUrl!),
           isDefault: defaultIndex === index,
+          isOriginalAudioLanguage: Boolean(
+            originalAudioLanguageCode &&
+              matchesLanguageCode(
+                track.languageCode!,
+                originalAudioLanguageCode,
+                true
+              )
+          ),
           isTranslatable: Boolean(track.isTranslatable),
         }));
 
@@ -177,6 +202,7 @@ export class BridgeCaptionSource {
           kind: track.kind,
           urlSource: track.urlSource,
           hasPot: track.hasPot,
+          isOriginalAudioLanguage: track.isOriginalAudioLanguage,
         })),
       });
 

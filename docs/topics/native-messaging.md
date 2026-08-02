@@ -35,6 +35,8 @@ YouTube content script
   `identityStatus` 为 `pending | verified | failed`；只有 verified session 可以携带
   ready / empty 结果和字幕。ready track 还带 `languageCode`、`displayName`、`kind`、
   `vssId` 和 `isDefault`，用于建立不会跨语言覆盖的持久轨道身份。
+  Extension 在发送前以 player response 中 `audioIsDefault=true` 的原始音轨语言选字幕；
+  原始音轨信号缺失时才回退 YouTube 默认字幕与首轨，当前自动配音不会改变入库原语。
 - **cursor** —— 播放游标。播放期间**最多 250ms 一次**；当前字幕索引变化则立即发。
 
 background 为每条消息补 `tabId`，并且**只在 session 到达时才懒连接**当前构建对应的 Host——所以没有字幕的页面不会白白拉起进程。
@@ -72,7 +74,7 @@ Desktop GUI 每次启动都会按编译环境重写自己的 manifest 与 wrappe
 - 两套 Host 的 `allowed_origins` 只能包含各自固定 Extension ID
 - 桥接模式的 **stdout 专供 Native Messaging 协议**，诊断只能写 stderr
 - 改 `nativeSubtitleProtocol.ts` 的字段必须两端同步改
-- v3 原语轨身份字段不可删除；默认选轨不得恢复固定英语优先
+- v3 原语轨身份字段不可删除；默认选轨不得恢复固定英语、当前配音或字幕首项优先
 
 见 [ADR-0003](../decisions/0003-native-messaging-single-binary.md) 与
 [ADR-0007](../decisions/0007-desktop-owned-video-session-selection.md)。
@@ -100,7 +102,8 @@ Desktop GUI 每次启动都会按编译环境重写自己的 manifest 与 wrappe
 
 5. Reload 扩展，打开带字幕的 YouTube `/watch` 页面。
 
-6. 日语视频确认 Desktop track/SQLite 原语是日语，英语视频是英语；再用 `listenup
+6. 日语视频确认 Desktop track/SQLite 原语是日语；多配音英语视频即使葡萄牙语字幕排第一，
+   也必须选择 `audioIsDefault` 对应的英语。再用 `listenup
    subtitle get <video-id> --env dev --json` 验证 revision 和 segment IDs。
 
 卸载（dev 加 `-- --dev`）：

@@ -1,8 +1,8 @@
 /**
- * @purpose 锁定原语选轨规则，防止默认行为重新退化成固定英语优先。
+ * @purpose 锁定原语选轨规则，防止字幕顺序、当前配音或固定英语覆盖视频原始音频语言。
  * @role    SubtitleTrackSelector 的 Node 内建测试。
  * @deps    node:test、node:assert、SubtitleTrackSelector
- * @gotcha  语言之间按 default/首轨决定；manual 优先只发生在同一语言内。
+ * @gotcha  语言只按 original audio/default/首轨决定；manual 优先只发生在同一语言内。
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -12,7 +12,11 @@ import { selectCaptionTrack } from "./SubtitleTrackSelector.ts";
 const track = (
   languageCode: string,
   kind: CaptionTrackDescriptor["kind"],
-  options: { isDefault?: boolean; vssId?: string } = {}
+  options: {
+    isDefault?: boolean;
+    isOriginalAudioLanguage?: boolean;
+    vssId?: string;
+  } = {}
 ): CaptionTrackDescriptor => ({
   source: "player-response",
   sourceVideoId: "abcdefghijk",
@@ -22,7 +26,17 @@ const track = (
   vssId: options.vssId ?? `.${languageCode}.${kind}`,
   baseUrl: `https://www.youtube.com/api/timedtext?v=abcdefghijk&lang=${languageCode}`,
   isDefault: Boolean(options.isDefault),
+  isOriginalAudioLanguage: Boolean(options.isOriginalAudioLanguage),
   isTranslatable: true,
+});
+
+test("selects the original English audio language when Portuguese is first", () => {
+  const selected = selectCaptionTrack([
+    track("pt", "manual", { isDefault: true }),
+    track("en", "asr", { isOriginalAudioLanguage: true }),
+  ]);
+
+  assert.equal(selected?.languageCode, "en");
 });
 
 test("selects the Japanese default language instead of an English track", () => {
@@ -63,11 +77,11 @@ test("uses the first available language when YouTube has no default", () => {
   assert.equal(selected?.languageCode, "ja");
 });
 
-test("still honors an explicit preferred language override", () => {
-  const selected = selectCaptionTrack(
-    [track("ja", "manual", { isDefault: true }), track("en-US", "manual")],
-    { preferredLanguages: ["en"] }
-  );
+test("does not let another caption language override original Japanese audio", () => {
+  const selected = selectCaptionTrack([
+    track("en-US", "manual", { isDefault: true }),
+    track("ja", "asr", { isOriginalAudioLanguage: true }),
+  ]);
 
-  assert.equal(selected?.languageCode, "en-US");
+  assert.equal(selected?.languageCode, "ja");
 });

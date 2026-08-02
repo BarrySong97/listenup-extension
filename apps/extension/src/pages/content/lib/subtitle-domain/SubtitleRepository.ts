@@ -1,8 +1,8 @@
 /**
- * @purpose 字幕加载的总编排：聚合两个轨道来源、选轨、下载、解析、处理、读写缓存。
+ * @purpose 字幕加载总编排：聚合轨道来源、保留原始音轨身份、选轨、下载、处理与缓存。
  * @role    subtitle-domain 的核心，useSubtitles 唯一调用的入口。
- * @deps    captions/*、subtitles/subtitleParser、SubtitleCache、SubtitleProcessor、SubtitleTransport、youtube-sdk
- * @gotcha  SPA 切换后五秒内只接受页面、playerResponse、字幕 URL 三方 videoId 一致的轨道；缓存前后都要复验
+ * @deps    captions/*（含 mergeCaptionTracks）、subtitles/subtitleParser、SubtitleCache、SubtitleProcessor、SubtitleTransport、youtube-sdk
+ * @gotcha  去重替换 URL 来源时必须 OR 保留 default/original 标记；SPA 切换仍要做三方 videoId 校验
  */
 import {
   bridgeCaptionSource,
@@ -15,8 +15,8 @@ import { buildSubtitleUrl } from "../captions/SubtitleUrlBuilder";
 import {
   CaptionTrackDescriptor,
   CaptionListResponse,
-  TrackPreference,
 } from "../captions/types";
+import { mergeCaptionTracks } from "../captions/mergeCaptionTracks";
 import { validateCaptionVideoIdentity } from "../captions/videoIdentity";
 import { youtubeSDK } from "../youtube-sdk";
 import { parseSubtitleContent } from "../subtitles/subtitleParser";
@@ -47,44 +47,6 @@ export interface SubtitleLoadFailure {
 }
 
 export type SubtitleLoadResult = SubtitleLoadSuccess | SubtitleLoadFailure;
-
-const dedupeTracks = (tracks: CaptionTrackDescriptor[]) => {
-  const deduped = new Map<string, CaptionTrackDescriptor>();
-
-  for (const track of tracks) {
-    const key = `${track.languageCode}:${track.vssId}:${track.kind}`;
-    const existing = deduped.get(key);
-    if (!existing) {
-      deduped.set(key, track);
-      continue;
-    }
-
-    if (isPreferredTrack(track, existing)) {
-      deduped.set(key, track);
-    }
-  }
-
-  return [...deduped.values()];
-};
-
-const isPreferredTrack = (
-  candidate: CaptionTrackDescriptor,
-  current: CaptionTrackDescriptor
-) => {
-  if (Boolean(candidate.hasPot) !== Boolean(current.hasPot)) {
-    return Boolean(candidate.hasPot);
-  }
-
-  if (Boolean(candidate.requestUrl) !== Boolean(current.requestUrl)) {
-    return Boolean(candidate.requestUrl);
-  }
-
-  if (candidate.source !== current.source) {
-    return candidate.source === "page-bridge";
-  }
-
-  return false;
-};
 
 const delay = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -150,6 +112,7 @@ export class SubtitleRepository {
           kind: track.kind,
           urlSource: track.urlSource,
           hasPot: track.hasPot,
+          isOriginalAudioLanguage: track.isOriginalAudioLanguage,
           sourceVideoId: track.sourceVideoId,
         }));
     let latestResults: CaptionListResponse[] = [];
@@ -166,7 +129,7 @@ export class SubtitleRepository {
         playerResponseCaptionSource.listTracks(),
         bridgeCaptionSource.listTracks(),
       ]);
-      const discoveredTracks = dedupeTracks(
+      const discoveredTracks = mergeCaptionTracks(
         latestResults.flatMap((result) => (result.ok ? result.tracks : []))
       );
       latestVerifiedTracks = discoveredTracks.filter((track) => {
@@ -226,7 +189,6 @@ export class SubtitleRepository {
   public async load(input: {
     videoId: string;
     enabled: boolean;
-    preference?: Partial<TrackPreference>;
     signal?: AbortSignal;
   }): Promise<SubtitleLoadResult> {
     subtitleDebug.log("repository.load called", input);
@@ -292,6 +254,7 @@ export class SubtitleRepository {
         urlSource: track.urlSource,
         hasPot: track.hasPot,
         isDefault: track.isDefault,
+        isOriginalAudioLanguage: track.isOriginalAudioLanguage,
       })),
     });
 
@@ -319,7 +282,7 @@ export class SubtitleRepository {
       };
     }
 
-    const selectedTrack = selectCaptionTrack(availableTracks, input.preference);
+    const selectedTrack = selectCaptionTrack(availableTracks);
     subtitleDebug.log("selected caption track", selectedTrack);
     if (!selectedTrack) {
       return {
