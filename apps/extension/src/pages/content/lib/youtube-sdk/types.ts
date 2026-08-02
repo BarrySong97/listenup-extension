@@ -1,4 +1,10 @@
 /**
+ * @purpose SDK 的共享类型：广告态、播放器态、会话态与四种回调。
+ * @role    SDK 内外的类型契约。
+ * @deps    无
+ * @gotcha  改结构会同时影响 subtitles.tsx 的订阅逻辑
+ */
+/**
  * Shared types for YouTube SDK
  */
 

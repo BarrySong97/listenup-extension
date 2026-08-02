@@ -1,4 +1,10 @@
 /**
+ * @purpose SDK 主编排：管理子组件生命周期、装 MutationObserver、拦 History API、对外统一 API。
+ * @role    被 index.ts 实例化为单例 youtubeSDK。
+ * @deps    ./YouTube{AdDetector,PlayerFacade,SessionMonitor,ThemeDetector}、MutationObserver、history API
+ * @gotcha  observer 只观察必要属性，YouTube 页面 DOM 变动极频繁；stop() 必须解绑，否则 SPA 切页会泄漏
+ */
+/**
  * YouTube SDK
  * Main orchestrator for YouTube interaction
  */

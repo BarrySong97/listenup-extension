@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示面板的四态渲染（ad / loading / error / empty）。
+ * @role    列表区域的状态守卫（扩展同名组件的副本）。
+ * @deps    react
+ * @gotcha  与扩展版保持相同的判定顺序，改一边要想到另一边
+ */
 "use client";
 import React, { memo } from "react";
 

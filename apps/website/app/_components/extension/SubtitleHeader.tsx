@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示面板头部：标题、折叠与工具按钮。
+ * @role    SubtitlePanelShell 的顶部区域（扩展同名组件的简化副本）。
+ * @deps    @iconify/react、./iconScale、./subtitleTypes
+ * @gotcha  只保留展示，去掉了扩展里的下拉与真实设备逻辑
+ */
 "use client";
 import { memo, useState } from "react";
 import { Icon } from "@iconify/react";

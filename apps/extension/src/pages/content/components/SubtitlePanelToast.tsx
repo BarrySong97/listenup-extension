@@ -1,3 +1,9 @@
+/**
+ * @purpose 面板内的轻量 toast（复制成功之类）。
+ * @role    由 usePanelToast 驱动，SubtitlePanelShell 渲染。
+ * @deps    framer-motion
+ * @gotcha  同一条消息重复触发靠 key=message 重放动画
+ */
 import { FC } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 

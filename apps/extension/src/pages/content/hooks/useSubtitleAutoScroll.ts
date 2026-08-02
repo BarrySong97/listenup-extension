@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕列表自动滚动：跟随当前句、检测用户手动滚动、给出“回到当前句”。
+ * @role    驱动 VList 的滚动行为。
+ * @deps    virtua 的 VListHandle
+ * @gotcha  首次加载直接跳转不做平滑动画；靠 isProgrammaticScroll 区分程序滚动与用户滚动，改动容易引起抖动
+ */
 import { useEffect, useRef, useState } from "react";
 import { VListHandle } from "virtua";
 

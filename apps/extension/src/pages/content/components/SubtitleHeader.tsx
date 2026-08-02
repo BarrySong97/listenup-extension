@@ -1,3 +1,9 @@
+/**
+ * @purpose 面板头部：标题、折叠、整段复制/下载、麦克风选择与设置菜单入口。
+ * @role    SubtitlePanelShell 的顶部区域。
+ * @deps    components/ui 的 Dropdown、hooks/useAudioInputLevel、lib/subtitle-domain/subtitleDebug
+ * @gotcha  下拉必须用自建 Dropdown；麦克风电平只在菜单展开时采样。见 docs/modules/extension/faq.md
+ */
 import { memo, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Button } from "@heroui/react";

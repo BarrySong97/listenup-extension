@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕合并：把过短、间隔小的相邻条目并成一句，受时长与字数上限约束。
+ * @role    清洗之后的第二步处理。
+ * @deps    subtitleTypes
+ * @gotcha  纯函数；合并结果保留 originalSubtitles，方便回溯原始时间轴
+ */
 import { SubtitleItem } from "./subtitleTypes";
 
 export interface MergeConfig {

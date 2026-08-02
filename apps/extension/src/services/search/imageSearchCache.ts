@@ -1,3 +1,9 @@
+/**
+ * @purpose 图片搜索结果缓存（chrome.storage.local，TTL 1 天）。
+ * @role    imageSearch 的读写层。
+ * @deps    chrome.storage.local（key: image_search_cache）
+ * @gotcha  缓存键为 引擎::归一化查询词
+ */
 import { ImageSearchEngine } from "@src/services/ai/aiSettings";
 import { ImageSearchResult } from "./imageSearch";
 

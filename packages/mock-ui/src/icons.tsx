@@ -1,3 +1,9 @@
+/**
+ * @purpose 内联 SVG 图标（YouTube 标志、影院模式、关闭、品牌 mark）。
+ * @role    供 SubtitlePanelMock 与官网导航使用。
+ * @deps    react
+ * @gotcha  刻意内联而不依赖 iconify，保证这个包零运行时依赖
+ */
 import type { SVGProps } from "react";
 
 /* Minimal inline icons — mirror the mdi icons used in the desktop app. */

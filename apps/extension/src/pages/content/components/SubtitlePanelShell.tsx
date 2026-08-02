@@ -1,3 +1,9 @@
+/**
+ * @purpose 面板外壳：组装 header、toast、字幕列表、分隔条、当前句面板与 footer。
+ * @role    被 subtitles.tsx 和 newtab 预览页共用的布局层。
+ * @deps    framer-motion、SubtitleHeader/SubtitleFooter/ActiveSegmentPanel/PlaybackDivider、hooks/useAudioInputSettings
+ * @gotcha  预览页复用它来脱离 YouTube 调样式，改布局要同时看 newtab
+ */
 import { FC, ReactNode, useEffect, useRef, type CSSProperties } from "react";
 import { motion } from "framer-motion";
 import { SubtitleHeader } from "./SubtitleHeader";

@@ -1,4 +1,10 @@
 /**
+ * @purpose YouTube 明暗主题探测与对应配色。
+ * @role    SDK 子组件，面板据此切换观感。
+ * @deps    document 上的 YouTube 主题标记
+ * @gotcha  主题变化是异步的，务必用回调而不是只在挂载时读一次
+ */
+/**
  * YouTube Theme Detector
  * Detects and monitors YouTube's theme (dark/light mode)
  */

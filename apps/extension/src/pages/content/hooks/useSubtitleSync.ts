@@ -1,3 +1,9 @@
+/**
+ * @purpose 播放时间与当前字幕索引的同步计算。
+ * @role    被 subtitles.tsx 用来驱动高亮与自动滚动。
+ * @deps    lib/subtitles/subtitleTypes
+ * @gotcha  重叠字幕的索引选择在这里；广告期间刻意不屏蔽高亮
+ */
 import { useState, useMemo } from "react";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 

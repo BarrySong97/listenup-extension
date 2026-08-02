@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕文档下载：先直接 fetch，失败再走页面桥接。
+ * @role    SubtitleRepository 的传输层。
+ * @deps    fetch、captions/PageBridge、errors
+ * @gotcha  直连要带 credentials: include；两条路都失败才抛 NETWORK_ERROR
+ */
 import { SubtitleLoadError } from "./errors";
 import { pageBridge } from "../captions/PageBridge";
 import { subtitleDebug } from "./subtitleDebug";

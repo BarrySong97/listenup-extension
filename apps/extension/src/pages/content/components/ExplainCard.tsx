@@ -1,3 +1,9 @@
+/**
+ * @purpose Explain 解释卡片：词性、音标朗读、AI 讲解、图片参考与错误态。
+ * @role    面板内右侧滑出的覆盖层，数据来自 useExplain。
+ * @deps    services/ai/explainSchema、services/search/imageSearch、services/tts/speak、framer-motion
+ * @gotcha  加载分 skeleton → 原始 JSON 文本 → 正式 UI 三段；缺 key 时错误区要给出打开设置的入口。见 docs/modules/extension/explain-card.md
+ */
 import { FC, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "@iconify/react";

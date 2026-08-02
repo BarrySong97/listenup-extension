@@ -1,3 +1,9 @@
+/**
+ * @purpose 带假光标的脚本化演示：自动走一遍点击字幕、打开解释卡片的动画。
+ * @role    早期落地页的演示组件；**当前 page.tsx 未引用**，属于未接线的遗留代码。
+ * @deps    ./extension/RealExtensionPanel
+ * @gotcha  整个 app/_components/ 目录目前都没被页面引用，删改前先确认是否还打算复用
+ */
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { RealExtensionPanel } from "./extension/RealExtensionPanel";

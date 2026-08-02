@@ -1,3 +1,9 @@
+/**
+ * @purpose 扩展弹窗：打开 AI 设置页、UI Preview 页与 ListenUp Desktop 深链接。
+ * @role    轻量入口，不承载产品能力。
+ * @deps    chrome.tabs、utils/extensionPages、shared/nativeSubtitleProtocol 的 DESKTOP_DEEP_LINK
+ * @gotcha  深链接按构建环境切 listenup:// 与 listenup-dev://；见 docs/modules/extension/entry-pages.md
+ */
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";

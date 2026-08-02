@@ -1,3 +1,9 @@
+/**
+ * @purpose 自动识别并解析 json3 / XML / WebVTT 三种字幕格式。
+ * @role    下载得到的文本进入领域层的第一道处理。
+ * @deps    subtitleTypes
+ * @gotcha  无副作用；解析失败抛 SubtitleParseError 并带错误码，不要静默返回空数组
+ */
 import { SubtitleItem, ParsedSubtitleData } from "./subtitleTypes";
 
 export type SubtitleParseErrorCode =

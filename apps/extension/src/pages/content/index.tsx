@@ -1,3 +1,9 @@
+/**
+ * @purpose 内容脚本入口：判域名、建 Shadow DOM、注入样式、挂载 React。
+ * @role    整条内容脚本链路的起点，由 manifest 的 content_scripts 注入。
+ * @deps    react-dom/client、@heroui/react、jotai、./style.css?inline、./app
+ * @gotcha  样式必须 inline 注入并把 rem 换成 em；宿主节点 id 为 #__listenup-extension-host。见 docs/decisions/0001-content-script-shadow-dom.md
+ */
 import { createRoot } from "react-dom/client";
 import { HeroUIProvider } from "@heroui/react";
 import { Provider } from "jotai";

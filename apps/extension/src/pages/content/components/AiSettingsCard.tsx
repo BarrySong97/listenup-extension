@@ -1,3 +1,9 @@
+/**
+ * @purpose 面板内右侧滑出的 AI 设置卡片，包着共享的 AiSettingsForm。
+ * @role    header 菜单与 Explain 卡片的设置入口都指向它（不跳新标签页）。
+ * @deps    components/ai/AiSettingsForm、framer-motion
+ * @gotcha  打开时接管 Esc 键；见 docs/modules/extension/ai-settings.md
+ */
 import { FC, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@heroui/react";

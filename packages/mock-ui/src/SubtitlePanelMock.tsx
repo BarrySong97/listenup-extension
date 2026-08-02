@@ -1,3 +1,9 @@
+/**
+ * @purpose ListenUp Desktop 列表模式窗口的静态复刻组件（纯呈现，无状态）。
+ * @role    官网首屏的产品图。
+ * @deps    ./data、./icons、styles/tokens.css 的 lu-* 类名
+ * @gotcha  结构与取值对齐 apps/listenup-desktop/src/App.tsx；桌面端改了这里不会自动跟着变。里面的按钮是 tabIndex=-1 的装饰件
+ */
 import { DEFAULT_MOCK, type SubtitleMock } from "./data";
 import { Close, MovieOpen, YoutubeLogo } from "./icons";
 

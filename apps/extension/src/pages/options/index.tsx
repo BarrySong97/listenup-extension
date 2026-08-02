@@ -1,3 +1,9 @@
+/**
+ * @purpose options 页面的 React 挂载入口。
+ * @role    manifest 的 options_ui.page 指向的 HTML 加载它。
+ * @deps    react-dom/client、@heroui/react、./Options
+ * @gotcha  同样复用内容脚本的 style.css
+ */
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { HeroUIProvider } from "@heroui/react";

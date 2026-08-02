@@ -1,3 +1,9 @@
+/**
+ * @purpose Explain 数据编排：读设置、查缓存、发 AI 请求、并行拉图片、支持 refresh 绕过缓存。
+ * @role    ExplainCard 的数据源；连接 services/ai 与 services/search。
+ * @deps    services/ai/{aiSettings,explainClient,explainCache}、services/search/{imageSearch,imageSearchCache}
+ * @gotcha  缺 API key 抛 MissingApiKeyError（UI 要给设置入口）；explain 缓存 TTL 7 天、图片 1 天。见 docs/modules/extension/explain-card.md
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AiSettings,

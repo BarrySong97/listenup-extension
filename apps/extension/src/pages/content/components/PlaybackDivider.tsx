@@ -1,3 +1,9 @@
+/**
+ * @purpose 列表与当前句面板之间的分隔条，内嵌播放/暂停按钮。
+ * @role    纯展示组件，状态由上层传入。
+ * @deps    @heroui/react、@iconify/react
+ * @gotcha  按钮交互统一用 onPressStart（Shadow DOM 约定）
+ */
 import { FC } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";

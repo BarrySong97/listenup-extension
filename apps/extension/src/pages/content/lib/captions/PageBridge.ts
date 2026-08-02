@@ -1,3 +1,9 @@
+/**
+ * @purpose 内容脚本侧的页面桥接客户端：用自定义事件向注入脚本请求字幕轨与字幕文档。
+ * @role    BridgeCaptionSource 与 SubtitleTransport 的底层通道。
+ * @deps    public/scripts/inject-youtube.js、CustomEvent、subtitleDebug
+ * @gotcha  请求靠 requestId 配对且有超时（BRIDGE_TIMEOUT）；事件名改了要同步注入脚本
+ */
 import { subtitleDebug } from "../subtitle-domain/subtitleDebug";
 
 type BasePageBridgeRequest = {

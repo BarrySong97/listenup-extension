@@ -1,3 +1,9 @@
+/**
+ * @purpose 单句循环播放：记住目标句并轮询播放时间，越界即跳回句首。
+ * @role    footer 的循环开关背后的逻辑。
+ * @deps    lib/youtube-sdk 的 PlayerFacade、setInterval
+ * @gotcha  用轮询而非 timeupdate，是为了在 seek 与广告切换后仍稳定；关闭时务必清 interval
+ */
 import { useCallback, useRef, useState } from "react";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 import { youtubeSDK } from "../lib/youtube-sdk";

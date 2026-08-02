@@ -1,3 +1,9 @@
+/**
+ * @purpose 单条字幕：点击跳转、当前句高亮，以及选中文本后的浮动 Copy / Explain 工具条。
+ * @role    字幕列表的行组件，Explain 链路的触发点。
+ * @deps    @iconify/react、hooks/useExplain 的 ExplainTarget 类型
+ * @gotcha  靠 selectionchange 监听选区；onRequestExplain 只上抛 text+context，videoId 由 subtitles.tsx 补。见 docs/modules/extension/explain-card.md
+ */
 import {
   memo,
   useEffect,

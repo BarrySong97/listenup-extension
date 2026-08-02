@@ -1,3 +1,9 @@
+/**
+ * @purpose Explain 结果缓存（chrome.storage.local，TTL 7 天）。
+ * @role    useExplain 请求前后的读写层。
+ * @deps    chrome.storage.local（key: explain_cache）、./explainSchema
+ * @gotcha  缓存键为 videoId|归一化文本|model；过期项在读取时清理
+ */
 import { ExplainResult } from "./explainSchema";
 
 const STORAGE_KEY = "explain_cache";

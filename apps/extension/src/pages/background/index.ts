@@ -1,3 +1,9 @@
+/**
+ * @purpose Service worker：代抓图片搜索 HTML，并把字幕 session/cursor 转发给桌面端 Native Host。
+ * @role    内容脚本通过 chrome.runtime.sendMessage 调它；它是唯一持有 native port 的一方。
+ * @deps    src/shared/nativeSubtitleProtocol、chrome.runtime.connectNative、fetch
+ * @gotcha  只在 manifest 含 nativeMessaging 时连 host，且只在 session 到达时懒连接；图片抓取放这里是为绕开页面 CSP。见 docs/topics/native-messaging.md
+ */
 import {
   isNativeSubtitleExtensionMessage,
   NATIVE_SUBTITLE_HOST,

@@ -1,3 +1,9 @@
+/**
+ * @purpose 麦克风录音：多 take 录制、播放、时长统计与错误处理。
+ * @role    SubtitleFooter 的录音控制背后的逻辑。
+ * @deps    MediaRecorder、getUserMedia、Blob URL
+ * @gotcha  按支持度依次挑选 mime type；播放优先命中最新一段；Blob URL 要在清理时 revoke
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface RecordingClip {

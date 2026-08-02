@@ -1,3 +1,9 @@
+/**
+ * @purpose 内联 SVG 图标组件（Material Symbols 字幕/设置系列）。
+ * @role    被面板局部引用；大多数图标走 @iconify/react，这里只放需要内联的几个。
+ * @deps    react SVGProps
+ * @gotcha  图标来自 Material Symbols（Apache-2.0），文件内保留了出处注释，别删
+ */
 import { SVGProps } from "react";
 
 export function MaterialSymbolsSubtitlesGearOutlineSharp(

@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示面板的当前句区域与“回到当前句”。
+ * @role    SubtitlePanelShell 的中部区域（扩展同名组件的副本）。
+ * @deps    @iconify/react、./subtitleTypes
+ * @gotcha  无
+ */
 "use client";
 import { FC } from "react";
 import { Icon } from "@iconify/react";

@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕面板实验室：用 mock 数据复现 loaded/loading/empty/error/ad 及 Explain 卡片各态。
+ * @role    脱离 YouTube 迭代面板 UI 的预览页，直接复用内容脚本组件。
+ * @deps    pages/content/components/*、pages/content/hooks/usePanelToast、services 的类型
+ * @gotcha  只能验证视觉与局部交互，证明不了字幕抓取/播放器同步/Shadow DOM 行为。见 docs/testing.md
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@heroui/react";

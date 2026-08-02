@@ -1,4 +1,10 @@
 /**
+ * @purpose Tailwind 插件：把默认主题里的 rem 尺度整体换成 em。
+ * @role    内容脚本样式链路的一环，供 Shadow DOM 下的尺寸隔离使用。
+ * @deps    tailwindcss/plugin
+ * @gotcha  rem 在 Shadow DOM 里不隔离，换 em 是刻意约定，别改回去；见 docs/decisions/0001-content-script-shadow-dom.md
+ */
+/**
  * Tailwind CSS plugin to automatically convert all rem units to em units
  * This modifies the default theme values so all utilities use em instead of rem
  *

@@ -1,3 +1,9 @@
+/**
+ * @purpose 自绘的扩展面板演示（图标全部内联 SVG，不依赖扩展代码）。
+ * @role    另一版落地页演示组件；**当前未被引用**。
+ * @deps    react
+ * @gotcha  与 ./extension/ 下那套是两条独立的演示实现，别混着改
+ */
 "use client";
 import { useEffect, useRef, useState } from "react";
 

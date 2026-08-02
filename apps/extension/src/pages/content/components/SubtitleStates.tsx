@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕四态渲染：ad / loading / error / empty，都不命中才渲染 children。
+ * @role    列表区域的状态守卫，扩展与预览页共用。
+ * @deps    react
+ * @gotcha  四态的判定顺序固定（ad 优先），改顺序会影响广告期间的表现
+ */
 import React, { memo } from "react";
 
 interface SubtitleStatesProps {

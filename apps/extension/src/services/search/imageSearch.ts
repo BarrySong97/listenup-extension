@@ -1,3 +1,9 @@
+/**
+ * @purpose 图片搜索：委托 background 抓 Bing/Google/Baidu 的 HTML，再在前端解析出缩略图。
+ * @role    Explain 卡片 Visual Reference 区的数据源。
+ * @deps    chrome.runtime.sendMessage、services/ai/aiSettings 的引擎类型
+ * @gotcha  直接在内容脚本抓会被页面 CSP/跨域拦下，所以必须走 background；解析依赖各引擎 HTML 结构，会随改版失效
+ */
 import { ImageSearchEngine } from "@src/services/ai/aiSettings";
 
 export interface ImageSearchResult {

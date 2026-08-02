@@ -1,3 +1,9 @@
+/**
+ * @purpose 会话探测：当前 videoId、是否 watch 页、播放器是否就绪。
+ * @role    SDK 子组件，SPA 导航后的状态判定来源。
+ * @deps    location、YouTube 播放器 DOM
+ * @gotcha  watch 页判定要兼容 /watch 路径与 v= 查询两种形态
+ */
 export interface YouTubeSessionState {
   videoId: string | null;
   isWatchPage: boolean;

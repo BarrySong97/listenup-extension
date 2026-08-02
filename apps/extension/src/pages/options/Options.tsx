@@ -1,3 +1,9 @@
+/**
+ * @purpose 正式 AI 设置页：包住共享的 AiSettingsForm，并提供打开 UI Preview 的入口。
+ * @role    扩展的用户设置入口。
+ * @deps    components/ai/AiSettingsForm、utils/extensionPages
+ * @gotcha  表单本体是共享组件，改字段去 AiSettingsForm；见 docs/modules/extension/ai-settings.md
+ */
 import { FC } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";

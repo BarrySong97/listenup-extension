@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示面板外壳：头部、toast、列表、分隔条与当前句区域。
+ * @role    website 侧的面板布局层（扩展同名组件的副本）。
+ * @deps    framer-motion、同目录的 header/toast/divider 组件、./useAudioInputSettings
+ * @gotcha  对应扩展的 pages/content/components/SubtitlePanelShell.tsx，两边会分叉
+ */
 "use client";
 import { FC, ReactNode, useEffect, useRef, type CSSProperties } from "react";
 import { motion } from "framer-motion";

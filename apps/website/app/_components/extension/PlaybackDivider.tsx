@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示面板的播放控制分隔条。
+ * @role    SubtitlePanelShell 的中部分隔（扩展同名组件的副本）。
+ * @deps    @iconify/react、./iconScale
+ * @gotcha  无
+ */
 "use client";
 import { FC } from "react";
 import { Icon } from "@iconify/react";

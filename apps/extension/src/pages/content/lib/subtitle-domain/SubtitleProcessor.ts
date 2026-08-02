@@ -1,3 +1,9 @@
+/**
+ * @purpose 读取清洗/合并配置、算配置指纹、调用纯处理逻辑。
+ * @role    SubtitleRepository 与 subtitles 纯逻辑层之间的适配。
+ * @deps    subtitles/{subtitleConfig,subtitleCleaner,subtitleMerger}
+ * @gotcha  configHash 参与缓存键：处理配置变了缓存要自动失效，改结构记得同步
+ */
 import { subtitleConfig } from "../subtitles/subtitleConfig";
 import { SubtitleCleaner } from "../subtitles/subtitleCleaner";
 import { SubtitleMerger } from "../subtitles/subtitleMerger";

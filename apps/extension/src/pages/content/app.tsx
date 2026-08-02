@@ -1,3 +1,9 @@
+/**
+ * @purpose 监听 YouTube SPA 导航，只在 watch 页渲染字幕面板。
+ * @role    index.tsx 与 components/subtitles.tsx 之间的路由层。
+ * @deps    yt-navigate-finish 事件、./components/subtitles
+ * @gotcha  用 videoId 作 key 强制重建，防止旧视频状态泄漏到新视频；见 docs/modules/extension/content.md
+ */
 import { FC, useEffect, useState } from "react";
 import Subtitles from "./components/subtitles";
 export interface AppProps {}

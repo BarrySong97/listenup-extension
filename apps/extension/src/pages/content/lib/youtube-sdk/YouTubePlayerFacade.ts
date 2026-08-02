@@ -1,3 +1,9 @@
+/**
+ * @purpose 播放控制门面：取 video 元素、播放/暂停/seek/音量、读播放状态。
+ * @role    SDK 子组件；内容脚本所有播放操作都经过它。
+ * @deps    ./YouTubeAdDetector、YouTube 的 video 元素
+ * @gotcha  广告播放时 getVideoElement() 刻意返回 null，上层必须处理空值
+ */
 import { PlayerState } from "./types";
 
 type PlayerStateListener = (state: PlayerState) => void;

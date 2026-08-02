@@ -1,54 +1,18 @@
 # ListenUp Website
 
-This is a Next.js app copied from `install-ipa-to-iphone/webs` into the ListenUp monorepo.
+ListenUp 的落地页与下载入口。Next.js（App Router）+ HeroUI v3，静态导出部署在 Cloudflare Pages。
 
-## Feishu waitlist integration
-
-The homepage waitlist form posts to `POST /api/waitlist`. The route triggers
-the Feishu Flow webhook configured in `FEISHU_WAITLIST_WEBHOOK_URL`.
-
-The webhook receives:
-
-- `event`: `waitlist.joined`
-- `email`: submitted email address
-- `source`: form source, currently `homepage`
-- `submittedAt`: ISO timestamp
-
-The Feishu Flow should handle downstream actions such as creating the Bitable
-record and sending the Feishu notification.
-
-## Getting Started
-
-From the monorepo root, install dependencies and run the development server:
+## 快速开始
 
 ```bash
-pnpm install
-pnpm dev:website
+pnpm install       # 在仓库根执行
+pnpm dev:website   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+构建：`pnpm build:website`（普通构建）/ `pnpm build:web:static`（静态导出到 `out/`，部署用的就是这条）。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> 🚨 改完必须跑一次 `pnpm build:web:static`。这个站不能有 API route 或动态渲染，否则 Cloudflare Pages 部署会挂。
 
-Build from the monorepo root:
+## 文档
 
-```bash
-pnpm build:website
-```
-
-## Environment
-
-Copy `.env.example` to `.env.local` when setting up a new machine and provide `FEISHU_WAITLIST_WEBHOOK_URL`.
-
-## Key Files
-
-- `app/page.tsx`: homepage（CTA 使用 HeroUI `Button`）
-- `app/api/waitlist/route.ts`: Feishu waitlist API route
-- `app/provider.tsx`: app-level providers
-- `public/`: image and static assets
-
-HeroUI v3（`@heroui/react` / `@heroui/styles`）版本由 monorepo 根目录 `pnpm-workspace.yaml` 的 `catalog` 统一管理。
-
-## Deploy
-
-This app can be deployed as a normal Next.js application. The Feishu webhook environment variable must be configured in the deployment target.
+本 app 的全部文档在仓库根的 [`docs/modules/website/`](../../docs/modules/website/README.md)，部署细节见 [`docs/topics/release-and-distribution.md`](../../docs/topics/release-and-distribution.md)。

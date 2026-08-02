@@ -1,3 +1,9 @@
+/**
+ * @purpose 字幕清洗：去括号内容、音乐符号、前导破折号与过短空条目。
+ * @role    解析后的第一步处理，配置由 subtitleConfig 提供。
+ * @deps    subtitleTypes
+ * @gotcha  纯函数，无副作用；改默认规则会让已有缓存的 configHash 变化并整体失效
+ */
 import { SubtitleItem } from './subtitleTypes';
 
 export interface CleanConfig {

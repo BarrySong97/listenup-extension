@@ -1,3 +1,9 @@
+/**
+ * @purpose 点击字幕跳转到对应播放时间。
+ * @role    SubtitleItem 的点击回调来源。
+ * @deps    lib/youtube-sdk 的 PlayerFacade
+ * @gotcha  广告播放时 getVideoElement() 返回 null，跳转会失败——这是刻意的
+ */
 import { useCallback } from "react";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 import { youtubeSDK } from "../lib/youtube-sdk";

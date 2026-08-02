@@ -1,3 +1,9 @@
+/**
+ * @purpose 麦克风设备列表与当前选择，持久化在 localStorage。
+ * @role    被面板 header 与 footer 共用。
+ * @deps    navigator.mediaDevices.enumerateDevices、localStorage
+ * @gotcha  未授权时拿不到设备 label，用 “Microphone N” 兜底
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "listenup:selected-audio-input-id";

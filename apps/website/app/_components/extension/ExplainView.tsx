@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示用的解释卡片：静态内容 + 滑入动画，不发任何请求。
+ * @role    RealExtensionPanel 里点击 Explain 后展示的覆盖层。
+ * @deps    framer-motion、@iconify/react、./iconScale
+ * @gotcha  对应扩展的 ExplainCard，但这里没有 AI、缓存与图片搜索
+ */
 "use client";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";

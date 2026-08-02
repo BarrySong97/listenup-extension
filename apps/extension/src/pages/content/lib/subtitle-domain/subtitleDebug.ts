@@ -1,3 +1,9 @@
+/**
+ * @purpose 带 [ListenUp:subtitles] 前缀的调试日志，并在内存里保留最近若干条供导出。
+ * @role    整条字幕链路的日志出口。
+ * @deps    console
+ * @gotcha  环形缓冲上限 500 条；别把字幕全文或用户数据打进去。见 docs/conventions.md
+ */
 const PREFIX = "[ListenUp:subtitles]";
 const MAX_LOG_ENTRIES = 500;
 

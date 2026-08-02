@@ -1,3 +1,9 @@
+/**
+ * @purpose 用 mock 字幕驱动的扩展面板演示容器。
+ * @role    ScriptedPanel 的内层；本目录组件树的根。
+ * @deps    ./SubtitlePanelShell、./SubtitleItem、./SubtitleStates、./ExplainView
+ * @gotcha  这是扩展面板的**副本**而非共享代码，扩展改了不会同步；且当前整棵树未被页面引用
+ */
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SubtitlePanelShell } from "./SubtitlePanelShell";

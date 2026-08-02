@@ -1,3 +1,9 @@
+/**
+ * @purpose 根布局：字体、站点 metadata / OG、HeroUI Provider 与全局样式引入。
+ * @role    所有页面的外壳。
+ * @deps    next/font/google、@heroui/react、./provider、./globals.css、@listenup/mock-ui/styles/tokens.css
+ * @gotcha  SITE_URL 写死为线上域名，换自定义域名要改这里；不要在这里引入动态渲染，会破坏静态导出
+ */
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { isRTL } from "@heroui/react";

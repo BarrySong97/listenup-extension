@@ -1,0 +1,75 @@
+# 内容脚本：分层与字幕链路
+
+`apps/extension/src/pages/content/` 是整个仓库最重要、也最容易改坏的地方。改之前先确认要落在哪一层。
+
+## 初始化链路
+
+1. `index.tsx` 检查当前页面是否属于 `youtube.com`
+2. 创建 `#__listenup-extension-host`，挂 Shadow Root
+3. 以 `style.css?inline` 引入样式，并把所有 `rem` 替换成 `em`（隔离宿主字号，见 [ADR-0001](../../decisions/0001-content-script-shadow-dom.md)）
+4. 用 `Provider` + `HeroUIProvider` 渲染 `App`
+5. `app.tsx` 监听 `yt-navigate-finish`，路径是 watch 页时渲染 `Subtitles`，并用 `videoId` 作 key 强制重建状态
+
+## 编排层：`components/subtitles.tsx`
+
+它既是容器组件也是主要编排层，负责：
+
+- 启动 `youtubeSDK`，监听主题、广告、播放器状态与会话变化
+- 调 `useSubtitles` 加载字幕
+- 协调当前字幕索引、自动滚动、循环播放、面板布局
+- 承接选词 → `explainTarget`（写入前先暂停视频，避免边听边读错过内容）
+- dev 构建下把字幕快照与节流后的播放游标交给 background
+
+## 字幕加载层：`hooks/useSubtitles.ts`
+
+自身不处理字幕细节。字幕、轨道、loading/error 与 `identityStatus` 被原子绑定到
+一个 videoId；即使 React effect 还没运行，传入 videoId 变化也会同步返回空的
+pending 快照，避免一帧内把旧字幕发布给 Native。
+
+## 领域层：`lib/subtitle-domain/`
+
+| 文件 | 职责 |
+|---|---|
+| `SubtitleRepository.ts` | 聚合轨道来源、选择策略、下载、解析、缓存、处理 |
+| `SubtitleProcessor.ts` | 读清洗 / 合并配置并调用纯处理逻辑 |
+| `SubtitleCache.ts` | 基于 `chrome.storage.local` 的配置感知缓存 |
+| `SubtitleTransport.ts` | 先直接拉字幕文档，失败再走页面桥接 |
+| `errors.ts` | 具名错误，供 UI 映射四态 |
+| `subtitleDebug.ts` | `[ListenUp:subtitles]` 前缀的调试日志 |
+
+## 轨道发现层：`lib/captions/`
+
+两个来源：`PlayerResponseCaptionSource`（读 `ytInitialPlayerResponse`）与 `BridgeCaptionSource`（经 `PageBridge` 进页面上下文取）。`SubtitleRepository` 合并去重后按来源能力择优。
+
+默认选轨跟随 YouTube `defaultCaptionTrackIndex` 所代表的视频原语，不再固定优先英语；同一
+语言存在人工字幕和 ASR 时优先人工字幕。没有 default 时采用 YouTube 返回的第一条可用轨
+所代表的语言。显式传入 `preferredLanguages` 的调用仍可覆盖默认策略。
+
+其中有一段**针对 `pot` 参数缺失的短延迟重试**——刚进视频页时 YouTube 给的 track URL 可能不完整，直接用会拿不到字幕。别把这段当无用重试删掉。
+
+每条轨道还必须携带同一响应的 `videoDetails.videoId`。仓储层会在约五秒重试窗口内
+校验页面 session videoId、轨道来源 videoId、字幕 URL 的 `v` 参数三者一致。
+未验证轨道不能读写缓存、下载字幕或发布 ready；缓存结构为 v3，并同时保存
+`videoId` 与 `sourceVideoId`。规则见 [ADR-0007](../../decisions/0007-desktop-owned-video-session-selection.md)。
+Desktop 同步协议 v3 还发送 `vssId` 与 `isDefault`，见
+[ADR-0008](../../decisions/0008-desktop-sqlite-bilingual-subtitles-and-safe-cli.md)。
+
+## 纯处理层：`lib/subtitles/`
+
+`subtitleParser.ts`（自动识别 JSON / XML / WebVTT）、`subtitleCleaner.ts`（去噪）、`subtitleMerger.ts`（合并短句与相邻片段）、`subtitleConfig.ts`（读本地处理配置）。
+
+这层对 DOM 和 `chrome.*` 零依赖，是最该先补自动化测试的地方。**保持它无副作用。**
+
+## UI 层
+
+- `SubtitleHeader` 整体复制 / 下载 / 设置菜单
+- `SubtitleItem` 单条交互 + 选中文字的浮动工具条（Copy / Explain）
+- `SubtitleFooter` 录音与循环控制
+- `SubtitleStates` loading / error / empty / ad 四态
+- `ActiveSegmentPanel` / `PlaybackDivider` / `SubtitlePanelToast` / `SubtitlePanelShell` 辅助交互与外壳
+- `ExplainCard` / `AiSettingsCard` 面板内右侧滑出的覆盖层
+
+## 相关
+
+- [Explain 卡片](explain-card.md) · [youtube-sdk](youtube-sdk.md) · [FAQ](faq.md)
+- 跨模块：[Native Messaging 字幕同步](../../topics/native-messaging.md)

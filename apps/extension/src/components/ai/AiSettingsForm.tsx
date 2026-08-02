@@ -1,3 +1,9 @@
+/**
+ * @purpose AI 设置表单：base URL / API key / model / 图片搜索引擎，含连通性测试。
+ * @role    被 options 页和内容脚本面板内的 AiSettingsCard 共用。
+ * @deps    @heroui/react、services/ai/aiSettings、services/ai/explainClient 的 testAiConnection
+ * @gotcha  API key 明文存 chrome.storage.local；字段说明见 docs/modules/extension/ai-settings.md
+ */
 import { FC, useEffect, useState } from "react";
 import { Button, Input, Select, SelectItem } from "@heroui/react";
 import { Icon } from "@iconify/react";

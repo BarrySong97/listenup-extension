@@ -1,3 +1,9 @@
+/**
+ * @purpose HeroUI v2 主题定制：字号、行高、圆角、阴影与明暗色板。
+ * @role    供 Tailwind 配置消费，决定内容脚本与扩展页面的整体观感。
+ * @deps    @heroui/react 的 heroui()
+ * @gotcha  扩展用 HeroUI v2，website 用 v3，两套主题互不通用；见 design.md
+ */
 import { heroui } from "@heroui/react";
 
 export default heroui({

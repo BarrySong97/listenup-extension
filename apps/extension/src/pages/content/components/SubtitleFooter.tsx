@@ -1,3 +1,9 @@
+/**
+ * @purpose 面板底部：当前句时间、循环开关与录音控制。
+ * @role    SubtitlePanelShell 的底部区域。
+ * @deps    hooks/useAudioRecording、@heroui/react
+ * @gotcha  录音是多 take 的，播放优先命中最新一段
+ */
 import { Icon } from "@iconify/react";
 import { Button } from "@heroui/react";
 import { iconScale } from "@src/components/ui/iconScale";

@@ -1,3 +1,9 @@
+/**
+ * @purpose 写死的展示用假数据（标题、连接状态、字幕列表）与相关类型。
+ * @role    SubtitlePanelMock 的默认内容。
+ * @deps    无
+ * @gotcha  纯假数据，别接真实来源；字段形状跟着桌面端列表模式走
+ */
 /** Fake, hard-coded content for the ListenUp Desktop subtitle-window mock.
  *  Shape mirrors what App.tsx renders in list mode. */
 

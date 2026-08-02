@@ -1,3 +1,9 @@
+/**
+ * @purpose 构建期生成社交分享卡片（左文案右产品 mock）。
+ * @role    Next 的 OG image 约定文件。
+ * @deps    next/og 的 ImageResponse
+ * @gotcha  静态导出要求 export const dynamic = "force-static"；satori 不支持 backdrop-filter，毛玻璃是用半透明填充伪造的。见 docs/decisions/0004-website-static-export.md
+ */
 import { ImageResponse } from "next/og";
 
 export const alt = "ListenUp — Subtitles for anything. One menu bar.";

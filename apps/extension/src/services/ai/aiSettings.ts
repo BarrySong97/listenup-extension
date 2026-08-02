@@ -1,3 +1,9 @@
+/**
+ * @purpose AI 设置的类型、默认值与 chrome.storage.local 读写/订阅。
+ * @role    Explain 链路与设置表单的共同数据源。
+ * @deps    chrome.storage.local（key: ai_settings）
+ * @gotcha  API key 明文存储；改默认值要同步 docs/modules/extension/ai-settings.md 的字段表
+ */
 export type ImageSearchEngine = "google" | "bing" | "baidu";
 
 export interface AiSettings {

@@ -1,3 +1,9 @@
+/**
+ * @purpose 清洗与合并配置的默认值与本地读写。
+ * @role    SubtitleProcessor 的配置来源。
+ * @deps    localStorage（key: listenup_subtitle_config）
+ * @gotcha  配置参与缓存指纹，改默认值等于让全部字幕缓存失效
+ */
 import { MergeConfig } from './subtitleMerger';
 import { CleanConfig } from './subtitleCleaner';
 

@@ -1,3 +1,9 @@
+/**
+ * @purpose jotai 原子：广告播放状态、类型、文案、剩余时间与展示文本。
+ * @role    全局 store，目前只被遗留的 PlayerStatusBadge 使用。
+ * @deps    jotai
+ * @gotcha  面板本身直接订阅 youtubeSDK，没走这些 atom；要扩全局状态前先确认是否真有必要
+ */
 import { atom } from 'jotai';
 
 // Ad detection atoms

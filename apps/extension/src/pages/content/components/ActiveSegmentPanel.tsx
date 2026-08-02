@@ -1,3 +1,9 @@
+/**
+ * @purpose 当前句面板：显示当前字幕文本与时间，并提供“回到当前句”。
+ * @role    SubtitlePanelShell 中列表与 footer 之间的区域。
+ * @deps    @heroui/react、lib/subtitles/subtitleTypes
+ * @gotcha  showReturnToActive 由 useSubtitleAutoScroll 计算，不要在这里自行判断滚动位置
+ */
 import { FC } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";

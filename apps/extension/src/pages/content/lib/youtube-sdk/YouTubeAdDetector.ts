@@ -1,4 +1,10 @@
 /**
+ * @purpose 广告探测：判断是否播广告、类型、文案与剩余秒数。
+ * @role    SDK 子组件，同时被 PlayerFacade 用来决定 video 是否可用。
+ * @deps    YouTube 播放器 DOM（.ytp-ad-* / #movie_player.ad-showing）
+ * @gotcha  全靠 YouTube class 名，改版即静默失效——面板异常时先查这里。见 docs/modules/extension/youtube-sdk.md
+ */
+/**
  * YouTube Ad Detector
  * Responsible for detecting and monitoring YouTube ads
  */

@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示用的单条字幕，含选中文本后的浮动工具条。
+ * @role    演示列表的行组件（扩展同名组件的副本）。
+ * @deps    @iconify/react、./iconScale、./subtitleTypes
+ * @gotcha  交互是演示性质的，不连任何真实 AI 服务
+ */
 "use client";
 import {
   memo,

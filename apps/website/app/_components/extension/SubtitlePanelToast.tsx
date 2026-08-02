@@ -1,3 +1,9 @@
+/**
+ * @purpose 演示面板的轻量 toast。
+ * @role    SubtitlePanelShell 的浮层（扩展同名组件的副本）。
+ * @deps    framer-motion
+ * @gotcha  无
+ */
 "use client";
 import { FC } from "react";
 import { AnimatePresence, motion } from "framer-motion";

@@ -1,3 +1,9 @@
+/**
+ * @purpose 调用 OpenAI 兼容端点流式取回 Explain 结果，并从文本里提取 JSON 做 schema 校验。
+ * @role    Explain 的网络层；同时提供设置页的连通性测试。
+ * @deps    @ai-sdk/openai-compatible、ai 的 streamText、./explainSchema
+ * @gotcha  缺 key 抛 MissingApiKeyError。注意：fetchExplain 的 catch 分支重试的是同一个 streamText 路径（结构化输出分支已被移除），所以那层并不是真正的降级——改这里时先读 docs/modules/extension/explain-card.md
+ */
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText } from "ai";
 import { AiSettings } from "./aiSettings";

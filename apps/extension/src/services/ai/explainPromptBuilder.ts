@@ -1,3 +1,9 @@
+/**
+ * @purpose 按选中内容是单词/短语/句子构造 system prompt。
+ * @role    explainClient 请求前的一步，决定输出形状。
+ * @deps    无
+ * @gotcha  prompt 与 explainSchema 必须成对修改；非单词时要求 partOfSpeech 返回空串
+ */
 export interface ExplainPromptInput {
   selectedText: string;
   context: string;

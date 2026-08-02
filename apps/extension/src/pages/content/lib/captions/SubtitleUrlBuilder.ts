@@ -1,3 +1,9 @@
+/**
+ * @purpose 根据轨道描述符拼出可下载的字幕 URL（默认 json3 格式）。
+ * @role    SubtitleRepository 下载前的最后一步。
+ * @deps    captions/types、URL
+ * @gotcha  requestUrl 存在时要补 xorb/xobt/xovt 参数，否则 YouTube 返回空文档
+ */
 import { CaptionTrackDescriptor } from "./types";
 
 export interface SubtitleUrlOptions {

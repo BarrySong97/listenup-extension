@@ -1,3 +1,9 @@
+/**
+ * @purpose 自建下拉菜单：支持子菜单、选中态、图标，并做全局互斥只开一个。
+ * @role    扩展内所有下拉的唯一实现，替代 HeroUI Dropdown。
+ * @deps    framer-motion、@iconify/react
+ * @gotcha  HeroUI Dropdown 的 portal 会挂到 Shadow Root 外而丢样式，所以必须用这个；见 docs/decisions/0001-content-script-shadow-dom.md
+ */
 import React, {
   cloneElement,
   useEffect,
