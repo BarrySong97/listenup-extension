@@ -2,7 +2,7 @@
  * @purpose 落地页唯一页面：导航、主标题、macOS / Chrome 下载 CTA 与右侧桌面端窗口 mock。
  * @role    站点主体内容。
  * @deps    @heroui/react 的 Link、next/link、@listenup/mock-ui 的 SubtitlePanelMock / LogoMark
- * @gotcha  下载按钮用 Link 而不是 Button（HeroUI v3 的 Button 不是链接）；MAC_DOWNLOAD_URL 指向 releases/latest，CHROME_EXTENSION_URL 指向正式商店条目，VERSION 是手写常量，发版后要同步
+ * @gotcha  下载按钮用 Link 而不是 Button；macOS 永远指向 releases/latest，页面不展示手写版本号，避免发版时漂移
  */
 import { Link } from "@heroui/react";
 import { LogoMark, SubtitlePanelMock } from "@listenup/mock-ui";
@@ -15,7 +15,6 @@ const MAC_DOWNLOAD_URL =
 const CHROME_EXTENSION_URL =
   "https://chromewebstore.google.com/detail/nocahdalbgboblhbjkacpneakljldfjh";
 const GITHUB_URL = "https://github.com/BarrySong97/listenup-extension";
-const VERSION = "v0.3.0";
 
 export default function Home() {
   return (
@@ -39,7 +38,6 @@ export default function Home() {
             >
               GitHub
             </a>
-            <span className="font-mono text-[12.5px] text-black/40">{VERSION}</span>
           </div>
         </div>
       </nav>
@@ -75,9 +73,6 @@ export default function Home() {
             >
               <AppleIcon />
               Download for macOS
-              <span className="font-mono text-[12px] font-normal text-white/55">
-                {VERSION}
-              </span>
             </Link>
             <Link
               href={CHROME_EXTENSION_URL}

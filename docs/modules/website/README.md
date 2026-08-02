@@ -34,13 +34,14 @@ next.config.ts      transpilePackages: @listenup/mock-ui；BUILD_STATIC=1 时切
 
 - 部署产物：`apps/website/out/`（`pnpm build:web:static`）
 - 站点 URL 常量写死在 `layout.tsx` 的 `SITE_URL`；换自定义域名要改这里
-- Desktop 展示版本写死在 `page.tsx` 的 `VERSION`，当前为 `v0.3.0`；每次 Desktop 发版必须同步
+- 页面不展示 Desktop 版本号；下载链接永远走 `/releases/latest`，发版不需要修改落地页
 
 ## 注意事项
 
 🚨 **必须保持可静态导出**（[ADR-0004](../../decisions/0004-website-static-export.md)）：不得新增 API route、`headers()`、cookies / 动态渲染。任何一条都会让 `pnpm build:web:static` 失败，Cloudflare Pages 随之挂掉。改完务必跑一次静态构建，不要只跑 `pnpm build:website`。
 
 - **HeroUI v3 的 `Button` 不是链接**。下载 CTA 用 `Link` 组件套按钮样式，别用 `Button` + `onPress` 跳转。
+- **不要重新加手写版本号**。官网无法从静态构建可靠感知下一次 GitHub Release，显示常量只会产生漂移。
 - Chrome Extension CTA 使用 `page.tsx` 内联的 Chrome Web Store 品牌 SVG，与 Post 官网同源（SVG Logos，MIT），不要替换成扩展自身的产品图标。
 - HeroUI v3 版本由根 `pnpm-workspace.yaml` 的 `catalog` 统一（`@heroui/react` / `@heroui/styles` 写 `"catalog:"`）。扩展用的是 HeroUI **v2**，不走这个 catalog，别互相"对齐"。
 - **`app/_components/` 目前是未接线的遗留代码**：`page.tsx` 只用 `@listenup/mock-ui`，没有引用 `ExtensionPanel` / `ScriptedPanel`，因此 `_components/extension/` 那棵树也整体没被用到。它们是早期版本落地页的演示组件——想复用就接回页面，不打算用就删掉，别让它继续以"看起来在用"的样子留着。
