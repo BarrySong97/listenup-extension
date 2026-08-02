@@ -211,14 +211,20 @@ const StatusDot = ({ connected }: { connected: boolean }) => (
   />
 );
 
-const UpdateNotice = ({ state }: { state: DesktopUpdateState }) => {
+const UpdateNotice = ({
+  state,
+  onInstall,
+}: {
+  state: DesktopUpdateState;
+  onInstall: () => void;
+}) => {
   if (!state.message) return null;
   const isError = state.phase === "error";
   const isSuccess = state.phase === "current" || state.phase === "installed";
 
   return (
     <div
-      className={`pointer-events-none absolute left-1/2 top-3 z-40 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] shadow-lg backdrop-blur-xl ${
+      className={`absolute left-1/2 top-3 z-40 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] shadow-lg backdrop-blur-xl ${state.phase === "available" ? "pointer-events-auto" : "pointer-events-none"} ${
         isError
           ? "border-red-400/30 bg-red-950/90 text-red-100"
           : isSuccess
@@ -233,7 +239,19 @@ const UpdateNotice = ({ state }: { state: DesktopUpdateState }) => {
       )}
       {isError && <Icon icon="mdi:alert-circle-outline" className="h-3.5 w-3.5 flex-none" />}
       {isSuccess && <Icon icon="mdi:check-circle-outline" className="h-3.5 w-3.5 flex-none" />}
+      {state.phase === "available" && (
+        <Icon icon="mdi:update" className="h-3.5 w-3.5 flex-none" />
+      )}
       <span className="truncate">{state.message}</span>
+      {state.phase === "available" && (
+        <button
+          type="button"
+          className="h-6 flex-none cursor-pointer rounded-full border border-white/15 bg-white/15 px-2 text-[10px] font-medium text-fg transition-colors hover:bg-white/25"
+          onClick={onInstall}
+        >
+          立即更新
+        </button>
+      )}
     </div>
   );
 };
@@ -598,7 +616,10 @@ export default function App() {
         className="group relative flex h-full cursor-grab select-none items-center justify-center overflow-hidden rounded-2xl bg-glass-cinema px-5 py-2 active:cursor-grabbing"
         data-tauri-drag-region
       >
-        <UpdateNotice state={updater.state} />
+        <UpdateNotice
+          state={updater.state}
+          onInstall={() => void updater.installAvailableUpdate()}
+        />
         <div
           className="min-w-0 text-center [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]"
           data-tauri-drag-region
@@ -710,7 +731,10 @@ export default function App() {
     <main
       className={`${shellClassName} relative grid grid-rows-[auto_minmax(0,1fr)_auto]`}
     >
-      <UpdateNotice state={updater.state} />
+      <UpdateNotice
+        state={updater.state}
+        onInstall={() => void updater.installAvailableUpdate()}
+      />
       <header
         className="min-w-0 border-b border-hairline pb-2.5 pl-3.5 pr-3 pt-3"
         data-tauri-drag-region

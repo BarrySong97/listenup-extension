@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原始音轨选轨、Desktop hover、CLI/DMG/updater 发布边界与 migration 不漂移。
+ * @purpose 校验环境标识、Native 协议、原始音轨、Desktop hover/启动更新、CLI/updater 发布边界与 migration 不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover 缺口、sidecar/updater 发布缺口、watcher 或轮询。
+ * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、sidecar/updater 发布缺口或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -234,6 +234,23 @@ assert.match(
   /showCinemaToolbarHint \? "opacity-100" : "opacity-0"/,
   "cinema toolbar must remain discoverable while native hover tracking recovers"
 );
+assert.match(
+  desktopAppSource,
+  />\s*立即更新\s*<\/button>/,
+  "startup update notice must require an explicit user action"
+);
+
+const desktopUpdaterSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src/useDesktopUpdater.ts"),
+  "utf8"
+);
+assert.match(desktopUpdaterSource, /launchCheckStartedRef/);
+assert.match(
+  desktopUpdaterSource,
+  /runUpdateCheck\(\{ installWhenAvailable: false, silent: true \}\)/,
+  "launch update check must stay silent and must not install automatically"
+);
+assert.match(desktopUpdaterSource, /phase: "available"/);
 
 const cliSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/src/cli/mod.rs"),

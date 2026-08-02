@@ -187,10 +187,12 @@ GUI 启动时会在 `~/Library/Application Support/Google/Chrome/NativeMessaging
 
 ## 应用内更新
 
-正式版在列表标题栏和菜单栏 tray 都提供“检查更新”。两处入口最终都调用 `useDesktopUpdater`：
+正式版启动后由 `useDesktopUpdater` 静默检查一次；没有新版或检查失败时不打扰用户，发现新版
+则持续显示“发现新版本 vX / 立即更新”。启动检查只提示，绝不自动下载、安装或重启。列表
+标题栏和菜单栏 tray 仍提供用户主动触发的“检查更新”：
 
 1. 从 GitHub 最新已发布 Release 的 `latest.json` 检查 SemVer；
-2. 有新版本时直接下载并展示进度；
+2. 启动检查发现新版时等待用户点击“立即更新”；主动检查发现新版时直接进入下载；
 3. Tauri updater 用内置公钥验证 `.app.tar.gz.sig`，验签失败立即拒绝安装；
 4. 安装完成后通过 process plugin 重启应用。
 
