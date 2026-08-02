@@ -1,15 +1,19 @@
 /**
  * @purpose 为 Tauri bundle 预编译 listenup CLI，并按 sidecar 目标三元组命名。
  * @role    tauri.conf beforeBuildCommand；让 production/DEV .app 都带同一安全 CLI。
- * @deps    node:child_process、node:fs、rustc、cargo
- * @gotcha  跨平台构建必须由 TAURI_ENV_TARGET_TRIPLE 或 LISTENUP_CLI_TARGET 明确目标。
+ * @deps    node:child_process、node:fs、rustc、cargo、packages/listenup-cli/package.json
+ * @gotcha  sidecar 显式注入独立 CLI 版本；跨平台构建必须明确目标。
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const desktopRoot = process.cwd();
 const tauriRoot = join(desktopRoot, "src-tauri");
+const cliPackage = JSON.parse(
+  readFileSync(join(desktopRoot, "../../packages/listenup-cli/package.json"), "utf8")
+);
+const cliVersion = process.env.LISTENUP_CLI_VERSION ?? cliPackage.version;
 const configuredTarget =
   process.env.LISTENUP_CLI_TARGET ?? process.env.TAURI_ENV_TARGET_TRIPLE;
 const rustc = spawnSync("rustc", ["-vV"], { encoding: "utf8" });
@@ -32,7 +36,10 @@ const cargoArgs = [
   "listenup",
 ];
 if (configuredTarget) cargoArgs.push("--target", target);
-const cargo = spawnSync("cargo", cargoArgs, { stdio: "inherit" });
+const cargo = spawnSync("cargo", cargoArgs, {
+  env: { ...process.env, LISTENUP_CLI_VERSION: cliVersion },
+  stdio: "inherit",
+});
 if (cargo.status !== 0) process.exit(cargo.status ?? 1);
 
 const executable = process.platform === "win32" ? "listenup.exe" : "listenup";

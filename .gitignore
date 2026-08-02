@@ -395,3 +395,7 @@ apps/website/out/
 
 #generated manifest
 apps/extension/public/manifest.json
+
+# local npm publishing credentials and generated CLI package
+/.npmrc
+/packages/listenup-cli/npm/

@@ -1,0 +1,27 @@
+{
+  "name": "@barrysongdev4real/listenup-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Safe local CLI for reading ListenUp subtitles and importing AI translations.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "bin": {
+    "listenup": "./bin/listenup.mjs"
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "pack:dry": "pnpm build && node ./scripts/pack-dry.mjs",
+    "pack": "pnpm build && npm pack ./npm",
+    "smoke": "node ./scripts/smoke-test.mjs",
+    "publish:npm": "pnpm build && node ./scripts/publish-npm.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ]
+}

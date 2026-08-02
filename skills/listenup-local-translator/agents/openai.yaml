@@ -1,0 +1,4 @@
+interface:
+  display_name: "ListenUp Local Translator"
+  short_description: "Translate local ListenUp subtitles safely"
+  default_prompt: "Use $listenup-local-translator to translate a ListenUp video with my local AI."

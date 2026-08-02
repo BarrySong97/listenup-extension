@@ -1,7 +1,7 @@
 // @purpose 提供 listenup CLI 的安全命令面，让外部 AI 读取原字幕并校验、提交完整译文。
 // @role    独立 CLI binary 与 database/domain 共享层之间的参数解析和输出适配。
-// @deps    clap、database、domain、serde_json
-// @gotcha  apply/delete 默认 dry-run；只有显式 --commit 才能修改数据库，不提供任意 SQL。
+// @deps    clap、database、domain、serde_json、build.rs 注入的 LISTENUP_CLI_VERSION
+// @gotcha  CLI 版本独立于 Desktop；apply/delete 默认 dry-run，只有显式 --commit 才修改数据库。
 
 use crate::{database::SubtitleDatabase, domain::TranslationDocument};
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -19,7 +19,7 @@ enum Environment {
 #[derive(Debug, Parser)]
 #[command(
     name = "listenup",
-    version,
+    version = env!("LISTENUP_CLI_VERSION"),
     about = "Read and manage ListenUp Desktop subtitles"
 )]
 struct Cli {

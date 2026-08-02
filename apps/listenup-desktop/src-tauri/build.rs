@@ -1,7 +1,7 @@
-// @purpose 构建脚本：从环境矩阵注入 Extension、Host 与 Desktop 编译期标识，再走 tauri_build。
+// @purpose 构建脚本：注入环境矩阵与独立 CLI 版本，再走 tauri_build。
 // @role    dev / production 两个 app 隔离的 Rust 配置入口。
-// @deps    tauri-build、serde_json、config/listenup-environments.json
-// @gotcha  缺省按 production；socket、Host 注册和 allowed origin 都依赖这里注入的值。
+// @deps    tauri-build、serde_json、config/listenup-environments.json、LISTENUP_CLI_VERSION
+// @gotcha  CLI 发布版本与 Desktop/Cargo 版本解耦；缺省仅供开发构建回退 Cargo package 版本。
 use serde::Deserialize;
 use std::{fs, path::PathBuf};
 
@@ -23,6 +23,7 @@ struct Environments {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=LISTENUP_ENV");
+    println!("cargo:rerun-if-env-changed=LISTENUP_CLI_VERSION");
     let config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../../config/listenup-environments.json");
     println!("cargo:rerun-if-changed={}", config_path.display());
@@ -60,5 +61,8 @@ fn main() {
         "cargo:rustc-env=LISTENUP_DEEP_LINK_SCHEME={}",
         environment.deep_link_scheme
     );
+    let cli_version = std::env::var("LISTENUP_CLI_VERSION")
+        .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string());
+    println!("cargo:rustc-env=LISTENUP_CLI_VERSION={cli_version}");
     tauri_build::build()
 }

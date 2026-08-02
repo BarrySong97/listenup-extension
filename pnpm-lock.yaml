@@ -234,6 +234,8 @@ importers:
         specifier: ^5
         version: 5.9.2
 
+  packages/listenup-cli: {}
+
   packages/mock-ui:
     dependencies:
       react:
