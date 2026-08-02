@@ -18,6 +18,26 @@
 
 ## CI
 
+## Chrome Web Store 手工发布
+
+Extension 版本唯一来源是 `apps/extension/package.json`，Vite 构建时写入 production
+manifest。商店包必须从版本提交的干净 worktree 生成：
+
+```bash
+pnpm --filter @listenup/extension test
+pnpm build:extension
+node scripts/check-environment-identifiers.mjs
+```
+
+打包前确认 `dist_chrome/manifest.json` 的 `version`、正式名称、MV3 与 `nativeMessaging`，并
+确认没有 `key`、DEV 名称、DEV Host 或 `listenup-dev`。zip 根目录必须直接是
+`manifest.json`，不能多包一层 `dist_chrome/`；记录 zip 的 SHA-256 后再上传。
+
+Chrome Web Store 的更新流程采用 deferred publishing：上传到现有条目，提交审核前关闭
+自动发布。审核期间和通过审核后的 staged 阶段都不会影响线上用户；配套 Desktop 上线并
+完成回归后，才在商店后台手动发布。审核中发现问题就取消审核，staged 版本发现问题就撤回
+并重新上传；不要为了抢版本重复提交同一 zip。
+
 ### `.github/workflows/ci.yml` — Build and Zip Chrome Extension
 
 **只有 `workflow_dispatch`**，不在 push / PR 上跑。装依赖（`--frozen-lockfile`）→ `pnpm build:chrome` → 上传 `apps/extension/dist_chrome` 作为 artifact。Node 版本取自 `.nvmrc`，pnpm 钉 `10.14.0`。
