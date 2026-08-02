@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原始音轨、Desktop hover/启动更新、CLI/updater 发布边界与 migration 不漂移。
+ * @purpose 校验环境标识、Native 协议、原始音轨、Desktop hover/启动更新/本地 bundle 清理、CLI/updater 发布边界与 migration 不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、sidecar/updater 发布缺口或轮询。
+ * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -15,6 +15,7 @@ const readJson = async (path) =>
   JSON.parse(await readFile(resolve(ROOT, path), "utf8"));
 
 const environments = await readJson("config/listenup-environments.json");
+const rootPackage = await readJson("package.json");
 const production = environments.production;
 const development = environments.development;
 
@@ -95,6 +96,32 @@ assert.deepEqual(developmentTauri.bundle.externalBin, [
   "target/sidecars/listenup",
 ]);
 assert.deepEqual(cliTauri.bundle.externalBin, ["target/sidecars/listenup"]);
+
+assert.equal(
+  rootPackage.scripts["clean:desktop:bundles"],
+  "node apps/listenup-desktop/scripts/clean-bundle-artifacts.mjs",
+  "local Desktop app bundles need one stable cleanup command"
+);
+const cleanBundleSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/scripts/clean-bundle-artifacts.mjs"),
+  "utf8"
+);
+assert.match(cleanBundleSource, /resolve\(desktopRoot, "src-tauri", "target"\)/);
+assert.match(cleanBundleSource, /listenUpAppPattern/);
+assert.doesNotMatch(
+  cleanBundleSource.replace(/\/\*\*[\s\S]*?\*\//, ""),
+  /rm\([^\n]*Applications/,
+  "bundle cleanup must never delete an installed app"
+);
+const releaseGuideSource = await readFile(
+  resolve(ROOT, "docs/topics/release-and-distribution.md"),
+  "utf8"
+);
+assert.match(
+  releaseGuideSource,
+  /每次本地完整构建或 bundle 手工回归结束后，必须运行 `pnpm clean:desktop:bundles`/,
+  "release docs must require cleanup after every local app bundle test"
+);
 
 const prepareCliSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/scripts/prepare-cli.mjs"),

@@ -34,6 +34,7 @@ src-tauri/Info.plist   深链接 scheme（由 gen-info-plist.mjs 生成，不要
 src-tauri/capabilities/default.json   窗口尺寸、updater 安装与进程重启权限声明
 scripts/gen-info-plist.mjs      按 LISTENUP_ENV 生成 Info.plist，构建前自动跑
 scripts/prepare-cli.mjs         构建 listenup sidecar 并放入 .app
+scripts/clean-bundle-artifacts.mjs  本地 bundle 回归后删除 target 下 `.app`，避免系统登记重复应用
 scripts/native-environment.mjs  读取正式/DEV 单一环境矩阵
 scripts/install-host.mjs        自动注册之外的 Host manifest 手动修复工具
 scripts/uninstall-host.mjs      卸载
@@ -175,6 +176,12 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 | 扩展名字 | ListenUp | ListenUp DEV |
 
 标识唯一权威是根目录 `config/listenup-environments.json`。`build.rs` 把选中环境注入 Rust，Vite 把 Host / deep link 注入扩展；`scripts/check-environment-identifiers.mjs` 校验 Tauri overlay、DEV key 和权限没有漂移。见 [ADR-0002](../../decisions/0002-dev-prod-separate-desktop-apps.md)。
+
+本地 `pnpm build:desktop` / `pnpm build:desktop:dev` 会在 `src-tauri/target/**/bundle/macos/`
+生成 `.app`。即使没有复制到 `/Applications`，macOS 也可能把这些 bundle 登记成重复应用。
+每次完整构建或手工 bundle 回归结束后必须运行 `pnpm clean:desktop:bundles`；DEV 日常只通过
+`pnpm dev:desktop` 启动，`/Applications` 只保留一份正式版。详见
+[构建产物与分发](../../topics/release-and-distribution.md#本地-app-清理)。
 
 ## Native Host 自动注册
 

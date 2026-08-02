@@ -13,6 +13,7 @@
     "build:web:static": "BUILD_STATIC=1 pnpm --filter @listenup/website build",
     "build:desktop": "pnpm --filter @listenup/desktop tauri:build",
     "build:desktop:dev": "pnpm --filter @listenup/desktop tauri:build:dev",
+    "clean:desktop:bundles": "node apps/listenup-desktop/scripts/clean-bundle-artifacts.mjs",
     "dev": "turbo run dev --parallel",
     "dev:extension": "pnpm --filter @listenup/extension dev",
     "dev:chrome": "pnpm --filter @listenup/extension dev:chrome",

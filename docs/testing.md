@@ -29,6 +29,7 @@ pnpm build:web:static                                                    # 改�
 pnpm --filter @listenup/desktop build                                    # 改桌面前端
 cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml    # 改 Rust
 cargo build --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml --bin listenup # 改 CLI
+pnpm clean:desktop:bundles                                               # 本地完整 bundle 回归后必跑
 node scripts/check-docs.mjs                                              # 永远要跑
 ```
 
@@ -109,6 +110,8 @@ node scripts/check-docs.mjs                                              # 永�
   配额限制的 `api.github.com/.../releases/assets/...`
 - 从 `releases/latest` 下载 updater tarball / `.sig`，SHA-256 与资产元数据一致，并用
   `tauri.conf.json` 内置公钥独立验签成功
+- 本地 `.app` 回归结束后运行 `pnpm clean:desktop:bundles`；`target/**/bundle/macos/` 不残留
+  `ListenUp*.app`，`/Applications` 只保留正式版，DEV 只从 `pnpm dev:desktop` 启动
 
 ### 改 Website
 

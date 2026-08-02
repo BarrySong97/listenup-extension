@@ -16,6 +16,22 @@
 
 以上全是生成物，都不要手工编辑或提交（`.gitignore` 已覆盖 `dist*/`、`apps/website/out/`、`*.zip`）。
 
+## 本地 `.app` 清理
+
+macOS LaunchServices 会登记磁盘任意位置的 `.app`，所以 Tauri 留在
+`apps/listenup-desktop/src-tauri/target/**/bundle/macos/` 下的 bundle 也会被系统显示成另一份
+“已安装” ListenUp。它们只是本地构建产物，但会造成 Finder、打开方式和自动化工具看到多个
+同 bundle ID 应用。
+
+- 正式发布以 GitHub Actions 的 tag 构建为准；只有需要本地 bundle 回归时才运行
+  `pnpm build:desktop` / `pnpm build:desktop:dev`。
+- 每次本地完整构建或 bundle 手工回归结束后，必须运行 `pnpm clean:desktop:bundles`，删除
+  `target/**/bundle/macos/ListenUp*.app`。
+- DEV 日常只运行 `pnpm dev:desktop`，不要把 `ListenUp Desktop DEV.app` 复制到
+  `/Applications`。`/Applications` 只保留一份正式 `ListenUp Desktop.app`。
+- 清理命令只删除仓库 `target` 下可重新生成的 `.app`，不会触碰 `/Applications`、SQLite、
+  Native Messaging manifest 或其他用户数据。
+
 ## CI
 
 ## Chrome Web Store 手工发布
