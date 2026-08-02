@@ -3,7 +3,8 @@ name: Release ListenUp Desktop (macOS)
 # Builds the Apple Silicon (arm64) macOS app and publishes a DMG to a GitHub
 # Release. Apple signing & notarization are OPTIONAL — engaged only when the Apple
 # secrets are present; otherwise the build is unsigned (users right-click →
-# Open on first launch).
+# Open on first launch). Tauri notarizes the app before creating the DMG, so this
+# workflow separately notarizes/staples the finished DMG and replaces the draft asset.
 # Tauri updater signing is REQUIRED so installed apps can verify every update.
 #
 # Trigger by pushing a version tag, e.g.:
@@ -126,3 +127,22 @@ jobs:
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
           args: --target aarch64-apple-darwin --bundles app,dmg --config src-tauri/tauri.cli.conf.json
+
+      - name: Notarize and replace DMG
+        if: env.APPLE_API_KEY_PATH != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./apps/listenup-desktop/src-tauri/tauri.conf.json').version")"
+          DMG_PATH="apps/listenup-desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/ListenUp Desktop_${VERSION}_aarch64.dmg"
+          UPLOAD_PATH="$RUNNER_TEMP/ListenUp.Desktop_${VERSION}_aarch64.dmg"
+          test -f "$DMG_PATH"
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          cp "$DMG_PATH" "$UPLOAD_PATH"
+          gh release upload "v${VERSION}" "$UPLOAD_PATH" --clobber

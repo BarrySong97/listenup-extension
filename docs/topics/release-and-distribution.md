@@ -56,6 +56,9 @@ Chrome Web Store 的更新流程采用 deferred publishing：上传到现有条�
    Tauri 的 `TAURI_CONFIG`，避免干净 runner 在 sidecar 生成前触发 `externalBin` 校验；随后
    `tauri-action` 构建 `--bundles app,dmg`，同时上传 `.app.tar.gz`、`.sig` 和 `latest.json`，
    发布为 **draft** release
+6. Tauri 会先公证 `.app`、再创建并签名 DMG；因此 workflow 在 DMG 生成后单独用
+   `notarytool` 公证并 staple DMG，再以相同资产名 `--clobber` 草稿中的预公证 DMG。发布前
+   必须让 Gatekeeper 同时接受 DMG 容器和其中 `.app`
 
 正式 Desktop 内含 Host 自动注册逻辑。用户安装后首次启动，app 会写入只允许正式扩展 `nocahdalbgboblhbjkacpneakljldfjh` 的 `com.listenup.desktop` manifest；DEV build 写入另一份 `.dev` manifest，不会覆盖正式环境。
 

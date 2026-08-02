@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原语选轨、CLI 构建/数据边界与 migration 不会漂移。
+ * @purpose 校验环境标识、Native 协议、原语选轨、CLI/DMG 发布边界与 migration 不会漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/selector、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语优先、协议 v2、环境串库、sidecar 自举失败、watcher 或轮询。
+ * @gotcha  ADR-0008：不得恢复英语优先、环境串库、sidecar/DMG 发布缺口、watcher 或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -104,6 +104,22 @@ assert.match(
   prepareCliSource,
   /delete cargoEnvironment\.TAURI_CONFIG/,
   "CLI sidecar bootstrap must not inherit Tauri's externalBin overlay"
+);
+
+const desktopReleaseWorkflow = await readFile(
+  resolve(ROOT, ".github/workflows/release-desktop.yml"),
+  "utf8"
+);
+assert.match(
+  desktopReleaseWorkflow,
+  /xcrun notarytool submit "\$DMG_PATH"/,
+  "release workflow must notarize the finished DMG, not only the app bundle"
+);
+assert.match(desktopReleaseWorkflow, /xcrun stapler staple "\$DMG_PATH"/);
+assert.match(
+  desktopReleaseWorkflow,
+  /gh release upload "v\$\{VERSION\}" "\$UPLOAD_PATH" --clobber/,
+  "release workflow must replace the pre-notarization draft DMG asset"
 );
 
 const protocolSource = await readFile(

@@ -32,8 +32,8 @@ macOS arm64 二进制；Skill 通过受限 CLI 完成字幕翻译文档的 dry-r
 7. [x] 上传现有 Chrome Web Store 条目，关闭自动发布并提交审核。
 8. [x] 实现 Desktop 无译文引导、Markdown 模板和只写文本的最小剪贴板权限。
 9. [x] 升级 Desktop 到 `0.3.0`，完成前端、Rust、聚焦刷新和真实视频手工回归。
-10. [ ] 推送 Desktop commit 与 `v0.3.0`；修复干净 CI 的 sidecar 自举后，核对 draft Release
-    资产和签名并发布。
+10. [ ] 推送 Desktop commit 与 `v0.3.0`；修复干净 CI 的 sidecar 自举和成品 DMG 公证后，
+    核对 draft Release 资产、Gatekeeper 与 updater 签名并发布。
 11. [ ] Desktop 上线后手动发布已通过审核的 Extension `1.5.0`。
 
 ## 风险 / 注意

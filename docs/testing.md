@@ -96,6 +96,10 @@ node scripts/check-docs.mjs                                              # 永�
 - production/DEV `.app` 都包含 `listenup` sidecar，CLI 构建不修改 shell profile
 - 在不存在预生成 `target/sidecars/listenup-*` 时，带 Tauri `TAURI_CONFIG` overlay 的
   `prepare-cli.mjs` 仍能从零构建 sidecar（内部 Cargo 不继承该 overlay）
+- 从公开 Release 下载 DMG 后，容器和内部 `.app` 都通过 `codesign` / Gatekeeper，且两者的
+  stapled 公证票据可验证；不能只依据 CI 中 `.app` 的 `Accepted` 日志
+- 从 `releases/latest` 下载 updater tarball / `.sig`，SHA-256 与资产元数据一致，并用
+  `tauri.conf.json` 内置公钥独立验签成功
 
 ### 改 Website
 
