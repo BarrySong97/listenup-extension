@@ -88,7 +88,7 @@ node scripts/check-docs.mjs                                              # 永�
 - `subtitle get` 的 video/track/revision/segment ID 能组成版本 1 translation document
 - `translation apply --dry-run` 不改变 `translation list`；`--commit` 后能 get 到完整译文
 - 合并相邻原句、拆分同一原句可导入；漏句、倒序、部分交叉、过期 revision 被拒绝且旧译文不变
-- 列表和影院工具条都能切换原语、译文、双语，且两种窗口形态共享当前模式；无首选译文时明确回退原语
+- 列表和影院工具条都能切换原语、译文、双语，且两种窗口形态共享当前模式；列表切换后当前时间对应字幕立即重新居中，继续播放仍逐块自动跟随；无首选译文时明确回退原语
 - 无译文时列表显示居中引导、影院显示紧凑入口；复制内容含固定 Skill / CLI 版本、视频与原语元数据，并要求先询问目标语言
 - 剪贴板 capability 只有 `clipboard-manager:allow-write-text`，复制成功 / 失败都有可恢复反馈
 - CLI 提交期间 Desktop 不自动变化；切回 Desktop 后 focus refetch 显示新译文

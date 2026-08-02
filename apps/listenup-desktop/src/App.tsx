@@ -2,7 +2,7 @@
  * @purpose 字幕窗口 UI：实时同步、SQLite 冷启动、原语/译文/双语、列表/影院与多视频选择。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  新 live session 立即接管缓存；CLI 译文只靠 query focus refetch，不监听 SQLite；缺译文入口只复制指令。
+ * @gotcha  新 live session 立即接管缓存；CLI 译文只靠 query focus refetch，不监听 SQLite；切换字幕数据集后要等 VList 提交再重新居中。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -255,7 +255,10 @@ export default function App() {
     useState<TranslationCopyStatus>("idle");
   const modeRef = useRef(mode);
   const vListRef = useRef<VListHandle>(null);
-  const lastScrolledSessionRef = useRef<string | null>(null);
+  const lastScrolledViewRef = useRef<{
+    sessionId: string | null;
+    blocks: DisplayBlock[];
+  } | null>(null);
   const scrollIdleTimerRef = useRef<number | null>(null);
   const updater = useDesktopUpdater({ enabled: !IS_DEV_BUILD });
   const liveSession = viewer.activeSession;
@@ -517,7 +520,13 @@ export default function App() {
         translationText: null,
       })) ?? []
     );
-  }, [effectiveSubtitleMode, session, subtitleQuery.data]);
+  }, [
+    effectiveSubtitleMode,
+    session?.status,
+    session?.subtitles,
+    subtitleQuery.data?.source.segments,
+    subtitleQuery.data?.translation,
+  ]);
   const currentIndex = useMemo(() => {
     if (!cursor) return -1;
     return displayBlocks.findIndex(
@@ -545,14 +554,19 @@ export default function App() {
     if (mode !== "list" || currentIndex < 0 || !vListRef.current) return;
 
     const sessionId = session?.sessionId ?? null;
-    const isNewSession = lastScrolledSessionRef.current !== sessionId;
-    lastScrolledSessionRef.current = sessionId;
+    const isNewView =
+      lastScrolledViewRef.current?.sessionId !== sessionId ||
+      lastScrolledViewRef.current?.blocks !== displayBlocks;
+    lastScrolledViewRef.current = { sessionId, blocks: displayBlocks };
 
-    vListRef.current.scrollToIndex(currentIndex, {
-      align: "center",
-      smooth: !isNewSession,
+    const frame = window.requestAnimationFrame(() => {
+      vListRef.current?.scrollToIndex(currentIndex, {
+        align: "center",
+        smooth: !isNewView,
+      });
     });
-  }, [currentIndex, session?.sessionId, mode]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentIndex, displayBlocks, session?.sessionId, mode]);
 
   const connectionLabel = connected ? "已连接" : "等待扩展连接";
   const playbackLabel = useMemo(() => {
