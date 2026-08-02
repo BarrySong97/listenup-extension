@@ -396,6 +396,13 @@ apps/website/out/
 #generated manifest
 apps/extension/public/manifest.json
 
+# extension signing keys (private)
+apps/extension/.keys/
+
+# local agent runtime state and generated Chrome Web Store screenshots
+/.superpowers/
+/apps/extension/store-assets/
+
 # local npm publishing credentials and generated CLI package
 /.npmrc
 /packages/listenup-cli/npm/
