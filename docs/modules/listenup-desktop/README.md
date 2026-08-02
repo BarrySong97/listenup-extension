@@ -193,7 +193,8 @@ GUI 启动时会在 `~/Library/Application Support/Google/Chrome/NativeMessaging
 签名分两层：现有 Apple Developer ID / 公证负责 macOS 对 `.app` 的系统信任；Tauri updater 的 minisign 密钥负责更新包来源校验。updater 公钥提交在 `tauri.conf.json`，私钥只允许存在于本机安全备份和 GitHub Actions 的 `TAURI_SIGNING_PRIVATE_KEY` Secret，不能提交仓库。
 
 发布 CI 还会在 Tauri 创建 DMG 后再次提交 Apple 公证并 staple DMG，再替换 Draft Release
-里同名的预公证资产。只看到 `.app` 公证 `Accepted` 不算完成：公开 DMG 和内部 `.app` 都必须
+里同名的预公证资产；全部必需步骤成功后自动发布 Release，任一步失败则保持草稿且不进入
+`releases/latest`。只看到 `.app` 公证 `Accepted` 不算完成：公开 DMG 和内部 `.app` 都必须
 通过 Gatekeeper，updater `.app.tar.gz` 还必须通过内置 minisign 公钥验签。
 
 DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.json` 也关闭 updater artifact 生成。首个带 updater 的正式版本仍需用户手工安装一次，从下一版开始才能应用内更新。

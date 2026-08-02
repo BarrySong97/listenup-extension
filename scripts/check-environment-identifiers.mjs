@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原始音轨选轨、无版本官网、CLI/DMG 发布边界与 migration 不会漂移。
+ * @purpose 校验环境标识、Native 协议、原始音轨选轨、无版本官网、CLI/DMG 发布边界、成功后自动发布与 migration 不会漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语/字幕首项优先、官网手写版本、环境串库、sidecar/DMG 发布缺口、watcher 或轮询。
+ * @gotcha  ADR-0008：不得恢复英语/字幕首项优先、官网手写版本、环境串库、sidecar/DMG/自动发布缺口、watcher 或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -120,6 +120,21 @@ assert.match(
   desktopReleaseWorkflow,
   /gh release upload "v\$\{VERSION\}" "\$UPLOAD_PATH" --clobber/,
   "release workflow must replace the pre-notarization draft DMG asset"
+);
+assert.match(
+  desktopReleaseWorkflow,
+  /releaseDraft: true/,
+  "release workflow must keep assets private until post-build checks finish"
+);
+const replaceDmgIndex = desktopReleaseWorkflow.indexOf(
+  'gh release upload "v${VERSION}" "$UPLOAD_PATH" --clobber'
+);
+const publishReleaseIndex = desktopReleaseWorkflow.indexOf(
+  'gh release edit "v${VERSION}" --draft=false'
+);
+assert.ok(
+  publishReleaseIndex > replaceDmgIndex,
+  "release workflow must publish only after the finished DMG is replaced"
 );
 
 const protocolSource = await readFile(

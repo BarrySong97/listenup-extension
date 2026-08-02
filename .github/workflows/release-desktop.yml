@@ -4,7 +4,8 @@ name: Release ListenUp Desktop (macOS)
 # Release. Apple signing & notarization are OPTIONAL — engaged only when the Apple
 # secrets are present; otherwise the build is unsigned (users right-click →
 # Open on first launch). Tauri notarizes the app before creating the DMG, so this
-# workflow separately notarizes/staples the finished DMG and replaces the draft asset.
+# workflow separately notarizes/staples the finished DMG, replaces the draft asset,
+# and publishes the Release only after every preceding step succeeds.
 # Tauri updater signing is REQUIRED so installed apps can verify every update.
 #
 # Trigger by pushing a version tag, e.g.:
@@ -110,7 +111,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build & publish
+      - name: Build draft release
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -146,3 +147,10 @@ jobs:
           xcrun stapler validate "$DMG_PATH"
           cp "$DMG_PATH" "$UPLOAD_PATH"
           gh release upload "v${VERSION}" "$UPLOAD_PATH" --clobber
+
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./apps/listenup-desktop/src-tauri/tauri.conf.json').version")"
+          gh release edit "v${VERSION}" --draft=false
