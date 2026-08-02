@@ -1,0 +1,33 @@
+{
+  "_comment": "check-docs 在 monorepo 下的配置。sourceRoots 设为 apps/packages，模块 = 一级目录名，正好对应 docs/modules/<module>/。",
+  "sourceExts": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".rs"],
+  "sourceRoots": ["apps", "packages"],
+  "ignoreDirs": [
+    "node_modules",
+    ".git",
+    "dist",
+    "dist_chrome",
+    "dist_chrome_dev",
+    "dist_firefox",
+    "dist_firefox_dev",
+    "build",
+    ".next",
+    "out",
+    "target",
+    "gen",
+    "coverage",
+    ".turbo",
+    ".cache",
+    ".wrangler",
+    "vendor",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".idea",
+    ".vscode",
+    "templates"
+  ],
+  "ignoreFiles": ["apps/website/next-env.d.ts"],
+  "nonModuleDirs": ["scripts", "test", "tests", "__tests__", "spec", "bin", "config", "public", "assets", "types", "typings", "migrations"],
+  "docsDir": "docs"
+}
