@@ -10,11 +10,11 @@
 
 ## 执行批次
 
-1. [ ] 清理 `.superpowers/` 与生成的 Chrome Web Store 截图，并补齐 `.gitignore`。
-2. [ ] 提交可复现 Chrome Web Store 截图的 Website 辅助路由，验证静态导出。
-3. [ ] 提交 AI 文档系统迁移：集中模块文档、ADR、源码文件头与仓库导航。
-4. [ ] 提交文档防漂移 sensor、Git hook、Claude / Codex 项目配置。
-5. [ ] 运行 docs sensor、环境隔离检查和受影响应用构建，确认工作区干净后推送。
+1. [x] 清理 `.superpowers/` 与生成的 Chrome Web Store 截图，并补齐 `.gitignore`。
+2. [x] 提交可复现 Chrome Web Store 截图的 Website 辅助路由，验证静态导出。
+3. [x] 提交 AI 文档系统迁移：集中模块文档、ADR、源码文件头与仓库导航。
+4. [x] 提交文档防漂移 sensor、Git hook、Claude / Codex 项目配置。
+5. [x] 运行 docs sensor、环境隔离检查和受影响应用构建，确认工作区干净后推送。
 
 ## 清理原则
 
