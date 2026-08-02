@@ -35,7 +35,8 @@ macOS arm64 二进制；Skill 通过受限 CLI 完成字幕翻译文档的 dry-r
 10. [x] 推送 Desktop commit 与 `v0.3.0`；修复干净 CI 的 sidecar 自举和成品 DMG 公证后，
     核对 draft Release 资产、Gatekeeper 与 updater 签名并发布。公开产物的 SHA-256、minisign、
     DMG 与内置 App 的 Gatekeeper / stapler 验证均通过。
-11. [ ] Desktop 上线后手动发布已通过审核的 Extension `1.5.0`。
+11. [x] Desktop 上线后手动发布已通过审核的 Extension `1.5.0`；Chrome Web Store
+    开发者后台已确认状态为“已发布 - 公开发布”。
 
 ## 风险 / 注意
 
