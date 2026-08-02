@@ -12,6 +12,8 @@ macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标�
 
 ```
 src/App.tsx        窗口 UI：原语 / 译文 / 双语、列表 / 影院、多视频选择、虚拟滚动
+src/TranslationMissingState.tsx  列表 / 影院共用的无译文引导与复制反馈
+src/localAiTranslationPrompt.ts  固定 Skill / CLI 版本的本地 AI Markdown 指令模板
 src/VideoSessionPicker.tsx  多视频冲突与主动改选的全遮罩
 src/useDesktopUpdater.ts    标题栏 / tray 共用的检查、下载、安装、重启更新流程
 src/useSubtitleView.ts      React Query → Tauri SQLite 只读查询
@@ -70,9 +72,12 @@ schema 对象完整时原子修复 migration 元数据，未知不匹配仍拒�
 ## 原语 / 译文 / 双语与刷新
 
 列表 header 提供三种模式和当前 revision 已导入的目标语言。选择保存在 `localStorage`。
-当前视频没有首选译文时回退原语并提示，不拿其他语言代替。列表按 AI 重组后的语义时间块
-显示；影院模式在双语时显示上下两层，并在 hover 工具条中提供原语、译文、双语切换，
-与列表模式共用同一份显示偏好。
+当前视频没有首选译文时不拿其他语言代替：列表模式显示居中的本地 AI 翻译引导，影院模式
+显示同一入口的紧凑按钮。点击只把 Markdown 指令写入系统剪贴板；模板包含视频 / 原语元数据、
+固定 `cli-v0.1.0` Skill URL 和 CLI `0.1.0`，要求 Agent 先询问目标语言、dry-run 后再 commit，
+Desktop 本身不下载 Skill、不安装 CLI、也不内置翻译。已有译文时列表按 AI 重组后的语义时间块
+显示；影院模式在双语时显示上下两层，并在 hover 工具条中提供原语、译文、双语切换，与列表
+模式共用同一份显示偏好。
 
 持久字幕通过 TanStack React Query 调 `get_subtitle_view`。query key 包含 video、模式和
 目标语言；窗口重新聚焦时由 Tauri focus event 触发 refetch。没有 SQLite 文件监测、定时
@@ -144,6 +149,7 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - Tailwind v4（`@tailwindcss/vite`），token 全在 `src/styles.css` 的 `@theme`；只有 `::-webkit-scrollbar` 伪元素保留原生 CSS
 - 列表模式**只用 `--color-glass` 一个背景色**，header / 列表 / footer 保持一致，不要给局部单独加深
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
+- 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限
 - 字幕列表用 `virtua` 的 `VList`，居中用 `scrollToIndex(i, { align: "center", smooth })`，切视频后首跳不做平滑动画
 - 滚动条只在滚动中显示：thumb 平时透明，`onScroll` / `onScrollEnd` 维护 `.scrolling` class
 
@@ -186,7 +192,7 @@ GUI 启动时会在 `~/Library/Application Support/Google/Chrome/NativeMessaging
 
 DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.json` 也关闭 updater artifact 生成。首个带 updater 的正式版本仍需用户手工安装一次，从下一版开始才能应用内更新。
 
-当前发布基线为 `v0.2.1`；`v0.2.0 → v0.2.1` 用作首条真实应用内更新回归链路。
+当前发布基线为 `v0.3.0`；`v0.2.0 → v0.2.1` 用作首条真实应用内更新回归链路。
 
 ## 验证
 

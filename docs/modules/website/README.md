@@ -34,7 +34,7 @@ next.config.ts      transpilePackages: @listenup/mock-ui；BUILD_STATIC=1 时切
 
 - 部署产物：`apps/website/out/`（`pnpm build:web:static`）
 - 站点 URL 常量写死在 `layout.tsx` 的 `SITE_URL`；换自定义域名要改这里
-- Desktop 展示版本写死在 `page.tsx` 的 `VERSION`，当前为 `v0.2.1`；每次 Desktop 发版必须同步
+- Desktop 展示版本写死在 `page.tsx` 的 `VERSION`，当前为 `v0.3.0`；每次 Desktop 发版必须同步
 
 ## 注意事项
 

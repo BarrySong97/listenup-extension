@@ -1,4 +1,4 @@
-// @purpose 桌面端 Rust 入口：GUI/桥接双模式、字幕持久化、session 仲裁、更新插件、NSPanel 与 tray。
+// @purpose 桌面端 Rust 入口：GUI/桥接双模式、字幕持久化、session 仲裁、剪贴板/更新插件、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    database、domain、tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
 // @gotcha  桥接 stdout 被协议独占；ready 字幕先入 SQLite 再发 UI 事件；2+ 播放 session 必须尊重手动锁定。
@@ -865,6 +865,7 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SharedStore::default())

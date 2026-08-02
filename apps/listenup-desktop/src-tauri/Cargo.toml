@@ -1,6 +1,6 @@
 [package]
 name = "listenup-desktop"
-version = "0.2.1"
+version = "0.3.0"
 description = "ListenUp Desktop subtitle viewer"
 authors = ["ListenUp"]
 edition = "2021"
@@ -24,6 +24,7 @@ serde_json = "1"
 sha2 = "0.10"
 sqlx = { version = "0.8", features = ["migrate", "runtime-tokio-rustls", "sqlite"] }
 tauri = { version = "2.11.5", features = ["macos-private-api", "tray-icon", "image-png"] }
+tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-process = "2.3.1"
 tauri-plugin-updater = "2.10.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

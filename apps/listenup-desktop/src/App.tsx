@@ -1,15 +1,21 @@
 /**
  * @purpose 字幕窗口 UI：实时同步、SQLite 冷启动、原语/译文/双语、列表/影院与多视频选择。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
- * @deps    @tauri-apps/api、@tanstack/react-query、virtua、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  新 live session 立即接管缓存；CLI 译文只靠 query focus refetch，不监听 SQLite。
+ * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
+ * @gotcha  新 live session 立即接管缓存；CLI 译文只靠 query focus refetch，不监听 SQLite；缺译文入口只复制指令。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VList, type VListHandle } from "virtua";
+import { buildLocalAiTranslationPrompt } from "./localAiTranslationPrompt";
+import {
+  TranslationMissingState,
+  type TranslationCopyStatus,
+} from "./TranslationMissingState";
 import type {
   CursorState,
   SessionState,
@@ -245,6 +251,8 @@ export default function App() {
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
   const [isListScrolling, setIsListScrolling] = useState(false);
+  const [translationCopyStatus, setTranslationCopyStatus] =
+    useState<TranslationCopyStatus>("idle");
   const modeRef = useRef(mode);
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledSessionRef = useRef<string | null>(null);
@@ -419,6 +427,34 @@ export default function App() {
     localStorage.setItem(TARGET_LANGUAGE_STORAGE_KEY, language);
   }, []);
 
+  const copyLocalAiTranslationPrompt = useCallback(async () => {
+    const source = subtitleQuery.data?.source;
+    if (!source) {
+      setTranslationCopyStatus("error");
+      return;
+    }
+
+    setTranslationCopyStatus("copying");
+    try {
+      await writeText(
+        buildLocalAiTranslationPrompt({
+          videoId: source.videoId,
+          title: source.title,
+          sourceLanguageCode: source.languageCode,
+          sourceLanguageDisplayName: source.displayName,
+        })
+      );
+      setTranslationCopyStatus("copied");
+    } catch (error) {
+      console.error("failed to copy local AI translation prompt", error);
+      setTranslationCopyStatus("error");
+    }
+  }, [subtitleQuery.data?.source]);
+
+  useEffect(() => {
+    setTranslationCopyStatus("idle");
+  }, [subtitleQuery.data?.source.revision]);
+
   const closeWindow = useCallback(() => {
     void getCurrentWindow().close();
   }, []);
@@ -445,7 +481,7 @@ export default function App() {
   const cursor: CursorState | null = session?.cursor ?? null;
   const requestedTranslationMissing = Boolean(
     subtitleMode !== "source" &&
-      targetLanguage &&
+      subtitleQuery.isSuccess &&
       subtitleQuery.data &&
       !subtitleQuery.data.translation
   );
@@ -536,7 +572,13 @@ export default function App() {
           className="min-w-0 text-center [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]"
           data-tauri-drag-region
         >
-          {currentSubtitle ? (
+          {requestedTranslationMissing ? (
+            <TranslationMissingState
+              compact
+              copyStatus={translationCopyStatus}
+              onCopy={() => void copyLocalAiTranslationPrompt()}
+            />
+          ) : currentSubtitle ? (
             <>
               {currentSubtitle.sourceText && (
                 <p
@@ -741,15 +783,15 @@ export default function App() {
             </select>
           )}
         </div>
-        {requestedTranslationMissing && (
-          <p className="m-0 mt-1.5 truncate text-[10px] text-amber-200/80">
-            尚无 {targetLanguage} 译文，已显示原语
-          </p>
-        )}
       </header>
 
       <section className="relative min-h-0 overflow-hidden" aria-live="polite">
-        {emptyMessage ? (
+        {requestedTranslationMissing ? (
+          <TranslationMissingState
+            copyStatus={translationCopyStatus}
+            onCopy={() => void copyLocalAiTranslationPrompt()}
+          />
+        ) : emptyMessage ? (
           <div className="grid min-h-full place-content-center justify-items-center text-center text-fg-muted">
             <div className="mb-3 grid h-8 w-11 place-items-center rounded-[7px] border border-white/25 text-xs font-bold text-fg">
               CC

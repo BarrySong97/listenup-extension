@@ -27,11 +27,11 @@ macOS arm64 二进制；Skill 通过受限 CLI 完成字幕翻译文档的 dry-r
 2. [x] 实现 `@barrysongdev4real/listenup-cli@0.1.0` 的构建、启动、pack 检查和发布脚本。
 3. [x] 创建并验证 `listenup-local-translator` Skill，覆盖目标语言确认、完整映射和安全写库。
 4. [x] 构建 CLI tarball，隔离安装并在 DEV SQLite 的临时备份完成真实往返。
-5. [ ] 创建并推送 `cli-v0.1.0`，发布 npm 后运行 registry、`npx` 与全局安装回归。
-6. [ ] 升级 Extension 到 `1.5.0`，测试并从干净 worktree生成 production zip 与 SHA-256。
-7. [ ] 上传现有 Chrome Web Store 条目，关闭自动发布并提交审核。
-8. [ ] 实现 Desktop 无译文引导、Markdown 模板和只写文本的最小剪贴板权限。
-9. [ ] 升级 Desktop 到 `0.3.0`，完成前端、Rust、聚焦刷新和真实视频手工回归。
+5. [x] 创建并推送 `cli-v0.1.0`，发布 npm 后运行 registry、`npx` 与全局安装回归。
+6. [x] 升级 Extension 到 `1.5.0`，测试并从干净 worktree 生成 production zip 与 SHA-256。
+7. [x] 上传现有 Chrome Web Store 条目，关闭自动发布并提交审核。
+8. [x] 实现 Desktop 无译文引导、Markdown 模板和只写文本的最小剪贴板权限。
+9. [x] 升级 Desktop 到 `0.3.0`，完成前端、Rust、聚焦刷新和真实视频手工回归。
 10. [ ] 推送 Desktop commit 与 `v0.3.0`，核对 draft Release 资产和签名后发布。
 11. [ ] Desktop 上线后手动发布已通过审核的 Extension `1.5.0`。
 
