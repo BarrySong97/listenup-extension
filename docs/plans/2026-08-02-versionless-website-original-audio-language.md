@@ -59,3 +59,12 @@ node scripts/check-docs.mjs
 `en-US.4`，扩展下载 URL 使用 `lang=en`；即使把当前 YouTube 配音临时切换为
 `Portuguese (BR)`，Desktop 仍显示 `English`，DEV SQLite 的 `.en` revision 含 422 个语义
 块。测试结束后已恢复 `English (US) original` 音轨。
+
+## Extension 1.5.1 发布记录
+
+- 版本提交：`edd49af`（`chore(extension): release 1.5.1`）。
+- 商店包：`listenup-extension-1.5.1-edd49af-chrome.zip`，zip 根目录直接包含
+  `manifest.json`；SHA-256 为
+  `9b291427ca63182691352f1467e9d148d68c03604eff97132b26932da496dacb`。
+- Chrome Web Store 已接受草稿 `1.5.1`，权限与已发布 `1.5.0` 一致；2026-08-02 已提交
+  审核，并关闭“通过审核后自动发布”。线上用户继续使用 `1.5.0`，审核通过后再手动发布。
