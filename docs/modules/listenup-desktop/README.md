@@ -77,7 +77,7 @@ schema 对象完整时原子修复 migration 元数据，未知不匹配仍拒�
 固定 `cli-v0.1.0` Skill URL 和 CLI `0.1.0`，要求 Agent 先询问目标语言、dry-run 后再 commit，
 Desktop 本身不下载 Skill、不安装 CLI、也不内置翻译。已有译文时列表按 AI 重组后的语义时间块
 显示；影院模式在双语时显示上下两层，并在 hover 工具条中提供原语、译文、双语切换，与列表
-模式共用同一份显示偏好。
+模式共用同一份显示偏好。进入影院时工具条先显示 3 秒，之后才恢复为仅 hover 显示。
 
 持久字幕通过 TanStack React Query 调 `get_subtitle_view`。query key 包含 video、模式和
 目标语言；窗口重新聚焦时由 Tauri focus event 触发 refetch。没有 SQLite 文件监测、定时
@@ -132,6 +132,9 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 | 工具条 | 常驻 header | 默认隐藏；hover 整条影院字幕窗口时显示，可切换原语 / 译文 / 双语，鼠标离开窗口后隐藏 |
 
 切换用 `setMinSize` + `setSize`，权限在 `capabilities/default.json`。
+列表/影院缩放、vibrancy/阴影切换、全屏 Space 重排和 tray 重显都会重新启用
+`acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免非激活 NSPanel 偶发停止命中
+CSS `:hover`。
 
 ## 多视频仲裁
 
@@ -153,6 +156,7 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限
 - 字幕列表用 `virtua` 的 `VList`，居中用 `scrollToIndex(i, { align: "center", smooth })`；切视频或切换原语 / 译文 / 双语数据集后，等新列表提交一帧再无动画居中，后续时间游标变化恢复平滑跟随
+- 影院工具条保持“入场短显 + `group-hover`”；原生层负责在窗口状态变化后恢复鼠标 tracking，不能改成永久显示掩盖问题
 - 滚动条只在滚动中显示：thumb 平时透明，`onScroll` / `onScrollEnd` 维护 `.scrolling` class
 
 ## dev / production 是两个独立 app

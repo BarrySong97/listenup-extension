@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原始音轨选轨、无版本官网、CLI/DMG/updater 发布边界、成功后自动发布与 migration 不会漂移。
+ * @purpose 校验环境标识、Native 协议、原始音轨选轨、Desktop hover、CLI/DMG/updater 发布边界与 migration 不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语/字幕首项优先、官网手写版本、环境串库、sidecar/DMG/updater/自动发布缺口、watcher 或轮询。
+ * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover 缺口、sidecar/updater 发布缺口、watcher 或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -213,6 +213,27 @@ const rustSource = await readFile(
   "utf8"
 );
 assert.match(rustSource, /const PROTOCOL_VERSION: u8 = 3/);
+assert.match(
+  rustSource,
+  /setAcceptsMouseMovedEvents: true/,
+  "NSPanel must keep distributing mouse-moved events after native state changes"
+);
+assert.match(
+  rustSource,
+  /updateTrackingAreas/,
+  "NSPanel must recalculate WebView tracking areas after resize/vibrancy changes"
+);
+
+const desktopAppSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src/App.tsx"),
+  "utf8"
+);
+assert.match(desktopAppSource, /CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000/);
+assert.match(
+  desktopAppSource,
+  /showCinemaToolbarHint \? "opacity-100" : "opacity-0"/,
+  "cinema toolbar must remain discoverable while native hover tracking recovers"
+);
 
 const cliSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/src/cli/mod.rs"),

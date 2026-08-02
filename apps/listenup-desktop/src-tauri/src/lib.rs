@@ -1,7 +1,7 @@
-// @purpose 桌面端 Rust 入口：GUI/桥接双模式、字幕持久化、session 仲裁、剪贴板/更新插件、NSPanel 与 tray。
+// @purpose 桌面端 Rust 入口：GUI/桥接双模式、字幕持久化、session 仲裁、更新插件、可交互 NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    database、domain、tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
-// @gotcha  桥接 stdout 被协议独占；ready 字幕先入 SQLite 再发 UI 事件；2+ 播放 session 必须尊重手动锁定。
+// @gotcha  桥接 stdout 被协议独占；ready 先入 SQLite 再发 UI；NSPanel 状态切换须刷新鼠标 tracking；2+ session 尊重锁定。
 pub mod cli;
 pub mod database;
 pub mod domain;
@@ -735,6 +735,44 @@ fn run_socket_server(app: AppHandle) {
     }
 }
 
+/// 恢复 NSPanel / WebView 的鼠标移动分发与 hover tracking。必须主线程调用。
+#[cfg(target_os = "macos")]
+fn refresh_mouse_tracking(window: &tauri::WebviewWindow) {
+    if let Ok(ns_window) = window.ns_window() {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        unsafe fn update_view_tree(view: *mut AnyObject) {
+            if view.is_null() {
+                return;
+            }
+
+            unsafe {
+                let _: () = msg_send![view, updateTrackingAreas];
+                let subviews: *mut AnyObject = msg_send![view, subviews];
+                if subviews.is_null() {
+                    return;
+                }
+                let count: usize = msg_send![subviews, count];
+                for index in 0..count {
+                    let child: *mut AnyObject = msg_send![subviews, objectAtIndex: index];
+                    update_view_tree(child);
+                }
+            }
+        }
+
+        let ns_window = ns_window as *mut AnyObject;
+        unsafe {
+            // NSWindow defaults this to false. Resizing, changing shadow/vibrancy,
+            // class-swapping to NSPanel, or moving between fullscreen Spaces can
+            // invalidate WebKit's hover tracking until the next process launch.
+            let _: () = msg_send![ns_window, setAcceptsMouseMovedEvents: true];
+            let content_view: *mut AnyObject = msg_send![ns_window, contentView];
+            update_view_tree(content_view);
+        }
+    }
+}
+
 /// 让窗口盖在其他 app（如全屏的 Chrome）的全屏 Space 之上。必须主线程调用。
 ///
 /// - `setLevel: 25`（NSStatusWindowLevel）：高于全屏视频画面
@@ -757,6 +795,7 @@ fn apply_overlay_window_style(window: &tauri::WebviewWindow) {
             eprintln!("[listenup] overlay style: level={level} collectionBehavior={applied:#b}");
         }
     }
+    refresh_mouse_tracking(window);
 }
 
 /// 列表模式开启 vibrancy 磨砂；影院模式关闭，让视频画面清晰透过。必须主线程调用。
@@ -995,6 +1034,8 @@ pub fn run() {
                                     let behavior: usize = (1 << 0) | (1 << 8);
                                     let _: () =
                                         msg_send![ns_window, setCollectionBehavior: behavior];
+                                    let _: () =
+                                        msg_send![ns_window, setAcceptsMouseMovedEvents: true];
                                     let _: () = msg_send![ns_window, orderFrontRegardless];
                                 }
                             }
@@ -1026,12 +1067,26 @@ pub fn run() {
                         "show" => {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let target = window.clone();
+                                    let _ = window.run_on_main_thread(move || {
+                                        refresh_mouse_tracking(&target);
+                                    });
+                                }
                                 let _ = window.set_focus();
                             }
                         }
                         "check-update" => {
                             if let Some(window) = app.get_webview_window("main") {
                                 let _ = window.show();
+                                #[cfg(target_os = "macos")]
+                                {
+                                    let target = window.clone();
+                                    let _ = window.run_on_main_thread(move || {
+                                        refresh_mouse_tracking(&target);
+                                    });
+                                }
                                 let _ = window.set_focus();
                             }
                             let _ = app.emit(CHECK_UPDATE_EVENT, ());

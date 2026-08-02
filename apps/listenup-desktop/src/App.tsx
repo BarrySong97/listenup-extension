@@ -2,7 +2,7 @@
  * @purpose 字幕窗口 UI：实时同步、SQLite 冷启动、原语/译文/双语、列表/影院与多视频选择。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  新 live session 立即接管缓存；CLI 译文只靠 query focus refetch，不监听 SQLite；切换字幕数据集后要等 VList 提交再重新居中。
+ * @gotcha  新 live 立即接管缓存；CLI 只靠 focus refetch；VList 换数据后再居中；影院入场短显后由 hover 控制。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -61,6 +61,7 @@ const DEFAULT_SIZES: Record<ViewMode, WindowSize> = {
 };
 
 const SCROLLBAR_IDLE_DELAY_MS = 700;
+const CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000;
 const SUBTITLE_MODE_OPTIONS: ReadonlyArray<
   readonly [SubtitleDisplayMode, string]
 > = [
@@ -155,9 +156,10 @@ const applyWindowSizeForMode = async (mode: ViewMode) => {
   await appWindow.setMinSize(new LogicalSize(minSize.width, minSize.height));
   await appWindow.setSize(new LogicalSize(targetSize.width, targetSize.height));
   // 影院模式追求沉浸：关掉 vibrancy 磨砂和系统窗口投影
-  // （投影在透明窗口上会形成一圈黑边），列表模式恢复
-  await invoke("set_vibrancy", { enabled: mode === "list" });
+  // （投影在透明窗口上会形成一圈黑边），列表模式恢复。vibrancy
+  // 命令最后执行，它会在所有几何变化后刷新 NSPanel 的鼠标 tracking areas。
   await appWindow.setShadow(mode === "list");
+  await invoke("set_vibrancy", { enabled: mode === "list" });
 };
 
 const persistCurrentWindowSize = async (mode: ViewMode) => {
@@ -253,6 +255,7 @@ export default function App() {
   const [isListScrolling, setIsListScrolling] = useState(false);
   const [translationCopyStatus, setTranslationCopyStatus] =
     useState<TranslationCopyStatus>("idle");
+  const [showCinemaToolbarHint, setShowCinemaToolbarHint] = useState(false);
   const modeRef = useRef(mode);
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledViewRef = useRef<{
@@ -399,6 +402,20 @@ export default function App() {
       console.error("failed to apply initial window size", error);
     });
   }, []);
+
+  useEffect(() => {
+    if (mode !== "cinema") {
+      setShowCinemaToolbarHint(false);
+      return;
+    }
+
+    setShowCinemaToolbarHint(true);
+    const timer = window.setTimeout(
+      () => setShowCinemaToolbarHint(false),
+      CINEMA_TOOLBAR_HINT_DURATION_MS
+    );
+    return () => window.clearTimeout(timer);
+  }, [mode]);
 
   const switchMode = useCallback(async (nextMode: ViewMode) => {
     if (nextMode === modeRef.current) return;
@@ -625,7 +642,11 @@ export default function App() {
             </p>
           )}
         </div>
-        <div className="absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div
+          className={`absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 transition-opacity group-hover:opacity-100 ${
+            showCinemaToolbarHint ? "opacity-100" : "opacity-0"
+          }`}
+        >
           <button
             type="button"
             className="flex h-6 cursor-pointer items-center gap-[5px] rounded-full border-none bg-transparent px-1.5 text-[11px] text-fg-muted transition-colors hover:text-fg"
