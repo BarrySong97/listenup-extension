@@ -58,14 +58,16 @@ Chrome Web Store 的更新流程采用 deferred publishing：上传到现有条�
    先创建 **draft** release，避免后处理完成前进入 `releases/latest`
 6. Tauri 会先公证 `.app`、再创建并签名 DMG；因此 workflow 在 DMG 生成后单独用
    `notarytool` 公证并 staple DMG，再以相同资产名 `--clobber` 草稿中的预公证 DMG
-7. 最后一步自动执行 `gh release edit --draft=false`：只有前面所有必需步骤成功才公开 Release；
+7. 下载草稿中的 `latest.json`，把 `tauri-action` 生成的 `api.github.com/.../releases/assets/...`
+   URL 重写成无需 GitHub API 匿名配额的公开 `github.com/.../releases/download/...` URL，再覆盖上传
+8. 最后一步自动执行 `gh release edit --draft=false`：只有前面所有必需步骤成功才公开 Release；
    任一步失败时最后一步不会运行，草稿不会进入官网或应用内更新的 `releases/latest`
 
 正式 Desktop 内含 Host 自动注册逻辑。用户安装后首次启动，app 会写入只允许正式扩展 `nocahdalbgboblhbjkacpneakljldfjh` 的 `com.listenup.desktop` manifest；DEV build 写入另一份 `.dev` manifest，不会覆盖正式环境。
 
 可选 Apple secrets：`APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY`（签名），`APPLE_API_ISSUER` / `APPLE_API_KEY` / `APPLE_API_KEY_P8`（公证）。都不配就是未签名包，用户首次打开需要右键 → 打开。
 
-updater 的 `TAURI_SIGNING_PRIVATE_KEY` 是必需项，和 Apple 证书不是同一套密钥。公钥内置在 Desktop；私钥只存在于 GitHub Secret 和发布者的安全备份。`releases/latest` 不会解析到 draft；workflow 成功后自动发布，失败时继续保持草稿，因此官网和应用内更新只会看到完整的成功产物。
+updater 的 `TAURI_SIGNING_PRIVATE_KEY` 是必需项，和 Apple 证书不是同一套密钥。公钥内置在 Desktop；私钥只存在于 GitHub Secret 和发布者的安全备份。更新包 URL 必须使用公开 Release 下载地址；GitHub assets API 的匿名请求受共享配额限制，耗尽后 Desktop 会收到 `403` / `download request failed`。`releases/latest` 不会解析到 draft；workflow 成功后自动发布，失败时继续保持草稿，因此官网和应用内更新只会看到完整的成功产物。
 
 手动触发和 tag 触发都使用 Tauri 配置版本生成 `v__VERSION__` tag，避免 `workflow_dispatch` 从 `main` 运行时错误创建名为 `main` 的 Release。
 

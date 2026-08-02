@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原始音轨选轨、无版本官网、CLI/DMG 发布边界、成功后自动发布与 migration 不会漂移。
+ * @purpose 校验环境标识、Native 协议、原始音轨选轨、无版本官网、CLI/DMG/updater 发布边界、成功后自动发布与 migration 不会漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语/字幕首项优先、官网手写版本、环境串库、sidecar/DMG/自动发布缺口、watcher 或轮询。
+ * @gotcha  ADR-0008：不得恢复英语/字幕首项优先、官网手写版本、环境串库、sidecar/DMG/updater/自动发布缺口、watcher 或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -129,12 +129,29 @@ assert.match(
 const replaceDmgIndex = desktopReleaseWorkflow.indexOf(
   'gh release upload "v${VERSION}" "$UPLOAD_PATH" --clobber'
 );
+const rewriteUpdaterIndex = desktopReleaseWorkflow.indexOf(
+  "node scripts/rewrite-updater-json.mjs"
+);
 const publishReleaseIndex = desktopReleaseWorkflow.indexOf(
   'gh release edit "v${VERSION}" --draft=false'
 );
 assert.ok(
-  publishReleaseIndex > replaceDmgIndex,
-  "release workflow must publish only after the finished DMG is replaced"
+  rewriteUpdaterIndex > replaceDmgIndex,
+  "release workflow must rewrite updater metadata after replacing the finished DMG"
+);
+assert.ok(
+  publishReleaseIndex > rewriteUpdaterIndex,
+  "release workflow must publish only after updater metadata uses a public download URL"
+);
+
+const rewriteUpdaterSource = await readFile(
+  resolve(ROOT, "scripts/rewrite-updater-json.mjs"),
+  "utf8"
+);
+assert.match(
+  rewriteUpdaterSource,
+  /github\.com\/\$\{repository\}\/releases\/download\/\$\{tag\}\/\$\{assetName\}/,
+  "updater metadata must use the public GitHub Release download URL, not api.github.com"
 );
 
 const protocolSource = await readFile(

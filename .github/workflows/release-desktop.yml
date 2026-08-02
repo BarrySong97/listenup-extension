@@ -5,7 +5,8 @@ name: Release ListenUp Desktop (macOS)
 # secrets are present; otherwise the build is unsigned (users right-click →
 # Open on first launch). Tauri notarizes the app before creating the DMG, so this
 # workflow separately notarizes/staples the finished DMG, replaces the draft asset,
-# and publishes the Release only after every preceding step succeeds.
+# rewrites updater metadata to a quota-free public download URL, and publishes the
+# Release only after every preceding step succeeds.
 # Tauri updater signing is REQUIRED so installed apps can verify every update.
 #
 # Trigger by pushing a version tag, e.g.:
@@ -147,6 +148,23 @@ jobs:
           xcrun stapler validate "$DMG_PATH"
           cp "$DMG_PATH" "$UPLOAD_PATH"
           gh release upload "v${VERSION}" "$UPLOAD_PATH" --clobber
+
+      # tauri-action writes the GitHub assets API URL into latest.json. Anonymous
+      # Desktop clients can exhaust that API's shared rate limit and receive 403,
+      # while the public releases/download URL has no GitHub API dependency.
+      - name: Rewrite updater download URL
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./apps/listenup-desktop/src-tauri/tauri.conf.json').version")"
+          UPDATER_DIR="$RUNNER_TEMP/listenup-updater"
+          mkdir -p "$UPDATER_DIR"
+          gh release download "v${VERSION}" --pattern latest.json --dir "$UPDATER_DIR" --clobber
+          node scripts/rewrite-updater-json.mjs \
+            "$UPDATER_DIR/latest.json" \
+            "$GITHUB_REPOSITORY" \
+            "v${VERSION}"
+          gh release upload "v${VERSION}" "$UPDATER_DIR/latest.json" --clobber
 
       - name: Publish release
         env:
