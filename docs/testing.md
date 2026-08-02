@@ -46,6 +46,7 @@ node scripts/check-docs.mjs                                              # 永�
 ### 改字幕加载链路
 
 - SPA 切换时旧字幕立即清空；页面 / playerResponse / track URL videoId 不一致不读写缓存
+- 多配音视频以 `audioIsDefault=true` 的原始音轨语言选字幕；不能取当前配音或字幕列表第一项
 - 首次加载命中正确字幕轨（含 `pot` 缺失重试）
 - 字幕缓存仍可复用（`chrome.storage.local`）
 - 页面桥接 fallback 仍可工作
@@ -81,7 +82,7 @@ node scripts/check-docs.mjs                                              # 永�
 
 ### 改 SQLite / 双语 / CLI
 
-- 日语视频默认缓存日语原字幕，英语视频默认缓存英语；同语言人工字幕优先于 ASR
+- 日语视频默认缓存日语原字幕；多配音英语视频即使葡萄牙语字幕排第一仍缓存英语；同语言人工字幕优先于 ASR
 - 只有 verified + ready + 非空 session 入库；loading/empty/error/cursor 不创建空 revision
 - 关闭并重开 Desktop，在没有 live session 时能显示最近一条 SQLite 缓存
 - `subtitle get` 的 video/track/revision/segment ID 能组成版本 1 translation document
@@ -105,6 +106,7 @@ node scripts/check-docs.mjs                                              # 永�
 
 - `pnpm build:web:static` 能产出 `apps/website/out/`（静态导出没被 API route / 动态渲染破坏）
 - 下载按钮指向 GitHub Releases latest，GitHub 链接可用
+- 页面不显示手写 Desktop 版本号，发版无需修改官网
 - 首屏在窄屏下不横向滚动
 
 ## 何时可以用预览页代替真实环境

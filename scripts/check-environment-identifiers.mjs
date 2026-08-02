@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原语选轨、CLI/DMG 发布边界与 migration 不会漂移。
+ * @purpose 校验环境标识、Native 协议、原始音轨选轨、无版本官网、CLI/DMG 发布边界与 migration 不会漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
- * @deps    环境矩阵、extension manifests/protocol/selector、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语优先、环境串库、sidecar/DMG 发布缺口、watcher 或轮询。
+ * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
+ * @gotcha  ADR-0008：不得恢复英语/字幕首项优先、官网手写版本、环境串库、sidecar/DMG 发布缺口、watcher 或轮询。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -142,12 +142,39 @@ const selectorSource = await readFile(
   ),
   "utf8"
 );
+assert.doesNotMatch(
+  selectorSource,
+  /preferredLanguages|TrackPreference/,
+  "ADR-0008: callers must not override the original audio language"
+);
 assert.match(
   selectorSource,
-  /preferredLanguages:\s*\[\]/,
-  "ADR-0008: default caption selection must follow the video's source language"
+  /tracks\.find\(\(track\) => track\.isOriginalAudioLanguage\)/,
+  "ADR-0008: the original audio language must win before caption defaults/order"
 );
-assert.doesNotMatch(selectorSource, /preferredLanguages:\s*\[\s*["']en["']/);
+
+const pageBridgeSource = await readFile(
+  resolve(ROOT, "apps/extension/public/scripts/inject-youtube.js"),
+  "utf8"
+);
+assert.match(pageBridgeSource, /audioIsDefault\s*===\s*true/);
+assert.match(pageBridgeSource, /originalAudioTrack/);
+
+const websitePageSource = await readFile(
+  resolve(ROOT, "apps/website/app/page.tsx"),
+  "utf8"
+);
+assert.match(websitePageSource, /releases\/latest/);
+assert.doesNotMatch(
+  websitePageSource,
+  /const\s+VERSION\s*=/,
+  "the latest-release website must not require a handwritten Desktop version"
+);
+assert.doesNotMatch(
+  websitePageSource,
+  />\s*v\d+\.\d+\.\d+\s*</,
+  "the website must not show a release version that can drift from releases/latest"
+);
 
 const rustSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/src/lib.rs"),

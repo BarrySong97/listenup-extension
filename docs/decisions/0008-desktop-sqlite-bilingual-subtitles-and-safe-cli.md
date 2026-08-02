@@ -15,7 +15,8 @@ CLI 写库后的刷新也有多个选择：监听 SQLite 文件、定时轮询�
 
 ## 决策
 
-Extension 默认跟随 YouTube 默认字幕轨所代表的视频原语，同语言内优先人工字幕。Desktop
+Extension 默认以 YouTube player response 中 `audioIsDefault=true` 的原始音轨语言选择
+字幕，同语言内优先人工字幕；元数据缺失时才回退默认字幕轨与首轨。Desktop
 把 verified、ready、非空的原字幕保存到 SQLite，每个译文绑定不可变的 source revision，
 并用显式多对多映射支持连续原句的合并和拆分。
 
@@ -44,8 +45,8 @@ source revision 能阻止旧译文静默套到变化后的 YouTube 字幕上。�
 - AI 必须一次提交覆盖全部原句的完整文档；第一版不把半成品写入正式译文表。
 - CLI 与 Desktop 可以借助 WAL 并发打开数据库，但 CLI 提交后不会实时推送 UI 更新。
 - 磁盘数据库初始化失败时 GUI 降级到进程内 SQLite，实时字幕仍可用，但 CLI 持久化不可用。
-- `scripts/check-environment-identifiers.mjs` 锁定协议 v3、原语默认策略、环境数据路径、CLI
-  sidecar 与无轮询查询规则，防止架构回退。
+- `scripts/check-environment-identifiers.mjs` 锁定协议 v3、原始音轨优先策略、官网不手写版本、
+  环境数据路径、CLI sidecar 与无轮询查询规则，防止架构回退。
 - 已发布的 SQLx migration 内容不可改写，sensor 固定其 SHA-384；早期开发版曾用同一完整
   schema 写入另一条 checksum，因此 database 层只对这条已知 checksum 且全部 schema
   对象完整的数据库修复 migration 元数据，其他 checksum 不匹配仍然拒绝打开。
