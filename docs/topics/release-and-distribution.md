@@ -52,8 +52,10 @@ Chrome Web Store 的更新流程采用 deferred publishing：上传到现有条�
 2. **重新生成 production Info.plist**（`node apps/listenup-desktop/scripts/gen-info-plist.mjs`）——不依赖开发者最后一次本地构建留下的 scheme，避免发出带 `listenup-dev://` 的包
 3. 可选 Apple 签名 / 公证：只有 `APPLE_CERTIFICATE` secret 存在时才启用；**Tauri 会把"设置了但为空"的 `APPLE_CERTIFICATE` 当成"导入这个证书"然后失败**，所以脚本只在 secret 真的非空时才写进 `$GITHUB_ENV`
 4. 强制检查 `TAURI_SIGNING_PRIVATE_KEY`，缺失就终止，避免发布一个后续无法被客户端信任的更新包
-5. `prepare-cli.mjs` 先按 Apple Silicon target 构建 `listenup` sidecar；`tauri-action` 再构建
-   `--bundles app,dmg`，同时上传 `.app.tar.gz`、`.sig` 和 `latest.json`，发布为 **draft** release
+5. `prepare-cli.mjs` 先按 Apple Silicon target 构建 `listenup` sidecar；内部 Cargo 不继承外层
+   Tauri 的 `TAURI_CONFIG`，避免干净 runner 在 sidecar 生成前触发 `externalBin` 校验；随后
+   `tauri-action` 构建 `--bundles app,dmg`，同时上传 `.app.tar.gz`、`.sig` 和 `latest.json`，
+   发布为 **draft** release
 
 正式 Desktop 内含 Host 自动注册逻辑。用户安装后首次启动，app 会写入只允许正式扩展 `nocahdalbgboblhbjkacpneakljldfjh` 的 `com.listenup.desktop` manifest；DEV build 写入另一份 `.dev` manifest，不会覆盖正式环境。
 

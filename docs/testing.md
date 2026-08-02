@@ -94,6 +94,8 @@ node scripts/check-docs.mjs                                              # 永�
 - 没有 `refetchInterval`、SQLite watcher、`PRAGMA data_version` 或 CLI 通知链路
 - production/DEV 默认数据库不同，`--env dev` 不会写入 production
 - production/DEV `.app` 都包含 `listenup` sidecar，CLI 构建不修改 shell profile
+- 在不存在预生成 `target/sidecars/listenup-*` 时，带 Tauri `TAURI_CONFIG` overlay 的
+  `prepare-cli.mjs` 仍能从零构建 sidecar（内部 Cargo 不继承该 overlay）
 
 ### 改 Website
 

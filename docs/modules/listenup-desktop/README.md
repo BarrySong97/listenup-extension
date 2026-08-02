@@ -110,7 +110,9 @@ listenup translation delete <video-id> --language zh-CN --commit --json
 translation document 后交给 `translation apply`。apply/delete 默认 dry-run，只有
 `--commit` 写库；`--db <path>` 优先于默认的 `--env prod|dev`。production/DEV Tauri bundle
 都会把 CLI 作为 `listenup` sidecar 放进 `.app`，主程序由 `mainBinaryName` / `default-run`
-明确锁定为 `listenup-desktop`，不修改用户 shell profile。
+明确锁定为 `listenup-desktop`，不修改用户 shell profile。`prepare-cli.mjs` 启动内部 Cargo
+构建时会移除外层 Tauri 注入的 `TAURI_CONFIG`：否则 `build.rs` 会在 sidecar 尚未复制前按
+`externalBin` overlay 校验目标文件，导致干净 runner 无法自举（本地残留 sidecar 会掩盖问题）。
 
 ## 窗口
 

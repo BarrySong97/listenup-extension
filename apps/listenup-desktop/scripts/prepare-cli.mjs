@@ -2,7 +2,7 @@
  * @purpose 为 Tauri bundle 预编译 listenup CLI，并按 sidecar 目标三元组命名。
  * @role    tauri.conf beforeBuildCommand；让 production/DEV .app 都带同一安全 CLI。
  * @deps    node:child_process、node:fs、rustc、cargo、packages/listenup-cli/package.json
- * @gotcha  sidecar 显式注入独立 CLI 版本；跨平台构建必须明确目标。
+ * @gotcha  构建 CLI 时必须移除外层 Tauri 的 TAURI_CONFIG，否则 sidecar 尚未生成就会被校验。
  */
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync } from "node:fs";
@@ -36,8 +36,13 @@ const cargoArgs = [
   "listenup",
 ];
 if (configuredTarget) cargoArgs.push("--target", target);
+const cargoEnvironment = {
+  ...process.env,
+  LISTENUP_CLI_VERSION: cliVersion,
+};
+delete cargoEnvironment.TAURI_CONFIG;
 const cargo = spawnSync("cargo", cargoArgs, {
-  env: { ...process.env, LISTENUP_CLI_VERSION: cliVersion },
+  env: cargoEnvironment,
   stdio: "inherit",
 });
 if (cargo.status !== 0) process.exit(cargo.status ?? 1);
