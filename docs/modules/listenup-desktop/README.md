@@ -3,13 +3,13 @@
 ## 职责
 
 macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标，同步显示在可浮于其他 app
-全屏之上的窗口里；可反向控制当前 YouTube 播放 / 暂停，并可在自由 Desktop 与菜单栏 App
+全屏之上的窗口里；可反向控制当前 YouTube 播放 / 暂停及点击字幕定点跳转，并可在自由 Desktop 与菜单栏 App
 两种形态间切换。同时将原字幕保存到 SQLite，并显示用户通过 CLI 导入的 AI 译文。
 Tauri v2，Rust 后端 + React 前端。
 
 边界：**管** 窗口渲染、Native Messaging Host、字幕持久化、安全 CLI、双形态生命周期和
-当前 session 的播放 / 暂停；**不管** 字幕抓取（那是扩展的事），不内置翻译模型，也不提供
-seek、音量、倍速等更宽的播放器遥控。
+当前 session 的播放 / 暂停和显示字幕块起点 seek；**不管** 字幕抓取（那是扩展的事），不内置
+翻译模型，也不提供任意进度条、音量、倍速等更宽的播放器遥控。
 
 跨模块的协议与联调流程写在 [Native Messaging 专题](../../topics/native-messaging.md)，本文只讲这个 app 自身。
 
@@ -17,7 +17,7 @@ seek、音量、倍速等更宽的播放器遥控。
 
 ```
 src/App.tsx        窗口 UI：播放控制、appMode、原语 / 译文 / 双语、列表 / 影院、多视频选择
-src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，不消费连续时间
+src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，HeroUI 行点击发送块起点
 src/subtitleCursor.ts  live 原语索引直用、译文 / fallback 时间映射的纯 selector
 src/components/ui/ HeroUI 3 primitives：文字 / 图标按钮、字幕模式组、目标语言 Select
 src/TranslationMissingState.tsx  列表 / 影院共用的无译文引导与复制反馈
@@ -87,7 +87,8 @@ schema 对象完整时原子修复 migration 元数据，未知不匹配仍拒�
 ## 原语 / 译文 / 双语与刷新
 
 列表 header 提供三种模式和当前 revision 已导入的目标语言，播放 / 暂停固定在这一行最右侧；
-选择保存在 `localStorage`。
+选择保存在 `localStorage`。原语、译文和双语字幕整行都可用鼠标或键盘跳到显示块起点，保持视频
+原播放状态，并等待真实 cursor 更新高亮。
 当前视频没有首选译文时不拿其他语言代替：列表模式显示居中的本地 AI 翻译引导，影院模式
 显示同一入口的紧凑按钮。点击只把 Markdown 指令写入系统剪贴板；模板包含视频 / 原语元数据、
 固定 `cli-v0.1.0` Skill URL 和 CLI `0.1.0`，要求 Agent 先询问目标语言、dry-run 后再 commit，
@@ -198,6 +199,9 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限
 - 字幕列表用 `virtua` 的 `VList`，居中用 `scrollToIndex(i, { align: "center", smooth })`；切视频或切换原语 / 译文 / 双语数据集后，等新列表提交一帧再无动画居中，后续时间游标变化恢复平滑跟随
+- 字幕行用 HeroUI `DesktopButton` 保留整行键盘语义；只传稳定 `onSeek` 与 disabled primitive，
+  hover / focus-visible 不能以重新订阅连续 cursor 为代价。见
+  [ADR-0014](../../decisions/0014-desktop-subtitle-row-seek-control.md)
 - Desktop 使用精确锁定的 React Compiler 1.0；高频 cursor 必须与 viewer/session 分离。列表只接收
   active / played index，时间文字只接收整秒，HeroUI 工具栏不订阅连续 `currentTime`。见
   [ADR-0013](../../decisions/0013-desktop-react-compiler-and-cursor-render-boundaries.md)

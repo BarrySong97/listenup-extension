@@ -45,7 +45,7 @@ public/scripts/        注入页面上下文的桥接脚本（web-accessible）
 5. `SubtitleRepository` 聚合轨道来源 → 下载 → 解析 → 清洗合并 → 写缓存
 6. UI 按当前字幕索引驱动高亮、自动滚动、循环、复制
 7. `useNativeSubtitleBridge` 把 session / cursor 交给 background；background 也把 Desktop 的
-   播放 / 暂停命令精确转发回来源标签页
+   播放 / 暂停 / 字幕 seek 命令精确转发回来源标签页
 
 ## 对外接口
 

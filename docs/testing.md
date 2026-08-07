@@ -81,6 +81,8 @@ node scripts/check-docs.mjs                                              # 永�
   最多每秒更新一次，字幕列表只在 active / played 边界变化时更新
 - Desktop 列表与影院的播放 / 暂停按钮都控制当前选中 session，按钮 pending 期间不可重复点；
   状态只随真实 cursor 更新，不能乐观翻转
+- Desktop 原语、译文和双语字幕行都有整行 hover / focus-visible；鼠标或 Enter / Space 跳到
+  显示块起点，播放中保持播放、暂停中保持暂停，并只随真实 seek cursor 更新高亮
 - Desktop / 菜单栏列表的播放按钮固定在原语 / 译文 / 双语行最右侧；原语模式隐藏语言 Select、
   译文 / 双语显示语言 Select 时都不能移位。纯图标操作 hover / 键盘 focus 都显示 Tooltip，
   disabled Tooltip 能解释 pending、断连、无 cursor 或广告原因

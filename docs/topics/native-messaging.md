@@ -4,14 +4,14 @@
 
 一条横跨三个进程边界的双向链路：YouTube 页面里的**内容脚本** ↔ 扩展的
 **service worker** ↔ Chrome 拉起的**桥接进程** ↔ **GUI 窗口**。向 Desktop 同步字幕与
-游标，反向只发送播放 / 暂停命令。任何一端单独看都解释不了时序、身份路由和降级行为。
+游标，反向发送播放 / 暂停和字幕块定点跳转命令。任何一端单独看都解释不了时序、身份路由和降级行为。
 
 ## 涉及的模块 / 文件
 
 | 位置 | 关系 |
 |---|---|
 | `apps/extension/src/shared/nativeSubtitleProtocol.ts` | **消息契约的唯一权威**，两端都从这里对齐；host 名与深链接按环境切换 |
-| `apps/extension/src/pages/content/hooks/useNativeSubtitleBridge.ts` | 发送 session / cursor，校验并执行播放命令 |
+| `apps/extension/src/pages/content/hooks/useNativeSubtitleBridge.ts` | 发送 session / cursor，校验并执行播放 / 字幕 seek 命令 |
 | `apps/extension/src/pages/background/index.ts` | 补 `tabId`、懒连接 native host、按 tab 转发命令与结果 |
 | `apps/extension/manifest.json` / `manifest.dev.json` | 两套环境都声明 `nativeMessaging`，功能一致 |
 | `apps/listenup-desktop/src-tauri/src/lib.rs` | 全双工桥接、socket 服务、活跃 session 与 command 状态机 |
@@ -27,7 +27,7 @@ YouTube content script
   ↔ chrome.runtime.connectNative()
   ↔ 桥接进程（同一二进制；Chrome 侧是长度帧，GUI 侧是 Unix socket NDJSON）
   ↔ GUI 实例（每条 socket 分配 bridgeId）
-  ↔ React 实时状态 / 播放按钮 + React Query 持久字幕视图
+  ↔ React 实时状态 / 播放按钮 / 可 seek 字幕行 + React Query 持久字幕视图
 ```
 
 向 GUI 的 verified ready session 仍先写 `listenup.sqlite` 再发 Tauri event。GUI 的反向命令
@@ -50,10 +50,11 @@ Desktop 把高频 cursor 与低频 viewer/session 状态分开：实时原语列
   后停止周期采样。当前字幕索引变化、拖动开始和
   最终 `seeked` 立即发。`currentIndex=-1` 也必须发送，保证拖进字幕间隙后 Desktop 清掉旧高亮。
 - **playbackCommand** —— GUI 生成唯一 commandId，携带完整 session/video/tab 身份和
-  `play | pause`。Rust 只向该 session 的 bridge 写命令，background 只向该 tab 发消息，
-  content 再校验当前 session/video/ad 状态后操作真实 YouTube video。
+  `play | pause | seek`；seek 额外要求有限、非负的 `seekTime`。Rust 只向该 session 的 bridge
+  写命令，background 只向该 tab 发消息，content 再校验当前 session/video/ad 状态后操作真实
+  YouTube video。字幕 seek 使用显示块自身的 startTime，不改变原播放 / 暂停状态。
 - **playbackCommandResult** —— 沿同一 Native port 返回；Rust 同时校验 bridge、tab、session、
-  video、action 和 commandId。Desktop 不乐观修改 cursor，只有随后真实 cursor 才改变按钮状态。
+  video 和 commandId。Desktop 不乐观修改 cursor，只有随后真实 cursor 才改变按钮、高亮与时间。
 
 background 为向上的每条消息补 `tabId`，并且**只在 session 到达时才懒连接**当前构建对应的
 Host——所以没有字幕的页面不会白白拉起进程。命令超时为 2 秒；断开的 bridge 会立即令对应
@@ -99,7 +100,8 @@ Desktop GUI 每次启动都会按编译环境重写自己的 manifest 与 wrappe
 
 见 [ADR-0003](../decisions/0003-native-messaging-single-binary.md) 与
 [ADR-0007](../decisions/0007-desktop-owned-video-session-selection.md)、
-[ADR-0009](../decisions/0009-native-messaging-bidirectional-playback-control.md)。
+[ADR-0009](../decisions/0009-native-messaging-bidirectional-playback-control.md)、
+[ADR-0014](../decisions/0014-desktop-subtitle-row-seek-control.md)。
 
 ## 联调步骤（dev 环境）
 
@@ -128,8 +130,9 @@ Desktop GUI 每次启动都会按编译环境重写自己的 manifest 与 wrappe
    也必须选择 `audioIsDefault` 对应的英语。再用 `listenup
    subtitle get <video-id> --env dev --json` 验证 revision 和 segment IDs。
 
-7. 在列表与影院窗口分别点播放 / 暂停，确认只控制当前选中的 YouTube 标签页；拖动进度条到
-   同一句内部、另一句与无字幕间隙，Desktop 时间与高亮都应立即收敛。
+7. 在列表与影院窗口分别点播放 / 暂停，确认只控制当前选中的 YouTube 标签页；在列表中点击
+   原语、译文和双语字幕行，确认跳到显示块起点且保持原播放状态。拖动进度条到同一句内部、
+   另一句与无字幕间隙，Desktop 时间与高亮都应立即收敛。
 
 卸载（dev 加 `-- --dev`）：
 

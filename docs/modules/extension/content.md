@@ -20,7 +20,7 @@
 - 承接选词 → `explainTarget`（写入前先暂停视频，避免边听边读错过内容）
 - 把字幕快照与播放游标交给 background；播放时 100ms 采样且普通游标最多 100ms 一次，字幕索引变化、
   `seeking` 与最终 `seeked` 强制立即发，避免拖进无字幕间隙或同一句内部时 Desktop 停在旧位置
-- 校验 Desktop v4 播放命令的 session/video/ad 身份，只在当前页面匹配时调用播放器适配层，
+- 校验 Desktop v4 播放 / 字幕 seek 命令的 session/video/ad 身份，只在当前页面匹配时调用播放器适配层，
   并把成功或失败结果沿原 bridge 返回
 
 ## 字幕加载层：`hooks/useSubtitles.ts`
@@ -83,4 +83,5 @@ Desktop 同步协议 v4 继续发送 `vssId` 与 `isDefault`，并增加播放�
 
 `hooks/nativeCursorScheduler.ts` 是无 DOM 副作用的调度器；Node 测试固定普通节流、latest-wins、
 seek 强制刷新、`currentIndex=-1` 间隙和卸载取消。协议守卫测试同时固定 v4 command/result 的
-必填身份字段。修改 Native 同步时运行 `pnpm --filter @listenup/extension test`。
+必填身份字段，以及字幕 seek 的有限非负时间。修改 Native 同步时运行
+`pnpm --filter @listenup/extension test`。
