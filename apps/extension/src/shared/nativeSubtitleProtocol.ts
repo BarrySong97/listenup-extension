@@ -67,6 +67,7 @@ interface NativeSubtitlePlaybackCommandBase {
   tabId: number;
   sessionId: string;
   videoId: string;
+  action: NativeSubtitlePlaybackAction;
 }
 
 export type NativeSubtitlePlaybackCommand =

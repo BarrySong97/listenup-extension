@@ -3,7 +3,7 @@
  * @purpose 校验环境标识、Native 协议、原始音轨、Desktop hover/启动更新/本地 bundle 清理、CLI/updater 发布边界与 migration 不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
- * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询。
+ * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -273,8 +273,8 @@ assert.match(
 );
 assert.match(
   desktopAppSource,
-  />\s*立即更新\s*<\/button>/,
-  "startup update notice must require an explicit user action"
+  /state\.phase === "available"[\s\S]*<DesktopButton[\s\S]*onPress=\{onInstall\}[\s\S]*>\s*立即更新\s*<\/DesktopButton>/,
+  "startup update notice must require an explicit HeroUI user action"
 );
 
 const desktopUpdaterSource = await readFile(
