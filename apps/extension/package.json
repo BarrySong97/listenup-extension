@@ -1,6 +1,6 @@
 {
   "name": "@listenup/extension",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "description": "ListenUp Chrome and Firefox extension.",
   "license": "PolyForm-Noncommercial-1.0.0",
