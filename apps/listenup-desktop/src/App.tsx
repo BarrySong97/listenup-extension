@@ -1,8 +1,8 @@
 /**
  * @purpose 字幕窗口 UI：实时同步、播放控制、Desktop/菜单栏形态、双语与列表/影院视图。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
- * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、components/ui、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  列表播放按钮固定在字幕模式行最右侧且不乐观改 cursor；Menubar 不覆盖 Desktop 当前尺寸。
+ * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、components/ui、SubtitleList、subtitleCursor、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
+ * @gotcha  高频 cursor 独立于 viewer；列表只接收字幕边界，不能把连续 currentTime 传回列表子树。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -13,8 +13,8 @@ import {
   getCurrentWindow,
 } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { VList, type VListHandle } from "virtua";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { VListHandle } from "virtua";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
 import { SubtitleModeControl } from "./components/ui/SubtitleModeControl";
@@ -28,6 +28,8 @@ import {
   TranslationMissingState,
   type TranslationCopyStatus,
 } from "./TranslationMissingState";
+import { SubtitleList, type DisplayBlock } from "./SubtitleList";
+import { resolveSubtitleCursorPresentation } from "./subtitleCursor";
 import type {
   AppMode,
   CursorState,
@@ -50,14 +52,6 @@ interface WindowSize {
 interface WindowPosition {
   x: number;
   y: number;
-}
-
-interface DisplayBlock {
-  id: string;
-  startTime: number;
-  endTime: number;
-  sourceText: string | null;
-  translationText: string | null;
 }
 
 const MODE_STORAGE_KEY = "listenup-view-mode";
@@ -324,22 +318,22 @@ const UpdateNotice = ({
   );
 };
 
-const PlaybackButton = ({
-  cursor,
+const PlaybackButton = memo(function PlaybackButton({
+  isPaused,
   disabled,
   pending,
   onPress,
   disabledReason,
   compact = false,
 }: {
-  cursor: CursorState | null;
+  isPaused: boolean | null;
   disabled: boolean;
   disabledReason?: string;
   pending: boolean;
   onPress: () => void;
   compact?: boolean;
-}) => {
-  const action = cursor?.isPaused !== false ? "play" : "pause";
+}) {
+  const action = isPaused !== false ? "play" : "pause";
   const label = action === "play" ? "播放 YouTube" : "暂停 YouTube";
   return (
     <DesktopIconButton
@@ -359,10 +353,24 @@ const PlaybackButton = ({
       }
     />
   );
-};
+});
+
+const PlaybackTime = memo(function PlaybackTime({
+  seconds,
+  className = "text-fg-muted",
+}: {
+  seconds: number;
+  className?: string;
+}) {
+  return (
+    <span className={`${className} tabular-nums`}>{formatTime(seconds)}</span>
+  );
+});
 
 export default function App() {
   const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
+  const [connected, setConnected] = useState(false);
+  const [cursor, setCursor] = useState<CursorState | null>(null);
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
   const [appMode, setAppModeState] = useState<AppMode>("desktop");
   const [appModeError, setAppModeError] = useState<string | null>(null);
@@ -384,6 +392,7 @@ export default function App() {
   const [playbackPending, setPlaybackPending] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const modeRef = useRef(mode);
+  const activeSessionIdRef = useRef<string | null>(null);
   const desktopModeRef = useRef<ViewMode>(loadStoredMode());
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledViewRef = useRef<{
@@ -401,6 +410,16 @@ export default function App() {
     targetLanguage
   );
 
+  const applyViewerSnapshot = useCallback(
+    (snapshot: ViewerSnapshot, connectionOverride?: boolean) => {
+      activeSessionIdRef.current = snapshot.activeSession?.sessionId ?? null;
+      setViewer(snapshot);
+      setCursor(snapshot.activeSession?.cursor ?? null);
+      setConnected(connectionOverride ?? snapshot.connected);
+    },
+    []
+  );
+
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
@@ -410,38 +429,26 @@ export default function App() {
       unlistenConnection = await listen<boolean>(
         "native-subtitle-connection",
         (event) => {
-          setViewer((current) => ({
-            ...current,
-            connected: Boolean(event.payload),
-          }));
+          setConnected(Boolean(event.payload));
         }
       );
       unlisten = await listen<UiUpdate>("native-subtitle-update", (event) => {
         const update = event.payload;
         if (update.kind === "snapshot") {
-          setViewer({ ...update.payload, connected: true });
+          applyViewerSnapshot(update.payload, true);
           return;
         }
 
-        const cursor = update.payload;
-        setViewer((current) => {
-          if (
-            !current.activeSession ||
-            current.activeSession.sessionId !== cursor.sessionId
-          ) {
-            return current;
-          }
-          return {
-            ...current,
-            connected: true,
-            activeSession: { ...current.activeSession, cursor },
-          };
-        });
+        const nextCursor = update.payload;
+        if (activeSessionIdRef.current === nextCursor.sessionId) {
+          setConnected(true);
+          setCursor(nextCursor);
+        }
       });
 
       const snapshot = await invoke<ViewerSnapshot>("get_snapshot");
       if (!disposed) {
-        setViewer(snapshot);
+        applyViewerSnapshot(snapshot);
       }
     };
 
@@ -454,7 +461,7 @@ export default function App() {
         window.clearTimeout(scrollIdleTimerRef.current);
       }
     };
-  }, []);
+  }, [applyViewerSnapshot]);
 
   useEffect(() => {
     let disposed = false;
@@ -507,7 +514,6 @@ export default function App() {
   }, []);
 
   const session = liveSession;
-  const connected = viewer.connected;
   const pickerVisible = viewer.selectionRequired;
 
   useEffect(() => {
@@ -567,13 +573,13 @@ export default function App() {
       const snapshot = await invoke<ViewerSnapshot>("select_subtitle_session", {
         sessionId,
       });
-      setViewer(snapshot);
+      applyViewerSnapshot(snapshot);
     } catch (error) {
       setPickerError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusySessionId(null);
     }
-  }, []);
+  }, [applyViewerSnapshot]);
 
   useEffect(() => {
     if (mode !== "cinema") {
@@ -689,27 +695,27 @@ export default function App() {
     setIsListScrolling(false);
   }, []);
 
-  const cursor: CursorState | null = session?.cursor ?? null;
   const playbackDisabled =
     playbackPending ||
     !connected ||
     !session ||
     !cursor ||
     cursor.isAdPlaying;
+  const playbackAction = cursor?.isPaused === false ? "pause" : "play";
   const controlPlayback = useCallback(async () => {
-    if (!cursor || playbackDisabled) return;
+    if (playbackDisabled) return;
     setPlaybackPending(true);
     setPlaybackError(null);
     try {
       await invoke("control_playback", {
-        action: cursor.isPaused ? "play" : "pause",
+        action: playbackAction,
       });
     } catch (error) {
       setPlaybackError(error instanceof Error ? error.message : String(error));
     } finally {
       setPlaybackPending(false);
     }
-  }, [cursor, playbackDisabled]);
+  }, [playbackAction, playbackDisabled]);
   const requestedTranslationMissing = Boolean(
     subtitleMode !== "source" &&
       subtitleQuery.isSuccess &&
@@ -755,13 +761,21 @@ export default function App() {
     subtitleQuery.data?.source.segments,
     subtitleQuery.data?.translation,
   ]);
-  const currentIndex = useMemo(() => {
-    if (!cursor) return -1;
-    return displayBlocks.findIndex(
-      (block) =>
-        cursor.currentTime >= block.startTime && cursor.currentTime < block.endTime
-    );
-  }, [cursor, displayBlocks]);
+  const preferLiveSourceIndex =
+    effectiveSubtitleMode === "source" &&
+    session?.status === "ready" &&
+    session.subtitles.length === displayBlocks.length;
+  const cursorPresentation = useMemo(
+    () =>
+      resolveSubtitleCursorPresentation(
+        displayBlocks,
+        cursor,
+        preferLiveSourceIndex
+      ),
+    [cursor, displayBlocks, preferLiveSourceIndex]
+  );
+  const currentIndex = cursorPresentation.activeIndex;
+  const playedThroughIndex = cursorPresentation.playedThroughIndex;
   const emptyMessage = session
     ? statusText(session)
     : viewer.playingSessionCount >= 2
@@ -801,7 +815,8 @@ export default function App() {
     if (!cursor) return "等待播放";
     if (cursor.isAdPlaying) return "广告播放中";
     return cursor.isPaused ? "已暂停" : "同步播放中";
-  }, [cursor]);
+  }, [cursor?.isAdPlaying, cursor?.isPaused]);
+  const playbackSecond = Math.floor(cursor?.currentTime ?? 0);
   const playbackDisabledReason = playbackPending
     ? "正在控制 YouTube…"
     : !connected
@@ -892,20 +907,21 @@ export default function App() {
           <StatusDot connected={connected} />
           <PlaybackButton
             compact
-            cursor={cursor}
+            isPaused={cursor?.isPaused ?? null}
             disabled={playbackDisabled}
             disabledReason={playbackDisabledReason}
             pending={playbackPending}
-            onPress={() => void controlPlayback()}
+            onPress={controlPlayback}
           />
           <span
             className={`text-[11px] ${appModeError || playbackError ? "text-red-300" : "text-fg-faint"}`}
           >
             {appModeError ?? playbackError ?? playbackLabel}
           </span>
-          <span className="text-[11px] text-fg-faint tabular-nums">
-            {formatTime(cursor?.currentTime ?? 0)}
-          </span>
+          <PlaybackTime
+            seconds={playbackSecond}
+            className="text-[11px] text-fg-faint"
+          />
           <DesktopIconButton
             className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border-none bg-transparent text-fg-muted transition-colors hover:text-fg"
             onPress={closeWindow}
@@ -1036,9 +1052,7 @@ export default function App() {
           <span className={appModeError || playbackError ? "text-red-300" : undefined}>
             {appModeError ?? playbackError ?? playbackLabel}
           </span>
-          <span className="text-fg-muted tabular-nums">
-            {formatTime(cursor?.currentTime ?? 0)}
-          </span>
+          <PlaybackTime seconds={playbackSecond} />
         </div>
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
           <SubtitleModeControl
@@ -1054,11 +1068,11 @@ export default function App() {
             />
           )}
           <PlaybackButton
-            cursor={cursor}
+            isPaused={cursor?.isPaused ?? null}
             disabled={playbackDisabled}
             disabledReason={playbackDisabledReason}
             pending={playbackPending}
-            onPress={() => void controlPlayback()}
+            onPress={controlPlayback}
           />
         </div>
       </header>
@@ -1082,69 +1096,15 @@ export default function App() {
             )}
           </div>
         ) : (
-          <VList
-            ref={vListRef}
-            style={{ height: "100%" }}
-            className={`subtitle-list ${isListScrolling ? "scrolling" : ""}`}
+          <SubtitleList
+            listRef={vListRef}
+            blocks={displayBlocks}
+            activeIndex={currentIndex}
+            playedThroughIndex={playedThroughIndex}
+            isScrolling={isListScrolling}
             onScroll={handleListScroll}
             onScrollEnd={handleListScrollEnd}
-          >
-            {displayBlocks.map((subtitle, index) => {
-              const isActive = index === currentIndex;
-              const isPlayed = Boolean(
-                cursor && subtitle.endTime <= cursor.currentTime && !isActive
-              );
-              return (
-                <div
-                  key={`${subtitle.id}-${index}`}
-                  className={`mx-2 grid grid-cols-[12px_40px_minmax(0,1fr)] items-start gap-2 rounded-[10px] py-2 pl-2.5 pr-2 transition-colors ${
-                    isActive ? "bg-wash-active" : ""
-                  }`}
-                >
-                  <span
-                    className={`mt-1.5 h-1.5 w-1.5 rounded-full transition-all ${
-                      isActive
-                        ? "bg-yt shadow-[0_0_8px_rgba(255,0,51,0.8)]"
-                        : isPlayed
-                          ? "bg-white/30"
-                          : "bg-white/15"
-                    }`}
-                  />
-                  <time
-                    className={`pt-0.5 text-[10px] tracking-[0.02em] tabular-nums ${
-                      isActive ? "text-white/75" : "text-fg-faint"
-                    }`}
-                  >
-                    {formatTime(subtitle.startTime)}
-                  </time>
-                  <div className="min-w-0">
-                    {subtitle.sourceText && (
-                      <p
-                        className={`m-0 whitespace-pre-line text-[13px] leading-[1.55] ${
-                          isActive ? "font-medium text-fg" : "text-fg-muted"
-                        }`}
-                      >
-                        {subtitle.sourceText}
-                      </p>
-                    )}
-                    {subtitle.translationText && (
-                      <p
-                        className={`m-0 whitespace-pre-line leading-[1.55] ${
-                          subtitle.sourceText ? "mt-1 text-[12px]" : "text-[13px]"
-                        } ${
-                          isActive
-                            ? "font-medium text-white"
-                            : "text-white/75"
-                        }`}
-                      >
-                        {subtitle.translationText}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </VList>
+          />
         )}
       </section>
 
