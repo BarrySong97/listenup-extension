@@ -190,9 +190,14 @@ const protocolSource = await readFile(
 );
 assert.match(protocolSource, /__LISTENUP_NATIVE_HOST__/);
 assert.match(protocolSource, /__LISTENUP_DEEP_LINK__/);
-assert.match(protocolSource, /NATIVE_SUBTITLE_PROTOCOL_VERSION = 3/);
+assert.match(protocolSource, /NATIVE_SUBTITLE_PROTOCOL_VERSION = 4/);
 assert.match(protocolSource, /vssId: string/);
 assert.match(protocolSource, /isDefault: boolean/);
+assert.match(
+  protocolSource,
+  /kind: "playbackCommand"[\s\S]*commandId: string[\s\S]*tabId: number[\s\S]*sessionId: string[\s\S]*videoId: string[\s\S]*action: NativeSubtitlePlaybackAction/,
+  "ADR-0009: playback commands must retain full tab/session/video identity"
+);
 
 const selectorSource = await readFile(
   resolve(
@@ -239,7 +244,12 @@ const rustSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/src/lib.rs"),
   "utf8"
 );
-assert.match(rustSource, /const PROTOCOL_VERSION: u8 = 3/);
+assert.match(rustSource, /const PROTOCOL_VERSION: u8 = 4/);
+assert.match(
+  rustSource,
+  /bridge_id: u64/,
+  "ADR-0009: Desktop sessions and playback results must remain bridge-bound"
+);
 assert.match(
   rustSource,
   /setAcceptsMouseMovedEvents: true/,
