@@ -38,7 +38,7 @@ Messaging 链路升级为按 bridge/session 精确路由的双向播放命令，
 6. [x] 在 Desktop 列表和影院 UI 中加入非乐观播放/暂停控件、pending 与错误反馈。
 7. [x] 增加 appMode Rust 偏好、动态 activation policy、事务回滚和前端状态同步。
 8. [x] 从 Separate/Grove 适配 tray 左键切换、多显示器定位与有效失焦隐藏。
-9. [x] 菜单栏形态固定 list panel；切回 Desktop 恢复位置、尺寸和 list/cinema 模式。
+9. [x] 菜单栏形态使用 list panel 并保留 Desktop 当前尺寸；切回恢复位置和 list/cinema 模式。
 10. [x] 同步文件头、模块/专题文档、测试清单和两条 ADR。
 11. [ ] 运行全部受影响构建、测试、sensors 和可执行的 macOS 窗口回归。
 12. [x] 按 Native 播放同步、双形态、文档与可执行棘轮拆成 Conventional Commits。
@@ -82,3 +82,5 @@ pnpm clean:desktop:bundles
 - [ ] Native 播放控制与 seek 需要装载本次 DEV Extension 后在真实 YouTube 页面端到端确认。
 - [ ] 当前 Computer Use 驱动无法读取 macOS 状态栏 item；tray 左键显示/隐藏、图标下方定位、
   多显示器 clamp、有效失焦隐藏和从 tray 切回 Desktop 仍需人工按 `docs/testing.md` 回归。
+- [x] 用户回归发现 Menubar 固定 400×640 会覆盖 Desktop 当前尺寸；已由 ADR-0011 改为
+  运行中不 resize，并增加 `appModeWindowPolicy.test.ts` 棘轮。

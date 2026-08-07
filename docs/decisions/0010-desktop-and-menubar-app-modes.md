@@ -1,6 +1,6 @@
 # 0010. 同一 NSPanel 支持自由 Desktop 与菜单栏 App 双形态
 
-- 状态：已采纳
+- 状态：部分被 0011 取代
 - 日期：2026-08-07
 
 ## 背景
@@ -14,7 +14,8 @@ Separate/Grove 一样只保留菜单栏入口：点击 tray 后在图标下方�
 
 1. 复用同一个 Tauri Webview / NSPanel，定义 `desktop | menubar` 两种 appMode。Desktop 使用
    `Regular`、可缩放并保留 list/cinema；Menubar 使用 `Accessory`、`skip_taskbar`、固定
-   400×640 列表且不可缩放。
+   400×640 列表且不可缩放。固定尺寸部分后来被 [ADR-0011](0011-menubar-preserves-desktop-window-size.md)
+   取代：Menubar 仍为列表且不可缩放，但继承 Desktop 当前尺寸。
 2. tray 左键在 Menubar 形态切换面板显示/隐藏。显示时根据 tray rect、点击位置、monitor
    scale 与 work area 定位并 clamp；面板真正获得过焦点后，失焦自动隐藏。
 3. Desktop → Menubar 前由 Rust 捕获运行时窗口位置/尺寸，切回时恢复；React 保存自由窗口的

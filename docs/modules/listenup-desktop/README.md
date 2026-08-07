@@ -143,7 +143,7 @@ appMode 可从 header 或 tray 菜单切换：
 | | 自由 Desktop | 菜单栏 App |
 |---|---|---|
 | activation | `Regular` | `Accessory` |
-| 窗口 | 可拖动、可缩放，保留 list / cinema | 固定 400×640 列表面板，不可缩放 |
+| 窗口 | 可拖动、可缩放，保留 list / cinema | 列表面板、不可缩放，宽高继承切换前 Desktop 当前尺寸 |
 | tray 左键 | 显示并聚焦窗口 | 在 tray 图标下方切换显示 / 隐藏 |
 | 失焦 | 保持显示 | 窗口真正获得过焦点后，失焦自动隐藏 |
 | 恢复 | 运行时恢复切换前位置 / 尺寸 / list-cinema；重启从本地偏好恢复 | 每次显示按 tray rect、点击位置与当前显示器 work area 定位并 clamp |
@@ -151,7 +151,9 @@ appMode 可从 header 或 tray 菜单切换：
 实现参考 Separate/Grove 的 panel 行为，但偏好和运行时窗口属性由 Rust `app_mode.rs` 统一
 管理。偏好写在各环境 app-data 的 `desktop-preferences.json`，使用临时文件 + rename 原子保存；
 activation、resizable/skip-taskbar 和持久化任一步失败都会回滚旧形态。见
-[ADR-0010](../../decisions/0010-desktop-and-menubar-app-modes.md)。
+[ADR-0010](../../decisions/0010-desktop-and-menubar-app-modes.md) 与
+[ADR-0011](../../decisions/0011-menubar-preserves-desktop-window-size.md)。运行中切换不调用
+`setSize`；冷启动 Menubar 才从最后 Desktop 视图的本地尺寸恢复。
 
 自由 Desktop 内还有两种视图，靠 header 按钮切换，尺寸持久化在 `localStorage`：
 
@@ -249,6 +251,7 @@ DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.js
 
 ```bash
 pnpm --filter @listenup/desktop build
+pnpm --filter @listenup/desktop test
 cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
 node scripts/check-environment-identifiers.mjs
 ```

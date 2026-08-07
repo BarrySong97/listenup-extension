@@ -13,7 +13,7 @@
 |---|---|---|
 | Extension | ⚠️ 少量 Node test | videoId 三重身份校验、Native cursor 调度、v4 协议守卫 + 构建 + 手工回归 |
 | Website | ⚠️ 只有 `eslint` | 构建 + 打开页面看 |
-| Desktop 前端 | ❌ 无 | 构建 + 手工回归 |
+| Desktop 前端 | ⚠️ 少量 Node test | appMode 尺寸策略 + 构建 + 手工回归 |
 | Desktop Rust | ✅ `cargo test` | session/bridge/command 状态机、appMode 偏好与定位、SQLite、翻译与 CLI |
 
 `apps/extension/src/pages/content/lib/subtitles/`（纯解析 / 清洗 / 合并）对 DOM 和 `chrome.*` 零依赖，是**最该先补单测**的一层。
@@ -27,6 +27,7 @@ pnpm build:firefox                                                       # 改�
 pnpm build:website && pnpm --filter @listenup/website lint               # 改站点
 pnpm build:web:static                                                    # 改了可能影响静态导出的东西
 pnpm --filter @listenup/desktop build                                    # 改桌面前端
+pnpm --filter @listenup/desktop test                                     # 改 appMode 尺寸策略
 cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml    # 改 Rust
 cargo build --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml --bin listenup # 改 CLI
 pnpm clean:desktop:bundles                                               # 本地完整 bundle 回归后必跑
@@ -90,8 +91,9 @@ node scripts/check-docs.mjs                                              # 永�
   偏好互不串用
 - 自由 Desktop ↔ 菜单栏 App 可从 header 和 tray 菜单双向切换；Desktop 是 `Regular`，菜单栏
   是 `Accessory`。固定在 Dock 的快捷图标可以保留，但菜单栏形态不显示运行状态圆点
-- 菜单栏形态固定 400×640 列表、不可缩放，不进入影院；tray 左键在图标下方切换显示/隐藏，
-  面板越过显示器边缘时被 clamp，副屏和不同缩放比例都验证
+- 菜单栏形态使用列表、不可缩放且不进入影院，但必须保持切换前 Desktop 的当前宽高，不能跳回
+  400×640；重启直接进入 Menubar 时恢复最后 Desktop 视图尺寸
+- tray 左键在图标下方切换显示/隐藏，面板越过显示器边缘时被 clamp，副屏和不同缩放比例都验证
 - 菜单栏面板真正获得焦点后，点到 Chrome 或桌面会自动隐藏；刚显示、系统弹窗或切换形态时
   不应被错误失焦事件立即吞掉
 - 从 tray 菜单切换（不经过 React header）后，切回自由 Desktop 仍恢复原位置、尺寸与

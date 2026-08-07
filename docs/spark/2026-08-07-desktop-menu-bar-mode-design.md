@@ -96,7 +96,8 @@ controller 在切换前保存旧 activation policy 和窗口属性。任一步�
 
 - tray 左键：显示时隐藏，隐藏时定位到 tray 下方后显示。
 - tray 右键：显示窗口、检查更新、切换应用形态、退出。
-- 面板使用列表 UI 的默认 400×640 逻辑尺寸；当 work area 不足时缩小到可见范围。
+- 原设计使用列表 UI 的默认 400×640 逻辑尺寸；真实回归后已由
+  [ADR-0011](../decisions/0011-menubar-preserves-desktop-window-size.md) 取代为继承 Desktop 当前尺寸。
 - Menubar 面板不可拖动、不可自由缩放，不提供 cinema 切换。
 - 失焦、关闭按钮或再次点击 tray 时隐藏；真正退出只走 tray 菜单。
 - 显示失败或拿不到 tray rect 时安全居中，不能把窗口放到屏幕外。
