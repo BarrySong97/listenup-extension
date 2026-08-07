@@ -1,10 +1,12 @@
 /**
- * @purpose 对 Native cursor 做 250ms 节流，并允许 seek/索引变化强制发送最新值。
+ * @purpose 对 Native cursor 做可配置节流，并允许 seek/索引变化强制发送最新值。
  * @role    useNativeSubtitleBridge 的纯时序单元，可在 Node 中用 fake clock 确定性测试。
  * @deps    src/shared/nativeSubtitleProtocol
  * @gotcha  force 必须先取消旧 timer；dispose 后任何旧回调都不得继续发送。
  */
 import type { NativeSubtitleCursorPayload } from "@src/shared/nativeSubtitleProtocol";
+
+export const NATIVE_CURSOR_THROTTLE_MS = 100;
 
 interface CursorTimer {
   cancel: () => void;

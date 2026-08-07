@@ -15,7 +15,10 @@ import {
   NativeSubtitleIdentityStatus,
   NativeSubtitleLoadStatus,
 } from "@src/shared/nativeSubtitleProtocol";
-import { NativeCursorScheduler } from "./nativeCursorScheduler";
+import {
+  NATIVE_CURSOR_THROTTLE_MS,
+  NativeCursorScheduler,
+} from "./nativeCursorScheduler";
 import { youtubeSDK } from "../lib/youtube-sdk";
 
 interface UseNativeSubtitleBridgeOptions {
@@ -32,8 +35,6 @@ interface UseNativeSubtitleBridgeOptions {
   isAdPlaying: boolean;
   cursorForceRevision: number;
 }
-
-const CURSOR_THROTTLE_MS = 250;
 
 const hasNativeMessagingPermission = () =>
   chrome.runtime
@@ -84,7 +85,7 @@ export const useNativeSubtitleBridge = ({
   const cursorSchedulerRef = useRef<NativeCursorScheduler | null>(null);
   if (!cursorSchedulerRef.current) {
     cursorSchedulerRef.current = new NativeCursorScheduler({
-      throttleMs: CURSOR_THROTTLE_MS,
+      throttleMs: NATIVE_CURSOR_THROTTLE_MS,
       now: () => performance.now(),
       schedule: (callback, delayMs) => {
         const timer = window.setTimeout(callback, delayMs);

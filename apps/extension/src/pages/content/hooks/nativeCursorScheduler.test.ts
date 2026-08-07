@@ -10,7 +10,10 @@ import {
   NATIVE_SUBTITLE_PROTOCOL_VERSION,
   type NativeSubtitleCursorPayload,
 } from "../../../shared/nativeSubtitleProtocol.ts";
-import { NativeCursorScheduler } from "./nativeCursorScheduler.ts";
+import {
+  NATIVE_CURSOR_THROTTLE_MS,
+  NativeCursorScheduler,
+} from "./nativeCursorScheduler.ts";
 
 const cursor = (
   currentTime: number,
@@ -32,7 +35,7 @@ const createHarness = () => {
   const timers = new Map<number, { at: number; callback: () => void }>();
   const sent: NativeSubtitleCursorPayload[] = [];
   const scheduler = new NativeCursorScheduler({
-    throttleMs: 250,
+    throttleMs: NATIVE_CURSOR_THROTTLE_MS,
     now: () => now,
     schedule: (callback, delayMs) => {
       const id = ++nextTimerId;
@@ -60,19 +63,19 @@ const createHarness = () => {
 test("throttles normal cursor updates and sends only the latest value", () => {
   const harness = createHarness();
   harness.scheduler.update(cursor(1, 0));
+  harness.advanceTo(20);
+  harness.scheduler.update(cursor(1.02, 0));
   harness.advanceTo(50);
   harness.scheduler.update(cursor(1.05, 0));
-  harness.advanceTo(100);
-  harness.scheduler.update(cursor(1.1, 0));
 
   assert.deepEqual(
     harness.sent.map((value) => value.currentTime),
     [1]
   );
-  harness.advanceTo(250);
+  harness.advanceTo(NATIVE_CURSOR_THROTTLE_MS);
   assert.deepEqual(
     harness.sent.map((value) => value.currentTime),
-    [1, 1.1]
+    [1, 1.05]
   );
 });
 

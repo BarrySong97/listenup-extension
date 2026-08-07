@@ -12,7 +12,7 @@
     "dev": "nodemon --config nodemon.chrome.json",
     "dev:chrome": "nodemon --config nodemon.chrome.json",
     "dev:firefox": "nodemon --config nodemon.firefox.json",
-    "test": "node --experimental-strip-types --test src/shared/*.test.ts src/pages/content/lib/captions/*.test.ts src/pages/content/hooks/*.test.ts"
+    "test": "node --experimental-strip-types --test src/shared/*.test.ts src/pages/content/lib/captions/*.test.ts src/pages/content/lib/youtube-sdk/*.test.ts src/pages/content/hooks/*.test.ts"
   },
   "type": "module",
   "dependencies": {
