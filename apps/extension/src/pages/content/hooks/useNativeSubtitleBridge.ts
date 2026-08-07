@@ -1,5 +1,5 @@
 /**
- * @purpose 把字幕/cursor 发给 Desktop，处理精确绑定当前 session 的反向播放命令。
+ * @purpose 把字幕/cursor 发给 Desktop，处理精确绑定当前 session 的反向播放与字幕 seek 命令。
  * @role    内容脚本侧的 Native Messaging 发送端。
  * @deps    src/shared/nativeSubtitleProtocol、nativeCursorScheduler、youtubeSDK、chrome.runtime
  * @gotcha  反向命令必须同时校验 tab 外的 session/video/广告态；失败不可尝试控制其他播放器。
@@ -206,9 +206,15 @@ export const useNativeSubtitleBridge = ({
         return undefined;
       }
 
-      void youtubeSDK
-        .getPlayerFacade()
-        .controlPlayback(command.action)
+      const player = youtubeSDK.getPlayerFacade();
+      const operation =
+        command.action === "seek"
+          ? player.seekTo(command.seekTime)
+            ? Promise.resolve()
+            : Promise.reject(new Error("YouTube 播放器无法跳转"))
+          : player.controlPlayback(command.action);
+
+      void operation
         .then(() => respond(true, null))
         .catch((commandError: unknown) =>
           respond(

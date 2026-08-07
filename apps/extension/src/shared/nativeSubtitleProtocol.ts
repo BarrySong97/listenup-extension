@@ -2,7 +2,7 @@
  * @purpose 扩展与桌面端之间双向 Native Messaging v4 契约、host 名与深链接。
  * @role    内容脚本、background 与桌面端 Rust 三方对齐的唯一权威。
  * @deps    构建期环境常量、content 的 SubtitleItem 类型
- * @gotcha  playback command 必须带 command/session/video/tab 身份；改字段必须同步 background、content 与 Rust。见 docs/topics/native-messaging.md
+ * @gotcha  playback command 必须带 command/session/video/tab 身份；seek 还必须带有限非负时间。改字段必须同步 background、content 与 Rust。
  */
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 
@@ -58,17 +58,26 @@ export interface NativeSubtitleEndPayload {
   videoId: string;
 }
 
-export type NativeSubtitlePlaybackAction = "play" | "pause";
+export type NativeSubtitlePlaybackAction = "play" | "pause" | "seek";
 
-export interface NativeSubtitlePlaybackCommand {
+interface NativeSubtitlePlaybackCommandBase {
   kind: "playbackCommand";
   version: typeof NATIVE_SUBTITLE_PROTOCOL_VERSION;
   commandId: string;
   tabId: number;
   sessionId: string;
   videoId: string;
-  action: NativeSubtitlePlaybackAction;
 }
+
+export type NativeSubtitlePlaybackCommand =
+  | (NativeSubtitlePlaybackCommandBase & {
+      action: "play" | "pause";
+      seekTime?: never;
+    })
+  | (NativeSubtitlePlaybackCommandBase & {
+      action: "seek";
+      seekTime: number;
+    });
 
 export interface NativeSubtitlePlaybackCommandResultPayload {
   version: typeof NATIVE_SUBTITLE_PROTOCOL_VERSION;
@@ -116,6 +125,13 @@ export const isNativeSubtitlePlaybackCommand = (
   value: unknown
 ): value is NativeSubtitlePlaybackCommand => {
   if (!isObject(value)) return false;
+  const hasValidAction =
+    value.action === "seek"
+      ? typeof value.seekTime === "number" &&
+        Number.isFinite(value.seekTime) &&
+        value.seekTime >= 0
+      : (value.action === "play" || value.action === "pause") &&
+        (value.seekTime === undefined || value.seekTime === null);
   return (
     value.kind === "playbackCommand" &&
     value.version === NATIVE_SUBTITLE_PROTOCOL_VERSION &&
@@ -124,7 +140,7 @@ export const isNativeSubtitlePlaybackCommand = (
     Number.isInteger(value.tabId) &&
     typeof value.sessionId === "string" &&
     typeof value.videoId === "string" &&
-    (value.action === "play" || value.action === "pause")
+    hasValidAction
   );
 };
 
