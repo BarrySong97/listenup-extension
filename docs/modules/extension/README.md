@@ -44,12 +44,14 @@ public/scripts/        注入页面上下文的桥接脚本（web-accessible）
 4. `components/subtitles.tsx` 启动 `youtubeSDK`，同步播放时间 / 主题 / 广告态，调 `useSubtitles`
 5. `SubtitleRepository` 聚合轨道来源 → 下载 → 解析 → 清洗合并 → 写缓存
 6. UI 按当前字幕索引驱动高亮、自动滚动、循环、复制
-7. （dev 构建）`useNativeSubtitleBridge` 把 session / cursor 交给 background，转发给桌面端
+7. `useNativeSubtitleBridge` 把 session / cursor 交给 background；background 也把 Desktop 的
+   播放 / 暂停命令精确转发回来源标签页
 
 ## 对外接口
 
 - 浏览器侧：`manifest.json` 声明的 popup / options / devtools 页面、内容脚本、`web_accessible_resources`
-- 对桌面端：`src/shared/nativeSubtitleProtocol.ts` 定义的 session / cursor 消息（见 [Native Messaging 专题](../../topics/native-messaging.md)）
+- 对桌面端：`src/shared/nativeSubtitleProtocol.ts` 定义的 v4 双向 session / cursor /
+  playback command-result 消息（见 [Native Messaging 专题](../../topics/native-messaging.md)）
 - 对用户数据：`chrome.storage.local` 的 `ai_settings` / `explain_cache` / `image_search_cache` / 字幕缓存
 
 ## 注意事项

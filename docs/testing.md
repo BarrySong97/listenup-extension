@@ -11,10 +11,10 @@
 
 | 面 | 自动化 | 现有覆盖 |
 |---|---|---|
-| Extension | ⚠️ 少量 Node test | videoId 三重身份校验 + 构建 + 手工回归 |
+| Extension | ⚠️ 少量 Node test | videoId 三重身份校验、Native cursor 调度、v4 协议守卫 + 构建 + 手工回归 |
 | Website | ⚠️ 只有 `eslint` | 构建 + 打开页面看 |
 | Desktop 前端 | ❌ 无 | 构建 + 手工回归 |
-| Desktop Rust | ✅ `cargo test` | session 状态机、SQLite repository、翻译校验、CLI dry-run/commit 往返 |
+| Desktop Rust | ✅ `cargo test` | session/bridge/command 状态机、appMode 偏好与定位、SQLite、翻译与 CLI |
 
 `apps/extension/src/pages/content/lib/subtitles/`（纯解析 / 清洗 / 合并）对 DOM 和 `chrome.*` 零依赖，是**最该先补单测**的一层。
 
@@ -72,7 +72,13 @@ node scripts/check-docs.mjs                                              # 永�
 - production Host 只允许 `nocahdalbgboblhbjkacpneakljldfjh`，DEV Host 只允许 `gbnneflaaakigllkomehhhaianjebljf`
 - 两个 Chrome profile 同时播放时，正式/DEV Desktop 不串窗口、socket 或字幕
 - Host 未安装时字幕面板照常工作
-- Native 窗口随播放 / 暂停 / seek 高亮并滚动当前句
+- Native 窗口随播放 / 暂停 / seek 高亮并滚动当前句；拖动到同一句内部、另一句和
+  `currentIndex=-1` 的无字幕间隙都立即同步最终时间，不能等下一次字幕索引变化
+- Desktop 列表与影院的播放 / 暂停按钮都控制当前选中 session，按钮 pending 期间不可重复点；
+  状态只随真实 cursor 更新，不能乐观翻转
+- 两个 Chrome profile 即使 tabId 相同，命令也只能到产生当前 session 的 bridge；切换选择后
+  只能控制新目标。关闭目标 tab、断开 Host、超时和身份变化都显示错误且不改投其他 tab
+- 广告、无 cursor、多视频尚未选择、Host 断开时播放按钮禁用；失败不影响扩展内字幕体验
 - SPA 切视频后 Native 窗口先 loading 再替换为新字幕，全程不闪上一视频字幕
 - 两个播放标签页出现选择遮罩，选定后第三个播放标签页不抢占
 - 所选视频暂停或关闭后，按剩余播放数量自动跟随或重新显示选择遮罩
@@ -80,6 +86,16 @@ node scripts/check-docs.mjs                                              # 永�
 - 列表切到影院后工具条先显示 3 秒再隐藏；反复切换、拖动、进入/退出 Chrome 全屏 Space
   后，移入影院字幕条仍显示工具条，不需要重启 Desktop
 - 从菜单栏隐藏再重显影院窗口后 hover 仍有效
+- 没有 `desktop-preferences.json`、文件损坏或版本未知时默认自由 Desktop；production / DEV
+  偏好互不串用
+- 自由 Desktop ↔ 菜单栏 App 可从 header 和 tray 菜单双向切换；Desktop 是 `Regular`，菜单栏
+  是 `Accessory`。固定在 Dock 的快捷图标可以保留，但菜单栏形态不显示运行状态圆点
+- 菜单栏形态固定 400×640 列表、不可缩放，不进入影院；tray 左键在图标下方切换显示/隐藏，
+  面板越过显示器边缘时被 clamp，副屏和不同缩放比例都验证
+- 菜单栏面板真正获得焦点后，点到 Chrome 或桌面会自动隐藏；刚显示、系统弹窗或切换形态时
+  不应被错误失焦事件立即吞掉
+- 从 tray 菜单切换（不经过 React header）后，切回自由 Desktop 仍恢复原位置、尺寸与
+  list/cinema；重启后恢复所选 appMode。制造偏好写入失败时保持旧形态并给出错误
 - 旧版本正式 Desktop 启动后静默检查并持续显示“发现新版本 / 立即更新”；点击前不下载、不安装、
   不重启，点击后才显示下载进度并完成更新
 - 已是最新版或启动检查网络失败时不弹提示；用户主动检查失败仍显示错误

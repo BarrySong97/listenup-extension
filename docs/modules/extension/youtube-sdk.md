@@ -8,7 +8,7 @@
 |---|---|
 | `YouTubeSDK.ts` | 主编排：管理子组件生命周期、装 MutationObserver、拦 History API、对外统一 API |
 | `YouTubeAdDetector.ts` | 广告探测：类型、文案、剩余时间 |
-| `YouTubePlayerFacade.ts` | 播放控制：**广告播放时 `getVideoElement()` 返回 `null`**，防止误操作广告视频；缓存 video 元素 |
+| `YouTubePlayerFacade.ts` | 播放控制与状态事件：**广告播放时 `getVideoElement()` 返回 `null`**，防止误操作广告视频；缓存 video 元素 |
 | `YouTubeSessionMonitor.ts` | 会话状态：`videoId` / 是否 watch 页 / 播放器是否就绪 |
 | `YouTubeThemeDetector.ts` | 明暗主题探测与配色 |
 | `types.ts` | `AdState` / `PlayerState` / `YouTubeSessionState` 与四个回调类型 |
@@ -32,7 +32,16 @@ youtubeSDK.start({ onAdStateChange, onPlayerStateChange, onThemeChange, onSessio
 youtubeSDK.stop();
 ```
 
-对外方法分四组：广告（`isAdPlaying` / `getCurrentAdState`）、播放（`getVideo` / `play` / `pause` / `seekTo` / `setVolume` / `getCurrentTime` / `getDuration` / `isPlaying` / `getCurrentPlayerState`）、会话（`getVideoId` / `getSessionState`）、主题（`getCurrentTheme` / `isDarkTheme` / `isLightTheme` / `getThemeColors`）。子组件也可直接取（`getAdDetector` / `getPlayerFacade` / `getThemeDetector`）。
+`onPlayerStateChange(state, reason)` 的 `reason` 保留 `timeupdate`、`play`、`pause`、
+`seeking`、`seeked` 等原生事件来源。Facade 会把一次拖动的第一个 `seeking` 和最终 `seeked`
+明确标出，供 Native cursor 绕过普通节流。
+
+对外方法分四组：广告（`isAdPlaying` / `getCurrentAdState`）、播放（`getVideo` / `play` /
+`pause` / `controlPlayback` / `seekTo` / `setVolume` / `getCurrentTime` / `getDuration` /
+`isPlaying` / `getCurrentPlayerState`）、会话（`getVideoId` / `getSessionState`）、主题
+（`getCurrentTheme` / `isDarkTheme` / `isLightTheme` / `getThemeColors`）。Native 反向命令只能走
+`controlPlayback("play" | "pause")`，它复用广告保护并在 video 不可用时返回明确错误。
+子组件也可直接取（`getAdDetector` / `getPlayerFacade` / `getThemeDetector`）。
 
 ## 探测机制
 

@@ -2,16 +2,21 @@
 
 ## 职责
 
-macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标，同步显示在一个可以浮在任何窗口（包括别的 app 的全屏）之上的独立窗口里；同时将原字幕保存到 SQLite，并显示用户通过 CLI 导入的 AI 译文。Tauri v2，Rust 后端 + React 前端。
+macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标，同步显示在可浮于其他 app
+全屏之上的窗口里；可反向控制当前 YouTube 播放 / 暂停，并可在自由 Desktop 与菜单栏 App
+两种形态间切换。同时将原字幕保存到 SQLite，并显示用户通过 CLI 导入的 AI 译文。
+Tauri v2，Rust 后端 + React 前端。
 
-边界：**管** 窗口渲染、Native Messaging Host、字幕持久化、安全 CLI 和菜单栏入口；**不管** 字幕抓取（那是扩展的事），不内置翻译模型，也**不能**反向控制 YouTube——同步是单向的。
+边界：**管** 窗口渲染、Native Messaging Host、字幕持久化、安全 CLI、双形态生命周期和
+当前 session 的播放 / 暂停；**不管** 字幕抓取（那是扩展的事），不内置翻译模型，也不提供
+seek、音量、倍速等更宽的播放器遥控。
 
 跨模块的协议与联调流程写在 [Native Messaging 专题](../../topics/native-messaging.md)，本文只讲这个 app 自身。
 
 ## 文件清单与关系
 
 ```
-src/App.tsx        窗口 UI：原语 / 译文 / 双语、列表 / 影院、多视频选择、虚拟滚动
+src/App.tsx        窗口 UI：播放控制、appMode、原语 / 译文 / 双语、列表 / 影院、多视频选择
 src/TranslationMissingState.tsx  列表 / 影院共用的无译文引导与复制反馈
 src/localAiTranslationPrompt.ts  固定 Skill / CLI 版本的本地 AI Markdown 指令模板
 src/VideoSessionPicker.tsx  多视频冲突与主动改选的全遮罩
@@ -21,7 +26,9 @@ src/queryClient.ts          窗口 focus refetch；无轮询 / watcher
 src/main.tsx       React 挂载与 QueryClientProvider
 src/types.ts       与 Rust 侧共享的实时快照 / 持久字幕视图类型
 src/styles.css     Tailwind v4 @theme（唯一的设计 token 权威，见 design.md）
-src-tauri/src/lib.rs   Tauri 入口、socket、状态机、SQLite composition、NSPanel/tray
+src-tauri/src/lib.rs   Tauri 入口、双向 socket、状态机、SQLite composition、NSPanel/tray
+src-tauri/src/app_mode.rs  版本化偏好、activation policy、窗口属性与事务切换
+src-tauri/src/positioning.rs  tray 下方定位、多显示器 work area clamp 与坐标缩放
 src-tauri/src/database/ SQLite repository、WAL 连接、原语 revision 与译文事务
 src-tauri/src/domain/   版本化翻译 JSON 与句段映射校验
 src-tauri/src/cli/      listenup CLI 参数、受限命令与机器输出
@@ -44,10 +51,14 @@ scripts/uninstall-host.mjs      卸载
 
 `lib.rs` 的 `run()` 开头就分叉：
 
-- **桥接模式** —— 启动参数含 `chrome-extension://`（被 Chrome Native Messaging 拉起）。不创建窗口，把 stdin 的长度前缀 JSON 帧按 NDJSON 转发到本地 Unix socket。所以**播放视频不会弹窗**。
+- **桥接模式** —— 启动参数含 `chrome-extension://`（被 Chrome Native Messaging 拉起）。
+  不创建窗口；Chrome → GUI 把 stdin 长度帧转成 Unix socket NDJSON，GUI → Chrome 把 socket
+  command 转成 stdout 长度帧。所以**播放视频不会弹窗**。
 - **GUI 模式**（默认）—— 用户通过 `listenup://open` 深链接或直接打开。启动时在同一个 socket 上监听桥接连接。
 
-GUI 没开时，桥接进程缓存最新的 session 快照、丢弃 cursor；GUI 打开后下一帧到来时自动连接并补发缓存的 session。
+GUI 没开时，桥接进程缓存最新的 session 快照、丢弃 cursor；GUI 打开后下一帧到来时自动连接
+并补发缓存的 session。GUI 为每条 socket 分配 bridgeId，播放命令只能写回产生当前 session 的
+bridge；Desktop 等待真实 command result 和后续 cursor，不乐观改状态。
 
 🚨 桥接模式下 **stdout 被 Native Messaging 协议独占**，任何诊断只能写 stderr。见 [ADR-0003](../../decisions/0003-native-messaging-single-binary.md)。
 
@@ -58,7 +69,7 @@ GUI 使用 Tauri app-data 目录下的 `listenup.sqlite`：
 - production：`~/Library/Application Support/com.listenup.desktop/listenup.sqlite`
 - development：`~/Library/Application Support/com.listenup.desktop.dev/listenup.sqlite`
 
-连接开启 WAL、foreign keys 和 5 秒 busy timeout，migration 编译进 Rust。只有协议 v3 中
+连接开启 WAL、foreign keys 和 5 秒 busy timeout，migration 编译进 Rust。只有协议 v4 中
 `identityStatus=verified`、`status=ready` 且字幕非空的 session 才写库；cursor、pending、
 loading、empty 和 error 都不写。写库发生在对应 UI snapshot event 之前。
 
@@ -117,14 +128,32 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 
 ## 窗口
 
-无边框透明窗口。macOS 上：
+无边框透明窗口，复用一个 Webview/NSPanel 实例动态切换两种 appMode。macOS 上：
 
 - 深色毛玻璃靠 `window-vibrancy`（`NSVisualEffectMaterial::HudWindow`），需要 `tauri.conf.json` 的 `app.macOSPrivateApi: true` **和** tauri 的 `macos-private-api` feature，缺一个就构建报错或背景不透明
 - 运行时把 NSWindow **class-swap 成 `NSPanel` + `nonactivatingPanel`**（objc2 直接干）。这是能盖住别的 app 原生全屏 Space 的唯一办法——实测普通 NSWindow 即使配了 `canJoinAllSpaces` + `fullScreenAuxiliary` + 高 level 也进不去（tauri#11488）。副作用正合适：点字幕条不抢视频 app 的焦点。
-- activation policy 是 `Regular`（Dock 图标 + Cmd+Tab 常驻），同时也建了菜单栏 tray（"显示字幕窗口" / "检查更新…" / "退出"），两个入口都保留
+- `desktop` 使用 `ActivationPolicy::Regular`：作为运行中的 app 出现在 Dock / Cmd+Tab；
+  `menubar` 使用 `Accessory`：不以运行中 app 身份出现在 Dock / Cmd+Tab。用户固定在 Dock 的
+  快捷图标仍可能保留，只是不显示运行状态圆点
+- 首次升级没有偏好文件或偏好损坏时默认 `desktop`，不会让现有用户突然改变使用形态
 - 拖动靠 `data-tauri-drag-region`（没有系统标题栏），关闭按钮在 header / 工具条里
 
-两种形态，靠 header 按钮切换，模式与各自尺寸持久化在 `localStorage`：
+appMode 可从 header 或 tray 菜单切换：
+
+| | 自由 Desktop | 菜单栏 App |
+|---|---|---|
+| activation | `Regular` | `Accessory` |
+| 窗口 | 可拖动、可缩放，保留 list / cinema | 固定 400×640 列表面板，不可缩放 |
+| tray 左键 | 显示并聚焦窗口 | 在 tray 图标下方切换显示 / 隐藏 |
+| 失焦 | 保持显示 | 窗口真正获得过焦点后，失焦自动隐藏 |
+| 恢复 | 运行时恢复切换前位置 / 尺寸 / list-cinema；重启从本地偏好恢复 | 每次显示按 tray rect、点击位置与当前显示器 work area 定位并 clamp |
+
+实现参考 Separate/Grove 的 panel 行为，但偏好和运行时窗口属性由 Rust `app_mode.rs` 统一
+管理。偏好写在各环境 app-data 的 `desktop-preferences.json`，使用临时文件 + rename 原子保存；
+activation、resizable/skip-taskbar 和持久化任一步失败都会回滚旧形态。见
+[ADR-0010](../../decisions/0010-desktop-and-menubar-app-modes.md)。
+
+自由 Desktop 内还有两种视图，靠 header 按钮切换，尺寸持久化在 `localStorage`：
 
 | | 列表模式 | 影院模式 |
 |---|---|---|
@@ -132,7 +161,8 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 | 背景 | vibrancy 磨砂 + `--color-glass` | **运行时关掉 vibrancy**（`set_vibrancy` 命令）+ 纯透明 + `--color-glass-cinema` |
 | 工具条 | 常驻 header | 默认隐藏；hover 整条影院字幕窗口时显示，可切换原语 / 译文 / 双语，鼠标离开窗口后隐藏 |
 
-切换用 `setMinSize` + `setSize`，权限在 `capabilities/default.json`。
+切换用 `setMinSize` + `setSize`；appMode 位置恢复另用 `setPosition`，权限在
+`capabilities/default.json`。
 列表/影院缩放、vibrancy/阴影切换、全屏 Space 重排和 tray 重显都会重新启用
 `acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免非激活 NSPanel 偶发停止命中
 CSS `:hover`。
@@ -223,7 +253,8 @@ cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
 node scripts/check-environment-identifiers.mjs
 ```
 
-Rust 单测覆盖帧解析和 0/1/2+ 播放 session、锁定、暂停、pending 与失效选择。
+Rust 单测覆盖帧解析、0/1/2+ 播放 session、锁定、暂停、pending、失效选择、bridge 精确路由、
+错误 bridge result、appMode 偏好默认/往返与 panel 坐标 clamp。
 真实链路必须手工验证，清单见 [testing.md](../../testing.md)。
 
 ## 注意事项

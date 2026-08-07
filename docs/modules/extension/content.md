@@ -14,11 +14,14 @@
 
 它既是容器组件也是主要编排层，负责：
 
-- 启动 `youtubeSDK`，监听主题、广告、播放器状态与会话变化
+- 启动 `youtubeSDK`，监听主题、广告、带事件原因的播放器状态与会话变化
 - 调 `useSubtitles` 加载字幕
 - 协调当前字幕索引、自动滚动、循环播放、面板布局
 - 承接选词 → `explainTarget`（写入前先暂停视频，避免边听边读错过内容）
-- dev 构建下把字幕快照与节流后的播放游标交给 background
+- 把字幕快照与播放游标交给 background；普通播放游标最多 250ms 一次，字幕索引变化、
+  `seeking` 与最终 `seeked` 强制立即发，避免拖进无字幕间隙或同一句内部时 Desktop 停在旧位置
+- 校验 Desktop v4 播放命令的 session/video/ad 身份，只在当前页面匹配时调用播放器适配层，
+  并把成功或失败结果沿原 bridge 返回
 
 ## 字幕加载层：`hooks/useSubtitles.ts`
 
@@ -53,7 +56,7 @@ pending 快照，避免一帧内把旧字幕发布给 Native。
 校验页面 session videoId、轨道来源 videoId、字幕 URL 的 `v` 参数三者一致。
 未验证轨道不能读写缓存、下载字幕或发布 ready；缓存结构为 v3，并同时保存
 `videoId` 与 `sourceVideoId`。规则见 [ADR-0007](../../decisions/0007-desktop-owned-video-session-selection.md)。
-Desktop 同步协议 v3 还发送 `vssId` 与 `isDefault`，见
+Desktop 同步协议 v4 继续发送 `vssId` 与 `isDefault`，并增加播放控制往返，见
 [ADR-0008](../../decisions/0008-desktop-sqlite-bilingual-subtitles-and-safe-cli.md)。
 
 ## 纯处理层：`lib/subtitles/`
@@ -75,3 +78,9 @@ Desktop 同步协议 v3 还发送 `vssId` 与 `isDefault`，见
 
 - [Explain 卡片](explain-card.md) · [youtube-sdk](youtube-sdk.md) · [FAQ](faq.md)
 - 跨模块：[Native Messaging 字幕同步](../../topics/native-messaging.md)
+
+## Native cursor 调度测试
+
+`hooks/nativeCursorScheduler.ts` 是无 DOM 副作用的调度器；Node 测试固定普通节流、latest-wins、
+seek 强制刷新、`currentIndex=-1` 间隙和卸载取消。协议守卫测试同时固定 v4 command/result 的
+必填身份字段。修改 Native 同步时运行 `pnpm --filter @listenup/extension test`。
