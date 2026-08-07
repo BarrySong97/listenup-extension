@@ -35,7 +35,14 @@ const cursor = (
 test("uses the live source index without remapping stale currentTime", () => {
   assert.deepEqual(
     resolveSubtitleCursorPresentation(blocks, cursor(0.99, 1), true),
-    { activeIndex: 1, playedThroughIndex: -1 }
+    { activeIndex: 1, playedThroughIndex: 0 }
+  );
+});
+
+test("marks the subtitle immediately before a live active index as played", () => {
+  assert.deepEqual(
+    resolveSubtitleCursorPresentation(blocks, cursor(1.99, 2), true),
+    { activeIndex: 2, playedThroughIndex: 1 }
   );
 });
 

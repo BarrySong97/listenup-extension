@@ -84,11 +84,15 @@ export const resolveSubtitleCursorPresentation = (
   const activeIndex = liveIndexIsValid
     ? cursor.currentIndex
     : findSubtitleIndexAtTime(blocks, cursor.currentTime);
-  const playedThroughIndex = findLastIndexAtOrBefore(
+  const timedPlayedThroughIndex = findLastIndexAtOrBefore(
     blocks,
     cursor.currentTime,
     (block) => block.endTime
   );
+  const playedThroughIndex =
+    liveIndexIsValid && activeIndex >= 0
+      ? Math.max(timedPlayedThroughIndex, activeIndex - 1)
+      : timedPlayedThroughIndex;
 
   return { activeIndex, playedThroughIndex };
 };

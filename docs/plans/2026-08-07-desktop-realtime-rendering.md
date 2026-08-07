@@ -66,8 +66,8 @@ Profiler 区分传输和 commit 时间。目标是普通字幕切换多数低于
 
 ## 执行记录
 
-- `pnpm --filter @listenup/desktop test`：9/9 通过；覆盖 live index、`-1`、译文映射、重叠、
-  结束状态与既有 UI / appMode 棘轮。
+- `pnpm --filter @listenup/desktop test`：10/10 通过；覆盖 live index、紧邻当前项的 played 边界、
+  `-1`、译文映射、重叠、结束状态与既有 UI / appMode 棘轮。
 - `pnpm --filter @listenup/extension test`：22/22 通过；新增 100ms playback clock 启停测试，
   既有 cursor force / dispose 测试通过。
 - Desktop production build 通过，产物确认包含 `react.memo_cache_sentinel`；单 chunk 534.64 kB

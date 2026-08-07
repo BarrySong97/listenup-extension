@@ -201,6 +201,8 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - Desktop 使用精确锁定的 React Compiler 1.0；高频 cursor 必须与 viewer/session 分离。列表只接收
   active / played index，时间文字只接收整秒，HeroUI 工具栏不订阅连续 `currentTime`。见
   [ADR-0013](../../decisions/0013-desktop-react-compiler-and-cursor-render-boundaries.md)
+- 实时原语列表以扩展传来的 `currentIndex` 为当前项权威值；所有更早的条目至少标记为已播放，
+  避免字幕切换容差或相邻时间重叠让“当前项之前一条”短暂显示成未播放。译文与缓存列表仍按时间映射。
 - 影院工具条保持“入场短显 + `group-hover`”；原生层负责在窗口状态变化后恢复鼠标 tracking，不能改成永久显示掩盖问题
 - 滚动条只在滚动中显示：thumb 平时透明，`onScroll` / `onScrollEnd` 维护 `.scrolling` class
 - 列表 footer 只显示语义块数量，不暴露 YouTube videoId 或 SQLite 来源文案；这不改变 SQLite
