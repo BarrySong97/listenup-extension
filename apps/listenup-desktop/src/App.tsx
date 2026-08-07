@@ -1,8 +1,8 @@
 /**
  * @purpose 字幕窗口 UI：实时同步、播放控制、Desktop/菜单栏形态、双语与列表/影院视图。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
- * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  播放按钮不乐观改 cursor；Menubar 只换列表外壳，不覆盖 Desktop 当前尺寸。
+ * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、components/ui、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
+ * @gotcha  列表播放按钮固定在字幕模式行最右侧且不乐观改 cursor；Menubar 不覆盖 Desktop 当前尺寸。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -15,6 +15,10 @@ import {
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VList, type VListHandle } from "virtua";
+import { DesktopButton } from "./components/ui/DesktopButton";
+import { DesktopIconButton } from "./components/ui/DesktopIconButton";
+import { SubtitleModeControl } from "./components/ui/SubtitleModeControl";
+import { TargetLanguageSelect } from "./components/ui/TargetLanguageSelect";
 import { buildLocalAiTranslationPrompt } from "./localAiTranslationPrompt";
 import {
   resolveAppModeWindowPolicy,
@@ -77,13 +81,6 @@ const DEFAULT_SIZES: Record<ViewMode, WindowSize> = {
 
 const SCROLLBAR_IDLE_DELAY_MS = 700;
 const CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000;
-const SUBTITLE_MODE_OPTIONS: ReadonlyArray<
-  readonly [SubtitleDisplayMode, string]
-> = [
-  ["source", "原语"],
-  ["translation", "译文"],
-  ["bilingual", "双语"],
-];
 const EMPTY_VIEWER_SNAPSHOT: ViewerSnapshot = {
   connected: false,
   activeSession: null,
@@ -254,6 +251,7 @@ const YoutubeLogo = ({ size = 22 }: { size?: number }) => (
 
 const StatusDot = ({ connected }: { connected: boolean }) => (
   <span
+    aria-hidden="true"
     className={`h-1.5 w-1.5 flex-none rounded-full transition-all ${
       connected
         ? "bg-ok shadow-[0_0_6px_rgba(48,209,88,0.7)]"
@@ -286,22 +284,41 @@ const UpdateNotice = ({
       aria-live="polite"
     >
       {(state.phase === "checking" || state.phase === "downloading") && (
-        <Icon icon="mdi:loading" className="h-3.5 w-3.5 flex-none animate-spin" />
+        <Icon
+          icon="mdi:loading"
+          className="h-3.5 w-3.5 flex-none animate-spin"
+          aria-hidden="true"
+        />
       )}
-      {isError && <Icon icon="mdi:alert-circle-outline" className="h-3.5 w-3.5 flex-none" />}
-      {isSuccess && <Icon icon="mdi:check-circle-outline" className="h-3.5 w-3.5 flex-none" />}
+      {isError && (
+        <Icon
+          icon="mdi:alert-circle-outline"
+          className="h-3.5 w-3.5 flex-none"
+          aria-hidden="true"
+        />
+      )}
+      {isSuccess && (
+        <Icon
+          icon="mdi:check-circle-outline"
+          className="h-3.5 w-3.5 flex-none"
+          aria-hidden="true"
+        />
+      )}
       {state.phase === "available" && (
-        <Icon icon="mdi:update" className="h-3.5 w-3.5 flex-none" />
+        <Icon
+          icon="mdi:update"
+          className="h-3.5 w-3.5 flex-none"
+          aria-hidden="true"
+        />
       )}
       <span className="truncate">{state.message}</span>
       {state.phase === "available" && (
-        <button
-          type="button"
+        <DesktopButton
           className="h-6 flex-none cursor-pointer rounded-full border border-white/15 bg-white/15 px-2 text-[10px] font-medium text-fg transition-colors hover:bg-white/25"
-          onClick={onInstall}
+          onPress={onInstall}
         >
           立即更新
-        </button>
+        </DesktopButton>
       )}
     </div>
   );
@@ -312,10 +329,12 @@ const PlaybackButton = ({
   disabled,
   pending,
   onPress,
+  disabledReason,
   compact = false,
 }: {
   cursor: CursorState | null;
   disabled: boolean;
+  disabledReason?: string;
   pending: boolean;
   onPress: () => void;
   compact?: boolean;
@@ -323,19 +342,22 @@ const PlaybackButton = ({
   const action = cursor?.isPaused !== false ? "play" : "pause";
   const label = action === "play" ? "播放 YouTube" : "暂停 YouTube";
   return (
-    <button
-      type="button"
-      className={`${compact ? "flex h-6 w-6" : iconButtonClassName} cursor-pointer items-center justify-center border-none bg-transparent text-fg-muted transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-40`}
-      onClick={onPress}
-      disabled={disabled}
-      title={pending ? "正在控制 YouTube…" : label}
-      aria-label={label}
-    >
-      <Icon
-        icon={pending ? "mdi:loading" : action === "play" ? "mdi:play" : "mdi:pause"}
-        className={`h-3.5 w-3.5 flex-none ${pending ? "animate-spin" : ""}`}
-      />
-    </button>
+    <DesktopIconButton
+      className={`${compact ? "flex h-6 w-6 items-center justify-center" : iconButtonClassName} cursor-pointer border-none bg-transparent text-fg-muted transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-40`}
+      onPress={onPress}
+      isDisabled={disabled}
+      tooltip={pending ? "正在控制 YouTube…" : disabledReason ?? label}
+      ariaLabel={label}
+      icon={
+        <Icon
+          icon={
+            pending ? "mdi:loading" : action === "play" ? "mdi:play" : "mdi:pause"
+          }
+          className={`h-3.5 w-3.5 flex-none ${pending ? "animate-spin" : ""}`}
+          aria-hidden="true"
+        />
+      }
+    />
   );
 };
 
@@ -780,6 +802,17 @@ export default function App() {
     if (cursor.isAdPlaying) return "广告播放中";
     return cursor.isPaused ? "已暂停" : "同步播放中";
   }, [cursor]);
+  const playbackDisabledReason = playbackPending
+    ? "正在控制 YouTube…"
+    : !connected
+      ? "扩展未连接，暂不可控制"
+      : !session
+        ? "等待可控制的视频"
+        : !cursor
+          ? "等待播放状态同步"
+          : cursor.isAdPlaying
+            ? "广告播放中，暂不可控制"
+            : undefined;
 
   if (mode === "cinema" && appMode === "desktop") {
     return (
@@ -839,42 +872,29 @@ export default function App() {
             showCinemaToolbarHint ? "opacity-100" : "opacity-0"
           }`}
         >
-          <button
-            type="button"
+          <DesktopButton
             className="flex h-6 cursor-pointer items-center gap-[5px] rounded-full border-none bg-transparent px-1.5 text-[11px] text-fg-muted transition-colors hover:text-fg"
-            onClick={() => void switchMode("list")}
-            title="返回列表模式"
+            onPress={() => void switchMode("list")}
           >
-            <Icon icon="mdi:format-list-bulleted" className="h-3.5 w-3.5 flex-none" />
+            <Icon
+              icon="mdi:format-list-bulleted"
+              className="h-3.5 w-3.5 flex-none"
+              aria-hidden="true"
+            />
             列表
-          </button>
-          <div
-            className="flex items-center gap-0.5 rounded-full border border-white/10 bg-black/25 p-0.5"
-            role="group"
-            aria-label="字幕显示模式"
-          >
-            {SUBTITLE_MODE_OPTIONS.map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={`h-5 cursor-pointer rounded-full border px-1.5 text-[10px] transition-colors ${
-                  subtitleMode === value
-                    ? "border-white/15 bg-white/15 text-fg"
-                    : "border-transparent bg-transparent text-fg-faint hover:bg-white/10 hover:text-fg"
-                }`}
-                onClick={() => switchSubtitleMode(value)}
-                aria-pressed={subtitleMode === value}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          </DesktopButton>
+          <SubtitleModeControl
+            compact
+            value={subtitleMode}
+            onChange={switchSubtitleMode}
+          />
           <DevBadge />
           <StatusDot connected={connected} />
           <PlaybackButton
             compact
             cursor={cursor}
             disabled={playbackDisabled}
+            disabledReason={playbackDisabledReason}
             pending={playbackPending}
             onPress={() => void controlPlayback()}
           />
@@ -886,15 +906,19 @@ export default function App() {
           <span className="text-[11px] text-fg-faint tabular-nums">
             {formatTime(cursor?.currentTime ?? 0)}
           </span>
-          <button
-            type="button"
-            className="flex h-6 cursor-pointer items-center rounded-full border-none bg-transparent px-1 text-fg-muted transition-colors hover:text-fg"
-            onClick={closeWindow}
-            title="收进菜单栏"
-            aria-label="收进菜单栏"
-          >
-            <Icon icon="mdi:close" className="h-3.5 w-3.5 flex-none" />
-          </button>
+          <DesktopIconButton
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border-none bg-transparent text-fg-muted transition-colors hover:text-fg"
+            onPress={closeWindow}
+            tooltip="收进菜单栏"
+            ariaLabel="收进菜单栏"
+            icon={
+              <Icon
+                icon="mdi:close"
+                className="h-3.5 w-3.5 flex-none"
+                aria-hidden="true"
+              />
+            }
+          />
         </div>
         {pickerVisible && (
           <VideoSessionPicker
@@ -938,57 +962,63 @@ export default function App() {
             {session?.title ?? subtitleQuery.data?.source.title ?? "ListenUp Desktop"}
           </h1>
           <DevBadge />
-          <PlaybackButton
-            cursor={cursor}
-            disabled={playbackDisabled}
-            pending={playbackPending}
-            onPress={() => void controlPlayback()}
-          />
-          <button
-            type="button"
+          <DesktopIconButton
             className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
-            onClick={() => void updater.checkForUpdates()}
-            disabled={updater.isBusy}
-            title={updater.state.message ?? "检查更新"}
-            aria-label="检查更新"
-          >
-            <Icon
-              icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
-              className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
-            />
-          </button>
+            onPress={() => void updater.checkForUpdates()}
+            isDisabled={updater.isBusy}
+            tooltip={updater.state.message ?? "检查更新"}
+            ariaLabel="检查更新"
+            icon={
+              <Icon
+                icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
+                className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
+            }
+          />
           {appMode === "desktop" && (
-            <button
-              type="button"
+            <DesktopIconButton
               className={iconButtonClassName}
-              onClick={() => void switchMode("cinema")}
-              title="影院模式：字幕条悬浮在视频上"
-              aria-label="切换到影院模式"
-            >
-              <Icon icon="mdi:movie-open-outline" className="h-3.5 w-3.5 flex-none" />
-            </button>
-          )}
-          <button
-            type="button"
-            className={iconButtonClassName}
-            onClick={() => void switchAppMode()}
-            title={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
-            aria-label={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
-          >
-            <Icon
-              icon={appMode === "desktop" ? "mdi:dock-top" : "mdi:application-outline"}
-              className="h-3.5 w-3.5 flex-none"
+              onPress={() => void switchMode("cinema")}
+              tooltip="影院模式：字幕条悬浮在视频上"
+              ariaLabel="切换到影院模式"
+              icon={
+                <Icon
+                  icon="mdi:movie-open-outline"
+                  className="h-3.5 w-3.5 flex-none"
+                  aria-hidden="true"
+                />
+              }
             />
-          </button>
-          <button
-            type="button"
+          )}
+          <DesktopIconButton
             className={iconButtonClassName}
-            onClick={closeWindow}
-            title="收进菜单栏"
-            aria-label="收进菜单栏"
-          >
-            <Icon icon="mdi:close" className="h-3.5 w-3.5 flex-none" />
-          </button>
+            onPress={() => void switchAppMode()}
+            tooltip={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
+            ariaLabel={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
+            icon={
+              <Icon
+                icon={
+                  appMode === "desktop" ? "mdi:dock-top" : "mdi:application-outline"
+                }
+                className="h-3.5 w-3.5 flex-none"
+                aria-hidden="true"
+              />
+            }
+          />
+          <DesktopIconButton
+            className={iconButtonClassName}
+            onPress={closeWindow}
+            tooltip="收进菜单栏"
+            ariaLabel="收进菜单栏"
+            icon={
+              <Icon
+                icon="mdi:close"
+                className="h-3.5 w-3.5 flex-none"
+                aria-hidden="true"
+              />
+            }
+          />
         </div>
         <div
           className="mt-2 flex min-w-0 items-center gap-[7px] text-[11px] text-fg-faint"
@@ -1011,43 +1041,25 @@ export default function App() {
           </span>
         </div>
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
-          {SUBTITLE_MODE_OPTIONS.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={`h-6 cursor-pointer rounded-md border px-2 text-[10px] transition-colors ${
-                subtitleMode === value
-                  ? "border-white/20 bg-white/15 text-fg"
-                  : "border-transparent bg-transparent text-fg-faint hover:bg-wash hover:text-fg"
-              }`}
-              onClick={() => switchSubtitleMode(value)}
-              aria-pressed={subtitleMode === value}
-            >
-              {label}
-            </button>
-          ))}
+          <SubtitleModeControl
+            value={subtitleMode}
+            onChange={switchSubtitleMode}
+          />
           <span className="flex-1" />
           {subtitleMode !== "source" && (
-            <select
-              className="h-6 max-w-[132px] cursor-pointer rounded-md border border-white/10 bg-black/30 px-1.5 text-[10px] text-fg outline-none"
-              value={targetLanguage ?? ""}
-              onChange={(event) => selectTargetLanguage(event.target.value)}
-              aria-label="目标字幕语言"
-              disabled={!subtitleQuery.data?.translations.length}
-            >
-              {!subtitleQuery.data?.translations.length && (
-                <option value="">无可用译文</option>
-              )}
-              {subtitleQuery.data?.translations.map((translation) => (
-                <option
-                  key={translation.languageCode}
-                  value={translation.languageCode}
-                >
-                  {translation.displayName}
-                </option>
-              ))}
-            </select>
+            <TargetLanguageSelect
+              value={targetLanguage}
+              options={subtitleQuery.data?.translations ?? []}
+              onChange={selectTargetLanguage}
+            />
           )}
+          <PlaybackButton
+            cursor={cursor}
+            disabled={playbackDisabled}
+            disabledReason={playbackDisabledReason}
+            pending={playbackPending}
+            onPress={() => void controlPlayback()}
+          />
         </div>
       </header>
 
@@ -1136,14 +1148,7 @@ export default function App() {
         )}
       </section>
 
-      <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
-        <span className="min-w-0 truncate">
-          {session
-            ? `YouTube · ${session.videoId}`
-            : subtitleQuery.data
-              ? `SQLite 缓存 · ${subtitleQuery.data.source.videoId}`
-              : "SQLite 本地字幕库"}
-        </span>
+      <footer className="flex items-center justify-end border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
         <span>{displayBlocks.length} 个语义块</span>
       </footer>
       {pickerVisible && (
