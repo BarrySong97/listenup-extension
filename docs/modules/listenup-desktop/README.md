@@ -19,7 +19,7 @@ Tauri v2，Rust 后端 + React 前端。
 src/App.tsx        窗口 UI：播放控制、appMode、原语 / 译文 / 双语、列表 / 影院、多视频选择
 src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，HeroUI 行点击发送块起点
 src/subtitleCursor.ts  live 原语索引直用、译文 / fallback 时间映射的纯 selector
-src/components/ui/ HeroUI 3 primitives：文字 / 图标按钮、字幕模式组、目标语言 Select
+src/components/ui/ HeroUI 3 primitives；DesktopRowButton 是虚拟字幕热路径的无 hover state 例外
 src/TranslationMissingState.tsx  列表 / 影院共用的无译文引导与复制反馈
 src/localAiTranslationPrompt.ts  固定 Skill / CLI 版本的本地 AI Markdown 指令模板
 src/VideoSessionPicker.tsx  多视频冲突与主动改选的全遮罩
@@ -199,13 +199,17 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限
 - 字幕列表用 `virtua` 的 `VList`，居中用 `scrollToIndex(i, { align: "center", smooth })`；切视频或切换原语 / 译文 / 双语数据集后，等新列表提交一帧再无动画居中，后续时间游标变化恢复平滑跟随
-- 字幕行用 HeroUI `DesktopButton` 保留整行键盘语义；只传稳定 `onSeek` 与 disabled primitive，
-  hover 背景用即时 CSS 伪类，不加 background transition，也不能改成 mouse state 或以重新订阅
-  连续 cursor 为代价；focus-visible 保留键盘描边。见
+- 字幕行用专用 `DesktopRowButton` 保留原生键盘语义；它不能换成 HeroUI / React Aria Button，
+  因为 React Aria `useHover` 会在鼠标逐行移动时触发 state render。行只接收稳定 `onSeek` 与
+  disabled primitive；毛玻璃上的 hover 使用常驻独立层，仅由 CSS `group-hover` 切 opacity，
+  并用 paint containment 限制重绘。不能直接 transition 半透明 background，也不能改成 mouse
+  state 或以重新订阅连续 cursor 为代价；focus-visible 保留键盘描边。见
   [ADR-0014](../../decisions/0014-desktop-subtitle-row-seek-control.md)
 - Desktop 使用精确锁定的 React Compiler 1.0；高频 cursor 必须与 viewer/session 分离。列表只接收
   active / played index，时间文字只接收整秒，HeroUI 工具栏不订阅连续 `currentTime`。见
   [ADR-0013](../../decisions/0013-desktop-react-compiler-and-cursor-render-boundaries.md)
+- hover / cursor 的最终流畅度以 production frontend bundle 为准；Vite + React Development 在
+  100ms cursor 下有额外检查与 HMR 开销，可用于功能调试，但不能据此判断发布版帧率。
 - 实时原语列表以扩展传来的 `currentIndex` 为当前项权威值；所有更早的条目至少标记为已播放，
   避免字幕切换容差或相邻时间重叠让“当前项之前一条”短暂显示成未播放。译文与缓存列表仍按时间映射。
 - 影院工具条保持“入场短显 + `group-hover`”；原生层负责在窗口状态变化后恢复鼠标 tracking，不能改成永久显示掩盖问题
