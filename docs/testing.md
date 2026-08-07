@@ -75,6 +75,10 @@ node scripts/check-docs.mjs                                              # 永�
 - Host 未安装时字幕面板照常工作
 - Native 窗口随播放 / 暂停 / seek 高亮并滚动当前句；拖动到同一句内部、另一句和
   `currentIndex=-1` 的无字幕间隙都立即同步最终时间，不能等下一次字幕索引变化
+- 正常播放时 cursor 约每 100ms 更新，暂停后停止周期消息；字幕切换多数低于 100ms、P95 目标
+  约 150ms，seek 目标低于 100ms。用 `sentAt` 区分传输延迟和 React commit，不能只凭肉眼估算
+- React Profiler 中连续 cursor 不应让 SubtitleList 或静态 HeroUI 工具栏反复 commit；时间标签
+  最多每秒更新一次，字幕列表只在 active / played 边界变化时更新
 - Desktop 列表与影院的播放 / 暂停按钮都控制当前选中 session，按钮 pending 期间不可重复点；
   状态只随真实 cursor 更新，不能乐观翻转
 - Desktop / 菜单栏列表的播放按钮固定在原语 / 译文 / 双语行最右侧；原语模式隐藏语言 Select、

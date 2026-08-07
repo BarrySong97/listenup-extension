@@ -17,6 +17,8 @@ seek、音量、倍速等更宽的播放器遥控。
 
 ```
 src/App.tsx        窗口 UI：播放控制、appMode、原语 / 译文 / 双语、列表 / 影院、多视频选择
+src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，不消费连续时间
+src/subtitleCursor.ts  live 原语索引直用、译文 / fallback 时间映射的纯 selector
 src/components/ui/ HeroUI 3 primitives：文字 / 图标按钮、字幕模式组、目标语言 Select
 src/TranslationMissingState.tsx  列表 / 影院共用的无译文引导与复制反馈
 src/localAiTranslationPrompt.ts  固定 Skill / CLI 版本的本地 AI Markdown 指令模板
@@ -196,6 +198,9 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限
 - 字幕列表用 `virtua` 的 `VList`，居中用 `scrollToIndex(i, { align: "center", smooth })`；切视频或切换原语 / 译文 / 双语数据集后，等新列表提交一帧再无动画居中，后续时间游标变化恢复平滑跟随
+- Desktop 使用精确锁定的 React Compiler 1.0；高频 cursor 必须与 viewer/session 分离。列表只接收
+  active / played index，时间文字只接收整秒，HeroUI 工具栏不订阅连续 `currentTime`。见
+  [ADR-0013](../../decisions/0013-desktop-react-compiler-and-cursor-render-boundaries.md)
 - 影院工具条保持“入场短显 + `group-hover`”；原生层负责在窗口状态变化后恢复鼠标 tracking，不能改成永久显示掩盖问题
 - 滚动条只在滚动中显示：thumb 平时透明，`onScroll` / `onScrollEnd` 维护 `.scrolling` class
 - 列表 footer 只显示语义块数量，不暴露 YouTube videoId 或 SQLite 来源文案；这不改变 SQLite
@@ -264,6 +269,9 @@ pnpm --filter @listenup/desktop test
 cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
 node scripts/check-environment-identifiers.mjs
 ```
+
+`vite build` 产物应包含 React Compiler 的 memo cache；改 Compiler 配置后还要用 React Profiler
+确认连续 cursor 不会触发 SubtitleList 和静态 HeroUI 工具栏 commit。
 
 Rust 单测覆盖帧解析、0/1/2+ 播放 session、锁定、暂停、pending、失效选择、bridge 精确路由、
 错误 bridge result、appMode 偏好默认/往返与 panel 坐标 clamp。

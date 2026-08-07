@@ -56,7 +56,7 @@
 | 字幕轨 | `caption track` | YouTube 提供的一条字幕，含语言、是否自动生成、track URL |
 | 字幕域 | `subtitle-domain` | 负责聚合轨道来源、下载、解析、缓存的编排层 |
 | 页面桥接 | `PageBridge` / `inject-youtube.js` | 注入到 YouTube 页面上下文的脚本，用于读播放器内部数据 |
-| 播放游标 | `cursor` | 发给桌面端的当前播放时间 / 字幕索引，最多 250ms 一次 |
+| 播放游标 | `cursor` | 发给桌面端的当前播放时间 / 字幕索引，播放中最多 100ms 一次，关键事件立即发 |
 | 会话 | `session` | 发给桌面端的一次字幕快照（videoId + 标题 + 全量字幕） |
 | 桥接进程 | `bridge process` | 被 Chrome 拉起的无窗口 Tauri 二进制，转发 stdin 到 Unix socket |
 | 影院模式 | `cinema mode` | Desktop 窗口缩成一条字幕带的形态 |

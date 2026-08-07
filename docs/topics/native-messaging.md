@@ -34,6 +34,10 @@ YouTube content script
 必须从活跃 session 取得 `bridgeId + tabId + sessionId + videoId`，只写回产生该 session 的
 socket；即使两个 Chrome Profile 恰好出现相同 tabId，也不会串页。
 
+Desktop 把高频 cursor 与低频 viewer/session 状态分开：实时原语列表直接消费已校验的
+`currentIndex`，译文块按 `currentTime` 映射。字幕列表只在 active / played 边界变化时 render，
+时间文字按整秒 render；Native cursor 到达不会重建 Header 或整张虚拟列表。
+
 ## 消息与身份状态
 
 - **session** —— 一次字幕快照（videoId + 标题 + 身份状态 + 全量字幕）。协议 v4 的
@@ -42,7 +46,8 @@ socket；即使两个 Chrome Profile 恰好出现相同 tabId，也不会串页�
   `vssId` 和 `isDefault`，用于建立不会跨语言覆盖的持久轨道身份。
   Extension 在发送前以 player response 中 `audioIsDefault=true` 的原始音轨语言选字幕；
   原始音轨信号缺失时才回退 YouTube 默认字幕与首轨，当前自动配音不会改变入库原语。
-- **cursor** —— 播放游标。普通播放期间**最多 250ms 一次**；当前字幕索引变化、拖动开始和
+- **cursor** —— 播放游标。视频播放期间由 100ms clock 采样，普通消息**最多 100ms 一次**；暂停
+  后停止周期采样。当前字幕索引变化、拖动开始和
   最终 `seeked` 立即发。`currentIndex=-1` 也必须发送，保证拖进字幕间隙后 Desktop 清掉旧高亮。
 - **playbackCommand** —— GUI 生成唯一 commandId，携带完整 session/video/tab 身份和
   `play | pause`。Rust 只向该 session 的 bridge 写命令，background 只向该 tab 发消息，

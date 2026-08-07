@@ -32,3 +32,4 @@
 | [0010](0010-desktop-and-menubar-app-modes.md) | 同一 NSPanel 支持自由 Desktop 与菜单栏 App 双形态 | 部分被 0011 取代 | 2026-08-07 |
 | [0011](0011-menubar-preserves-desktop-window-size.md) | 菜单栏形态保留 Desktop 窗口尺寸 | 已采纳 | 2026-08-07 |
 | [0012](0012-desktop-heroui-ui-primitives.md) | Desktop 业务交互统一经过 HeroUI 3 primitives | 已采纳 | 2026-08-07 |
+| [0013](0013-desktop-react-compiler-and-cursor-render-boundaries.md) | Desktop 使用 React Compiler 并隔离实时 cursor 渲染边界 | 已采纳 | 2026-08-07 |
