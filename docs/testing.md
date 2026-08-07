@@ -77,6 +77,9 @@ node scripts/check-docs.mjs                                              # 永�
   `currentIndex=-1` 的无字幕间隙都立即同步最终时间，不能等下一次字幕索引变化
 - Desktop 列表与影院的播放 / 暂停按钮都控制当前选中 session，按钮 pending 期间不可重复点；
   状态只随真实 cursor 更新，不能乐观翻转
+- Desktop / 菜单栏列表的播放按钮固定在原语 / 译文 / 双语行最右侧；原语模式隐藏语言 Select、
+  译文 / 双语显示语言 Select 时都不能移位。纯图标操作 hover / 键盘 focus 都显示 Tooltip，
+  disabled Tooltip 能解释 pending、断连、无 cursor 或广告原因
 - 两个 Chrome profile 即使 tabId 相同，命令也只能到产生当前 session 的 bridge；切换选择后
   只能控制新目标。关闭目标 tab、断开 Host、超时和身份变化都显示错误且不改投其他 tab
 - 广告、无 cursor、多视频尚未选择、Host 断开时播放按钮禁用；失败不影响扩展内字幕体验
@@ -117,6 +120,7 @@ node scripts/check-docs.mjs                                              # 永�
 - 无译文时列表显示居中引导、影院显示紧凑入口；复制内容含固定 Skill / CLI 版本、视频与原语元数据，并要求先询问目标语言
 - 剪贴板 capability 只有 `clipboard-manager:allow-write-text`，复制成功 / 失败都有可恢复反馈
 - CLI 提交期间 Desktop 不自动变化；切回 Desktop 后 focus refetch 显示新译文
+- 列表 footer 不显示 YouTube / SQLite 来源，只显示语义块数量；冷启动 SQLite 字幕仍正常显示
 - 没有 `refetchInterval`、SQLite watcher、`PRAGMA data_version` 或 CLI 通知链路
 - production/DEV 默认数据库不同，`--env dev` 不会写入 production
 - production/DEV `.app` 都包含 `listenup` sidecar，CLI 构建不修改 shell profile

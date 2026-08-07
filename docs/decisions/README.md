@@ -31,3 +31,4 @@
 | [0009](0009-native-messaging-bidirectional-playback-control.md) | Native Messaging 按 bridge/session 精确路由的双向播放控制 | 已采纳 | 2026-08-07 |
 | [0010](0010-desktop-and-menubar-app-modes.md) | 同一 NSPanel 支持自由 Desktop 与菜单栏 App 双形态 | 部分被 0011 取代 | 2026-08-07 |
 | [0011](0011-menubar-preserves-desktop-window-size.md) | 菜单栏形态保留 Desktop 窗口尺寸 | 已采纳 | 2026-08-07 |
+| [0012](0012-desktop-heroui-ui-primitives.md) | Desktop 业务交互统一经过 HeroUI 3 primitives | 已采纳 | 2026-08-07 |

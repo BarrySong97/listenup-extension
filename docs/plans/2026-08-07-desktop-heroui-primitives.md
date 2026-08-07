@@ -1,7 +1,7 @@
 # Desktop HeroUI 基础组件迁移 — 实施计划
 
 - 日期：2026-08-07
-- 状态：已批准
+- 状态：已实施，待 DEV 手工回归
 - 关联设计：[`docs/spark/2026-08-07-desktop-heroui-primitives-design.md`](../spark/2026-08-07-desktop-heroui-primitives-design.md)
 - 影响模块：ListenUp Desktop
 
@@ -31,50 +31,50 @@ HeroUI 3 基础组件层；把列表形态的播放 / 暂停按钮移动到原�
 
 ### 1. HeroUI 依赖与样式基线
 
-1. [ ] Desktop 依赖使用 `"@heroui/react": "catalog:"` 和
+1. [x] Desktop 依赖使用 `"@heroui/react": "catalog:"` 和
    `"@heroui/styles": "catalog:"`，运行 pnpm 更新 lockfile，确认 Desktop 实际解析到 3.1.0。
-2. [ ] 在 `styles.css` 中按 Website 已验证的顺序引入 HeroUI 样式，不复制 Website 的主题。
-3. [ ] 先跑一次 Desktop build，暴露 Vite / Tailwind / React 19 集成问题，再开始业务迁移。
+2. [x] 在 `styles.css` 中按 Website 已验证的顺序引入 HeroUI 样式，不复制 Website 的主题。
+3. [x] 先跑一次 Desktop build，暴露 Vite / Tailwind / React 19 集成问题，再开始业务迁移。
 
 ### 2. Desktop HeroUI primitives
 
-1. [ ] 建立 `DesktopButton`：包装 HeroUI `Button`，统一 `onPress`、`isDisabled`、焦点和
+1. [x] 建立 `DesktopButton`：包装 HeroUI `Button`，统一 `onPress`、`isDisabled`、焦点和
    现有样式透传。
-2. [ ] 建立 `DesktopIconButton`：组合 HeroUI `Button + Tooltip`；强制要求 tooltip 与
+2. [x] 建立 `DesktopIconButton`：组合 HeroUI `Button + Tooltip`；强制要求 tooltip 与
    aria label，并确保禁用按钮仍能触发原因提示。
-3. [ ] 建立 `SubtitleModeControl`：用 `ToggleButtonGroup + ToggleButton` 实现三选一，分别
+3. [x] 建立 `SubtitleModeControl`：用 `ToggleButtonGroup + ToggleButton` 实现三选一，分别
    支持列表和影院紧凑样式。
-4. [ ] 建立 `TargetLanguageSelect`：使用 HeroUI 3 compound Select，保留现有受控 value、
+4. [x] 建立 `TargetLanguageSelect`：使用 HeroUI 3 compound Select，保留现有受控 value、
    禁用态、选项文本和尺寸。
-5. [ ] 给新增源文件补齐 AI 文件头。
+5. [x] 给新增源文件补齐 AI 文件头。
 
 ### 3. 业务 UI 迁移与布局调整
 
-1. [ ] 迁移 `UpdateNotice` 的“立即更新”和 App 内所有纯图标按钮。
-2. [ ] 从列表标题栏移除播放 / 暂停，把它加入字幕显示控制行最后；原语模式无语言 Select 时
+1. [x] 迁移 `UpdateNotice` 的“立即更新”和 App 内所有纯图标按钮。
+2. [x] 从列表标题栏移除播放 / 暂停，把它加入字幕显示控制行最后；原语模式无语言 Select 时
    仍保持最右对齐。
-3. [ ] 迁移列表与影院的原语 / 译文 / 双语控件，保持同一 `subtitleMode` 与存储 key。
-4. [ ] 迁移目标语言 Select，确认切换数据集后现有字幕重新居中逻辑不变。
-5. [ ] 保留影院 hover 工具条中的紧凑播放控制，迁移其按钮与 Tooltip。
-6. [ ] 迁移 `TranslationMissingState` 和 `VideoSessionPicker` 的有文字按钮，不为可见文字重复
+3. [x] 迁移列表与影院的原语 / 译文 / 双语控件，保持同一 `subtitleMode` 与存储 key。
+4. [x] 迁移目标语言 Select，确认切换数据集后现有字幕重新居中逻辑不变。
+5. [x] 保留影院 hover 工具条中的紧凑播放控制，迁移其按钮与 Tooltip。
+6. [x] 迁移 `TranslationMissingState` 和 `VideoSessionPicker` 的有文字按钮，不为可见文字重复
    添加 Tooltip。
-7. [ ] 将纯展示 Iconify 图标标为装饰或保留相邻状态文本，不生成不可操作 Tooltip。
-8. [ ] 删除 footer 左侧 YouTube / SQLite 来源槽，只保留右侧语义块数量。
-9. [ ] 更新所有受影响源码文件的 AI 文件头。
+7. [x] 将纯展示 Iconify 图标标为装饰或保留相邻状态文本，不生成不可操作 Tooltip。
+8. [x] 删除 footer 左侧 YouTube / SQLite 来源槽，只保留右侧语义块数量。
+9. [x] 更新所有受影响源码文件的 AI 文件头。
 
 ### 4. 可执行棘轮
 
-1. [ ] 增加 Node test，扫描 Desktop 业务 TSX；除 UI primitives 文件外禁止原生
+1. [x] 增加 Node test，扫描 Desktop 业务 TSX；除 UI primitives 文件外禁止原生
    `<button>` 和 `<select>`。
-2. [ ] 依赖 TypeScript 必填 props 保证每个 `DesktopIconButton` 都有 tooltip 和 aria label。
-3. [ ] 运行测试并确认扫描规则不会把纯展示图标或 HeroUI 内部实现误判为业务违规。
+2. [x] 依赖 TypeScript 必填 props 保证每个 `DesktopIconButton` 都有 tooltip 和 aria label。
+3. [x] 运行测试并确认扫描规则不会把纯展示图标或 HeroUI 内部实现误判为业务违规。
 
 ### 5. 文档与决策同步
 
-1. [ ] 新增 ADR，记录 Desktop 业务交互元素统一经过 HeroUI 3 primitives；说明为何不直接在
+1. [x] 新增 ADR，记录 Desktop 业务交互元素统一经过 HeroUI 3 primitives；说明为何不直接在
    每个调用点使用 HeroUI，以及 Extension / Website 不在本次迁移范围。
-2. [ ] 更新 Desktop 模块文档：依赖、primitives 边界、Tooltip 规则、字幕控制行布局和 footer。
-3. [ ] 更新 `docs/testing.md`：纯图标 Tooltip、键盘操作、列表最右播放按钮和 SQLite 文案移除。
+2. [x] 更新 Desktop 模块文档：依赖、primitives 边界、Tooltip 规则、字幕控制行布局和 footer。
+3. [x] 更新 `docs/testing.md`：纯图标 Tooltip、键盘操作、列表最右播放按钮和 SQLite 文案移除。
 
 ### 6. 自动验证
 
@@ -92,7 +92,7 @@ node scripts/check-environment-identifiers.mjs
 
 ### 7. DEV 手工回归
 
-1. [ ] 在正在运行的 Desktop DEV 中验证热更新；如依赖变化导致 Vite 无法热加载，重启
+1. [x] 在正在运行的 Desktop DEV 中验证热更新；如依赖变化导致 Vite 无法热加载，重启
    `pnpm dev:desktop`。
 2. [ ] Desktop 与菜单栏 App 分别确认播放按钮位于字幕控制行最右侧，切换形态不改变窗口宽高。
 3. [ ] 原语模式无语言 Select、译文 / 双语有语言 Select 时，播放按钮都稳定贴右。
@@ -102,6 +102,16 @@ node scripts/check-environment-identifiers.mjs
 6. [ ] 验证更新、无译文复制、多视频选择、列表 / 影院切换、窗口拖拽和收进菜单栏。
 7. [ ] 确认 footer 不再显示 YouTube / SQLite 来源，只显示语义块数量；无 live session 时
    SQLite 冷启动字幕仍能显示。
+
+## 执行记录
+
+- `pnpm --filter @listenup/desktop test`：4/4 通过。
+- `pnpm --filter @listenup/desktop build`：通过；HeroUI 接入后单 chunk 超过 500 kB，Vite 仅给出
+  性能 warning，不影响 Tauri 本地页面构建。
+- `node scripts/check-docs.mjs`：通过。
+- 运行中的 Desktop DEV 已收到 package reload、样式和 React HMR，控制台无新增编译错误。
+- non-activating NSPanel 无法被当前 macOS 无障碍读取；浏览器直开 Vite 页面又缺少 Tauri
+  runtime。因此上方第 2–7 项保留为用户在实际 DEV App 中的最终视觉 / 交互回归。
 
 ## 风险与应对
 

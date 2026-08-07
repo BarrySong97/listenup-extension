@@ -17,6 +17,7 @@ seek、音量、倍速等更宽的播放器遥控。
 
 ```
 src/App.tsx        窗口 UI：播放控制、appMode、原语 / 译文 / 双语、列表 / 影院、多视频选择
+src/components/ui/ HeroUI 3 primitives：文字 / 图标按钮、字幕模式组、目标语言 Select
 src/TranslationMissingState.tsx  列表 / 影院共用的无译文引导与复制反馈
 src/localAiTranslationPrompt.ts  固定 Skill / CLI 版本的本地 AI Markdown 指令模板
 src/VideoSessionPicker.tsx  多视频冲突与主动改选的全遮罩
@@ -83,7 +84,8 @@ schema 对象完整时原子修复 migration 元数据，未知不匹配仍拒�
 
 ## 原语 / 译文 / 双语与刷新
 
-列表 header 提供三种模式和当前 revision 已导入的目标语言。选择保存在 `localStorage`。
+列表 header 提供三种模式和当前 revision 已导入的目标语言，播放 / 暂停固定在这一行最右侧；
+选择保存在 `localStorage`。
 当前视频没有首选译文时不拿其他语言代替：列表模式显示居中的本地 AI 翻译引导，影院模式
 显示同一入口的紧凑按钮。点击只把 Markdown 指令写入系统剪贴板；模板包含视频 / 原语元数据、
 固定 `cli-v0.1.0` Skill URL 和 CLI `0.1.0`，要求 Agent 先询问目标语言、dry-run 后再 commit，
@@ -185,12 +187,19 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 ## UI 实现约定
 
 - Tailwind v4（`@tailwindcss/vite`），token 全在 `src/styles.css` 的 `@theme`；只有 `::-webkit-scrollbar` 伪元素保留原生 CSS
+- Desktop 通过 workspace catalog 使用 HeroUI 3；业务 TSX 不直接写原生 `button` / `select`，
+  统一经过 `src/components/ui/`。HeroUI 管交互语义，现有 Tailwind class 管最终视觉，见
+  [ADR-0012](../../decisions/0012-desktop-heroui-ui-primitives.md)
+- 纯图标操作统一使用 `DesktopIconButton`，Tooltip 和 aria label 必填；带可见文字的按钮及
+  YouTube 标志、状态点、loading / success 等纯展示图标不重复加 Tooltip
 - 列表模式**只用 `--color-glass` 一个背景色**，header / 列表 / footer 保持一致，不要给局部单独加深
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限
 - 字幕列表用 `virtua` 的 `VList`，居中用 `scrollToIndex(i, { align: "center", smooth })`；切视频或切换原语 / 译文 / 双语数据集后，等新列表提交一帧再无动画居中，后续时间游标变化恢复平滑跟随
 - 影院工具条保持“入场短显 + `group-hover`”；原生层负责在窗口状态变化后恢复鼠标 tracking，不能改成永久显示掩盖问题
 - 滚动条只在滚动中显示：thumb 平时透明，`onScroll` / `onScrollEnd` 维护 `.scrolling` class
+- 列表 footer 只显示语义块数量，不暴露 YouTube videoId 或 SQLite 来源文案；这不改变 SQLite
+  冷启动缓存和持久字幕查询
 
 ## dev / production 是两个独立 app
 
