@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --experimental-strip-types --test src/*.test.ts",
     "build": "tsc && vite build",
     "tauri": "tauri",
     "tauri:dev": "LISTENUP_ENV=development VITE_LISTENUP_ENV=development tauri dev --config src-tauri/tauri.dev.conf.json",

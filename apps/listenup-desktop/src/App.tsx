@@ -2,7 +2,7 @@
  * @purpose 字幕窗口 UI：实时同步、播放控制、Desktop/菜单栏形态、双语与列表/影院视图。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  播放按钮不乐观改 cursor；菜单栏形态固定列表尺寸，切回自由窗口由 Rust 恢复运行时几何。
+ * @gotcha  播放按钮不乐观改 cursor；Menubar 只换列表外壳，不覆盖 Desktop 当前尺寸。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -16,6 +16,10 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VList, type VListHandle } from "virtua";
 import { buildLocalAiTranslationPrompt } from "./localAiTranslationPrompt";
+import {
+  resolveAppModeWindowPolicy,
+  type AppWindowViewMode,
+} from "./appModeWindowPolicy";
 import {
   TranslationMissingState,
   type TranslationCopyStatus,
@@ -32,7 +36,7 @@ import { useDesktopUpdater, type DesktopUpdateState } from "./useDesktopUpdater"
 import { useSubtitleView } from "./useSubtitleView";
 import { VideoSessionPicker } from "./VideoSessionPicker";
 
-type ViewMode = "list" | "cinema";
+type ViewMode = AppWindowViewMode;
 
 interface WindowSize {
   width: number;
@@ -162,15 +166,18 @@ const loadStoredSize = (mode: ViewMode): WindowSize | null => {
 
 const applyWindowSizeForMode = async (
   mode: ViewMode,
-  { menubar = false }: { menubar?: boolean } = {}
+  {
+    sizeMode = mode,
+    resize = true,
+  }: { sizeMode?: ViewMode; resize?: boolean } = {}
 ) => {
   const appWindow = getCurrentWindow();
-  const minSize = MIN_SIZES[mode];
-  const targetSize = menubar
-    ? DEFAULT_SIZES.list
-    : loadStoredSize(mode) ?? DEFAULT_SIZES[mode];
+  const minSize = MIN_SIZES[sizeMode];
   await appWindow.setMinSize(new LogicalSize(minSize.width, minSize.height));
-  await appWindow.setSize(new LogicalSize(targetSize.width, targetSize.height));
+  if (resize) {
+    const targetSize = loadStoredSize(sizeMode) ?? DEFAULT_SIZES[sizeMode];
+    await appWindow.setSize(new LogicalSize(targetSize.width, targetSize.height));
+  }
   // 影院模式追求沉浸：关掉 vibrancy 磨砂和系统窗口投影
   // （投影在透明窗口上会形成一圈黑边），列表模式恢复。vibrancy
   // 命令最后执行，它会在所有几何变化后刷新 NSPanel 的鼠标 tracking areas。
@@ -438,16 +445,19 @@ export default function App() {
       setAppModeError(null);
       if (nextMode === "menubar") {
         desktopModeRef.current = modeRef.current;
-        modeRef.current = "list";
-        setMode("list");
-        await applyWindowSizeForMode("list", { menubar: true });
-        return;
       }
-      const restoredMode = desktopModeRef.current;
-      modeRef.current = restoredMode;
-      setMode(restoredMode);
-      if (initial) {
-        await applyWindowSizeForMode(restoredMode);
+      const policy = resolveAppModeWindowPolicy({
+        nextMode,
+        desktopMode: desktopModeRef.current,
+        initial,
+      });
+      modeRef.current = policy.viewMode;
+      setMode(policy.viewMode);
+      await applyWindowSizeForMode(policy.viewMode, {
+        sizeMode: policy.sizeMode,
+        resize: policy.resize,
+      });
+      if (nextMode === "desktop" && initial) {
         await restoreDesktopWindowPosition();
       }
     };
@@ -541,12 +551,6 @@ export default function App() {
     } finally {
       setBusySessionId(null);
     }
-  }, []);
-
-  useEffect(() => {
-    applyWindowSizeForMode(modeRef.current).catch((error) => {
-      console.error("failed to apply initial window size", error);
-    });
   }, []);
 
   useEffect(() => {
