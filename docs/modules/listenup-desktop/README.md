@@ -200,7 +200,8 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限
 - 字幕列表用 `virtua` 的 `VList`，居中用 `scrollToIndex(i, { align: "center", smooth })`；切视频或切换原语 / 译文 / 双语数据集后，等新列表提交一帧再无动画居中，后续时间游标变化恢复平滑跟随
 - 字幕行用 HeroUI `DesktopButton` 保留整行键盘语义；只传稳定 `onSeek` 与 disabled primitive，
-  hover / focus-visible 不能以重新订阅连续 cursor 为代价。见
+  hover 背景用即时 CSS 伪类，不加 background transition，也不能改成 mouse state 或以重新订阅
+  连续 cursor 为代价；focus-visible 保留键盘描边。见
   [ADR-0014](../../decisions/0014-desktop-subtitle-row-seek-control.md)
 - Desktop 使用精确锁定的 React Compiler 1.0；高频 cursor 必须与 viewer/session 分离。列表只接收
   active / played index，时间文字只接收整秒，HeroUI 工具栏不订阅连续 `currentTime`。见

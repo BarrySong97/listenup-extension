@@ -1,8 +1,8 @@
 /**
- * @purpose 防止 Desktop 业务 JSX 绕过 HeroUI primitives 重新使用原生交互元素。
+ * @purpose 防止 Desktop 业务 JSX 绕过 HeroUI primitives，并锁定字幕行的即时 CSS hover 反馈。
  * @role    pnpm desktop test 的 UI 架构棘轮，扫描 src 下全部业务 TSX。
  * @deps    node:assert、node:fs、node:path、node:test、node:url
- * @gotcha  components/ui 是唯一允许封装第三方 primitives 的目录，不扫描 node_modules 或生成物。
+ * @gotcha  components/ui 是唯一允许封装第三方 primitives 的目录；字幕 hover 不得改回 mouse state 或背景 transition。
  */
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -34,4 +34,12 @@ test("Desktop business JSX uses HeroUI primitives instead of native controls", (
     [],
     `native button/select found outside components/ui: ${violations.join(", ")}`
   );
+});
+
+test("subtitle rows use immediate CSS hover without mouse state", () => {
+  const source = readFileSync(path.join(SOURCE_ROOT, "SubtitleList.tsx"), "utf8");
+
+  assert.equal(source.includes("hover:bg-white/[0.07]"), true);
+  assert.equal(source.includes("transition-[background-color"), false);
+  assert.equal(/onMouse(?:Enter|Leave)/.test(source), false);
 });

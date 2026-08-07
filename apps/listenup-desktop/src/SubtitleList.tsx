@@ -42,7 +42,7 @@ const SubtitleRow = memo(function SubtitleRow({
   return (
     <DesktopButton
       aria-label={`跳转到 ${formatTime(subtitle.startTime)}`}
-      className={`mx-2 grid h-auto w-[calc(100%-1rem)] grid-cols-[12px_40px_minmax(0,1fr)] items-start justify-start gap-2 whitespace-normal rounded-[10px] py-2 pl-2.5 pr-2 text-left transition-[background-color,box-shadow] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/35 ${
+      className={`mx-2 grid h-auto w-[calc(100%-1rem)] grid-cols-[12px_40px_minmax(0,1fr)] items-start justify-start gap-2 whitespace-normal rounded-[10px] py-2 pl-2.5 pr-2 text-left focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/35 ${
         isActive ? "bg-wash-active" : ""
       } ${
         isSeekDisabled
