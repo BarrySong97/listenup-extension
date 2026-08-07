@@ -1,10 +1,12 @@
 // @purpose 桌面端 Rust 入口：GUI/桥接双模式、双向播放协议、字幕持久化、session 仲裁、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
-// @deps    database、domain、tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
-// @gotcha  桥接 stdout 被协议独占；ready 先入 SQLite 再发 UI；NSPanel 状态切换须刷新鼠标 tracking；2+ session 尊重锁定。
+// @deps    database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket、编译期环境矩阵
+// @gotcha  stdout 只写 Native Messaging 长度帧；反向控制必须按 bridgeId+session 路由；2+ session 尊重锁定。
+mod app_mode;
 pub mod cli;
 pub mod database;
 pub mod domain;
+mod positioning;
 
 use database::{
     DatabaseState, SourceSnapshot, SourceSnapshotSegment, SubtitleDatabase, SubtitleView,
@@ -1147,6 +1149,31 @@ fn set_vibrancy(window: tauri::WebviewWindow, enabled: bool) {
     let _ = (window, enabled);
 }
 
+fn show_main_window(
+    app: &AppHandle,
+    tray_rect: Option<tauri::Rect>,
+    click_position: Option<tauri::PhysicalPosition<f64>>,
+) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if app.state::<app_mode::AppModeState>().current() == app_mode::AppMode::Menubar {
+        let positioned = tray_rect
+            .is_some_and(|rect| positioning::position_panel(&window, rect, click_position));
+        if !positioned {
+            let _ = window.center();
+        }
+    }
+    let _ = window.unminimize();
+    let _ = window.show();
+    #[cfg(target_os = "macos")]
+    {
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || refresh_mouse_tracking(&target));
+    }
+    let _ = window.set_focus();
+}
+
 #[tauri::command]
 fn get_snapshot(store: State<'_, SharedStore>) -> ViewerSnapshot {
     store
@@ -1263,6 +1290,8 @@ pub fn run() {
         .manage(SharedBridges::default())
         .manage(SharedPlaybackCommands::default())
         .invoke_handler(tauri::generate_handler![
+            app_mode::get_app_mode,
+            app_mode::set_app_mode,
             control_playback,
             get_snapshot,
             get_subtitle_view,
@@ -1270,7 +1299,17 @@ pub fn run() {
             set_vibrancy
         ])
         .setup(|app| {
-            let database_path = app.path().app_data_dir()?.join("listenup.sqlite");
+            let app_data_dir = app.path().app_data_dir()?;
+            let app_mode_path = app_mode::preference_path(&app_data_dir);
+            let initial_app_mode = app_mode::load(&app_mode_path);
+            app_mode::configure_initial(app, initial_app_mode)
+                .map_err(std::io::Error::other)?;
+            app.manage(app_mode::AppModeState::new(
+                app_mode_path,
+                initial_app_mode,
+            ));
+
+            let database_path = app_data_dir.join("listenup.sqlite");
             let database =
                 match tauri::async_runtime::block_on(SubtitleDatabase::connect(&database_path)) {
                     Ok(database) => {
@@ -1313,16 +1352,6 @@ pub fn run() {
                 }
             }
 
-            // 关键（调研结论，tauri#11488）：普通 activation policy 下，NSWindow
-            // 即使有 canJoinAllSpaces + fullScreenAuxiliary + 高 level 也进不了
-            // 其他 app 的原生全屏 Space（实测 isOnActiveSpace 恒为 false）。
-            // Regular 形态：Dock 图标常驻（黑色 app 图标）、可 Cmd+Tab，
-            // 同时菜单栏 tray 图标也常驻——两个入口都保留。
-            // 盖全屏能力由下方 NSPanel(nonactivatingPanel) 配置提供，与 activation
-            // policy 无关（已实测 Regular 下字幕仍能盖住别的 app 的全屏）。
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Regular);
-
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
                 // 把 NSWindow 运行时换成 NSPanel（tauri-nspanel 同款 class-swap）。
@@ -1359,10 +1388,27 @@ pub fn run() {
                 // 关闭按钮改为"收进菜单栏"：拦截关闭请求，隐藏窗口。
                 // 真正退出走菜单栏图标的"退出"。
                 let hide_target = window.clone();
+                let focus_app = app.handle().clone();
+                let panel_had_focus = Arc::new(AtomicBool::new(false));
+                let focus_state = Arc::clone(&panel_had_focus);
                 window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = hide_target.hide();
+                    match event {
+                        tauri::WindowEvent::CloseRequested { api, .. } => {
+                            api.prevent_close();
+                            let _ = hide_target.hide();
+                        }
+                        tauri::WindowEvent::Focused(true) => {
+                            focus_state.store(true, Ordering::SeqCst);
+                        }
+                        tauri::WindowEvent::Focused(false) => {
+                            if focus_app.state::<app_mode::AppModeState>().current()
+                                == app_mode::AppMode::Menubar
+                                && focus_state.swap(false, Ordering::SeqCst)
+                            {
+                                let _ = hide_target.hide();
+                            }
+                        }
+                        _ => {}
                     }
                 });
 
@@ -1402,52 +1448,80 @@ pub fn run() {
                 });
             }
 
-            // 菜单栏（tray）图标：Accessory 形态下没有 Dock 图标，
-            // 菜单栏是唤出窗口和退出 app 的常驻入口
+            // tray 左键按 appMode 显示/隐藏 panel；右键菜单负责更新、形态切换和退出。
             {
                 use tauri::menu::{Menu, MenuItem};
-                use tauri::tray::TrayIconBuilder;
+                use tauri::tray::{
+                    MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent,
+                };
 
                 let show_item = MenuItem::with_id(app, "show", "显示字幕窗口", true, None::<&str>)?;
                 let update_item =
                     MenuItem::with_id(app, "check-update", "检查更新…", true, None::<&str>)?;
+                let toggle_mode_text = match initial_app_mode {
+                    app_mode::AppMode::Desktop => "切换到菜单栏 App",
+                    app_mode::AppMode::Menubar => "切换到自由窗口",
+                };
+                let toggle_mode_item = MenuItem::with_id(
+                    app,
+                    "toggle-app-mode",
+                    toggle_mode_text,
+                    true,
+                    None::<&str>,
+                )?;
                 let quit_item =
                     MenuItem::with_id(app, "quit", "退出 ListenUp Desktop", true, None::<&str>)?;
-                let menu = Menu::with_items(app, &[&show_item, &update_item, &quit_item])?;
+                let menu = Menu::with_items(
+                    app,
+                    &[&show_item, &update_item, &toggle_mode_item, &quit_item],
+                )?;
+                app.manage(app_mode::AppModeMenuItem(toggle_mode_item.clone()));
 
                 let mut tray = TrayIconBuilder::with_id("main-tray")
                     .menu(&menu)
-                    .show_menu_on_left_click(true)
+                    .show_menu_on_left_click(false)
                     .on_menu_event(|app, event| match event.id.as_ref() {
                         "show" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                #[cfg(target_os = "macos")]
-                                {
-                                    let target = window.clone();
-                                    let _ = window.run_on_main_thread(move || {
-                                        refresh_mouse_tracking(&target);
-                                    });
-                                }
-                                let _ = window.set_focus();
-                            }
+                            let tray_rect = app
+                                .tray_by_id("main-tray")
+                                .and_then(|tray| tray.rect().ok().flatten());
+                            show_main_window(app, tray_rect, None);
                         }
                         "check-update" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                #[cfg(target_os = "macos")]
-                                {
-                                    let target = window.clone();
-                                    let _ = window.run_on_main_thread(move || {
-                                        refresh_mouse_tracking(&target);
-                                    });
-                                }
-                                let _ = window.set_focus();
-                            }
+                            let tray_rect = app
+                                .tray_by_id("main-tray")
+                                .and_then(|tray| tray.rect().ok().flatten());
+                            show_main_window(app, tray_rect, None);
                             let _ = app.emit(CHECK_UPDATE_EVENT, ());
+                        }
+                        "toggle-app-mode" => {
+                            if let Err(error) = app_mode::toggle(app) {
+                                let _ = app.emit(app_mode::APP_MODE_ERROR_EVENT, error);
+                            }
                         }
                         "quit" => app.exit(0),
                         _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            rect,
+                            position,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let is_menubar = app.state::<app_mode::AppModeState>().current()
+                                    == app_mode::AppMode::Menubar;
+                                if is_menubar && window.is_visible().unwrap_or(false) {
+                                    let _ = window.hide();
+                                } else {
+                                    show_main_window(app, Some(rect), Some(position));
+                                }
+                            }
+                        }
                     });
                 // 专用黑白 template 图标（变体 A：字幕框 + 字幕条）；
                 // 设为 template 后，macOS 会按菜单栏明暗自动反色

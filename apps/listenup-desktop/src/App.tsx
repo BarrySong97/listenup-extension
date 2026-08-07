@@ -1,13 +1,17 @@
 /**
- * @purpose 字幕窗口 UI：实时同步、SQLite 冷启动、原语/译文/双语、列表/影院与多视频选择。
+ * @purpose 字幕窗口 UI：实时同步、播放控制、Desktop/菜单栏形态、双语与列表/影院视图。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、virtua、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  新 live 立即接管缓存；CLI 只靠 focus refetch；VList 换数据后再居中；影院入场短显后由 hover 控制。
+ * @gotcha  播放按钮不乐观改 cursor；菜单栏形态固定列表尺寸，切回自由窗口由 Rust 恢复运行时几何。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  LogicalPosition,
+  LogicalSize,
+  getCurrentWindow,
+} from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VList, type VListHandle } from "virtua";
@@ -17,6 +21,7 @@ import {
   type TranslationCopyStatus,
 } from "./TranslationMissingState";
 import type {
+  AppMode,
   CursorState,
   SessionState,
   SubtitleDisplayMode,
@@ -34,6 +39,11 @@ interface WindowSize {
   height: number;
 }
 
+interface WindowPosition {
+  x: number;
+  y: number;
+}
+
 interface DisplayBlock {
   id: string;
   startTime: number;
@@ -45,6 +55,7 @@ interface DisplayBlock {
 const MODE_STORAGE_KEY = "listenup-view-mode";
 const SUBTITLE_MODE_STORAGE_KEY = "listenup-subtitle-display-mode";
 const TARGET_LANGUAGE_STORAGE_KEY = "listenup-target-language";
+const DESKTOP_POSITION_STORAGE_KEY = "listenup-window-position-desktop";
 const SIZE_STORAGE_KEYS: Record<ViewMode, string> = {
   list: "listenup-window-size-list",
   cinema: "listenup-window-size-cinema",
@@ -149,10 +160,15 @@ const loadStoredSize = (mode: ViewMode): WindowSize | null => {
   }
 };
 
-const applyWindowSizeForMode = async (mode: ViewMode) => {
+const applyWindowSizeForMode = async (
+  mode: ViewMode,
+  { menubar = false }: { menubar?: boolean } = {}
+) => {
   const appWindow = getCurrentWindow();
   const minSize = MIN_SIZES[mode];
-  const targetSize = loadStoredSize(mode) ?? DEFAULT_SIZES[mode];
+  const targetSize = menubar
+    ? DEFAULT_SIZES.list
+    : loadStoredSize(mode) ?? DEFAULT_SIZES[mode];
   await appWindow.setMinSize(new LogicalSize(minSize.width, minSize.height));
   await appWindow.setSize(new LogicalSize(targetSize.width, targetSize.height));
   // 影院模式追求沉浸：关掉 vibrancy 磨砂和系统窗口投影
@@ -160,6 +176,34 @@ const applyWindowSizeForMode = async (mode: ViewMode) => {
   // 命令最后执行，它会在所有几何变化后刷新 NSPanel 的鼠标 tracking areas。
   await appWindow.setShadow(mode === "list");
   await invoke("set_vibrancy", { enabled: mode === "list" });
+};
+
+const persistDesktopWindowPosition = async () => {
+  const appWindow = getCurrentWindow();
+  const [position, scaleFactor] = await Promise.all([
+    appWindow.outerPosition(),
+    appWindow.scaleFactor(),
+  ]);
+  if (scaleFactor <= 0) return;
+  const logical = position.toLogical(scaleFactor);
+  localStorage.setItem(
+    DESKTOP_POSITION_STORAGE_KEY,
+    JSON.stringify({ x: logical.x, y: logical.y } satisfies WindowPosition)
+  );
+};
+
+const restoreDesktopWindowPosition = async () => {
+  try {
+    const raw = localStorage.getItem(DESKTOP_POSITION_STORAGE_KEY);
+    if (!raw) return;
+    const position = JSON.parse(raw) as WindowPosition;
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
+    await getCurrentWindow().setPosition(
+      new LogicalPosition(position.x, position.y)
+    );
+  } catch {
+    // 损坏或越界位置交给系统当前窗口位置兜底。
+  }
 };
 
 const persistCurrentWindowSize = async (mode: ViewMode) => {
@@ -291,6 +335,8 @@ const PlaybackButton = ({
 export default function App() {
   const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
+  const [appMode, setAppModeState] = useState<AppMode>("desktop");
+  const [appModeError, setAppModeError] = useState<string | null>(null);
   const [subtitleMode, setSubtitleMode] =
     useState<SubtitleDisplayMode>(loadStoredSubtitleMode);
   const [targetLanguage, setTargetLanguage] = useState<string | null>(() =>
@@ -309,6 +355,7 @@ export default function App() {
   const [playbackPending, setPlaybackPending] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const modeRef = useRef(mode);
+  const desktopModeRef = useRef<ViewMode>(loadStoredMode());
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledViewRef = useRef<{
     sessionId: string | null;
@@ -377,6 +424,53 @@ export default function App() {
       if (scrollIdleTimerRef.current !== null) {
         window.clearTimeout(scrollIdleTimerRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlistenMode: (() => void) | null = null;
+    let unlistenError: (() => void) | null = null;
+
+    const applyAppMode = async (nextMode: AppMode, initial = false) => {
+      if (disposed) return;
+      setAppModeState(nextMode);
+      setAppModeError(null);
+      if (nextMode === "menubar") {
+        desktopModeRef.current = modeRef.current;
+        modeRef.current = "list";
+        setMode("list");
+        await applyWindowSizeForMode("list", { menubar: true });
+        return;
+      }
+      const restoredMode = desktopModeRef.current;
+      modeRef.current = restoredMode;
+      setMode(restoredMode);
+      if (initial) {
+        await applyWindowSizeForMode(restoredMode);
+        await restoreDesktopWindowPosition();
+      }
+    };
+
+    const initializeAppMode = async () => {
+      unlistenMode = await listen<AppMode>(
+        "desktop-app-mode-changed",
+        (event) => void applyAppMode(event.payload, false)
+      );
+      unlistenError = await listen<string>(
+        "desktop-app-mode-error",
+        (event) => setAppModeError(event.payload)
+      );
+      const initialMode = await invoke<AppMode>("get_app_mode");
+      await applyAppMode(initialMode, true);
+    };
+    void initializeAppMode().catch((error) => {
+      setAppModeError(error instanceof Error ? error.message : String(error));
+    });
+    return () => {
+      disposed = true;
+      unlistenMode?.();
+      unlistenError?.();
     };
   }, []);
 
@@ -470,6 +564,7 @@ export default function App() {
   }, [mode]);
 
   const switchMode = useCallback(async (nextMode: ViewMode) => {
+    if (appMode !== "desktop") return;
     if (nextMode === modeRef.current) return;
 
     try {
@@ -487,7 +582,25 @@ export default function App() {
     } catch (error) {
       console.error("failed to resize window", error);
     }
-  }, []);
+    desktopModeRef.current = nextMode;
+  }, [appMode]);
+
+  const switchAppMode = useCallback(async () => {
+    const nextMode: AppMode = appMode === "desktop" ? "menubar" : "desktop";
+    setAppModeError(null);
+    try {
+      if (nextMode === "menubar") {
+        desktopModeRef.current = modeRef.current;
+        await Promise.all([
+          persistCurrentWindowSize(modeRef.current),
+          persistDesktopWindowPosition(),
+        ]);
+      }
+      await invoke<AppMode>("set_app_mode", { mode: nextMode });
+    } catch (error) {
+      setAppModeError(error instanceof Error ? error.message : String(error));
+    }
+  }, [appMode]);
 
   const switchSubtitleMode = useCallback((nextMode: SubtitleDisplayMode) => {
     setSubtitleMode(nextMode);
@@ -664,7 +777,7 @@ export default function App() {
     return cursor.isPaused ? "已暂停" : "同步播放中";
   }, [cursor]);
 
-  if (mode === "cinema") {
+  if (mode === "cinema" && appMode === "desktop") {
     return (
       <main
         className="group relative flex h-full cursor-grab select-none items-center justify-center overflow-hidden rounded-2xl bg-glass-cinema px-5 py-2 active:cursor-grabbing"
@@ -762,9 +875,9 @@ export default function App() {
             onPress={() => void controlPlayback()}
           />
           <span
-            className={`text-[11px] ${playbackError ? "text-red-300" : "text-fg-faint"}`}
+            className={`text-[11px] ${appModeError || playbackError ? "text-red-300" : "text-fg-faint"}`}
           >
-            {playbackError ?? playbackLabel}
+            {appModeError ?? playbackError ?? playbackLabel}
           </span>
           <span className="text-[11px] text-fg-faint tabular-nums">
             {formatTime(cursor?.currentTime ?? 0)}
@@ -802,9 +915,12 @@ export default function App() {
       />
       <header
         className="min-w-0 border-b border-hairline pb-2.5 pl-3.5 pr-3 pt-3"
-        data-tauri-drag-region
+        data-tauri-drag-region={appMode === "desktop" ? true : undefined}
       >
-        <div className="flex min-w-0 items-center gap-2.5" data-tauri-drag-region>
+        <div
+          className="flex min-w-0 items-center gap-2.5"
+          data-tauri-drag-region={appMode === "desktop" ? true : undefined}
+        >
           <span
             className="grid h-[26px] w-[26px] flex-none place-items-center"
             aria-hidden="true"
@@ -813,7 +929,7 @@ export default function App() {
           </span>
           <h1
             className="m-0 min-w-0 flex-1 truncate text-[13px] font-[650] tracking-[-0.01em] text-fg"
-            data-tauri-drag-region
+            data-tauri-drag-region={appMode === "desktop" ? true : undefined}
           >
             {session?.title ?? subtitleQuery.data?.source.title ?? "ListenUp Desktop"}
           </h1>
@@ -837,14 +953,28 @@ export default function App() {
               className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
             />
           </button>
+          {appMode === "desktop" && (
+            <button
+              type="button"
+              className={iconButtonClassName}
+              onClick={() => void switchMode("cinema")}
+              title="影院模式：字幕条悬浮在视频上"
+              aria-label="切换到影院模式"
+            >
+              <Icon icon="mdi:movie-open-outline" className="h-3.5 w-3.5 flex-none" />
+            </button>
+          )}
           <button
             type="button"
             className={iconButtonClassName}
-            onClick={() => void switchMode("cinema")}
-            title="影院模式：字幕条悬浮在视频上"
-            aria-label="切换到影院模式"
+            onClick={() => void switchAppMode()}
+            title={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
+            aria-label={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
           >
-            <Icon icon="mdi:movie-open-outline" className="h-3.5 w-3.5 flex-none" />
+            <Icon
+              icon={appMode === "desktop" ? "mdi:dock-top" : "mdi:application-outline"}
+              className="h-3.5 w-3.5 flex-none"
+            />
           </button>
           <button
             type="button"
@@ -858,7 +988,7 @@ export default function App() {
         </div>
         <div
           className="mt-2 flex min-w-0 items-center gap-[7px] text-[11px] text-fg-faint"
-          data-tauri-drag-region
+          data-tauri-drag-region={appMode === "desktop" ? true : undefined}
         >
           <StatusDot connected={connected} />
           <span className="flex-none">{connectionLabel}</span>
@@ -869,8 +999,8 @@ export default function App() {
               "字幕同步 Demo"}
           </span>
           <span className="flex-1" />
-          <span className={playbackError ? "text-red-300" : undefined}>
-            {playbackError ?? playbackLabel}
+          <span className={appModeError || playbackError ? "text-red-300" : undefined}>
+            {appModeError ?? playbackError ?? playbackLabel}
           </span>
           <span className="text-fg-muted tabular-nums">
             {formatTime(cursor?.currentTime ?? 0)}

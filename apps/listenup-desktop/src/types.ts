@@ -1,8 +1,8 @@
 /**
- * @purpose 前端侧的实时会话与 SQLite 字幕视图类型，与 Rust serde 结构一一对应。
+ * @purpose 前端侧实时会话、播放控制、appMode 与 SQLite 字幕视图类型契约。
  * @role    App.tsx、React Query 和 Rust command/event 之间的类型契约。
  * @deps    无
- * @gotcha  v3 track 含 vssId/isDefault；改字段必须同步 Rust 与扩展协议。
+ * @gotcha  Native v4 与 Rust serde 必须同步；appMode 是 Rust 持久化的唯一权威。
  */
 export interface SubtitleItem {
   id: number | string;
@@ -63,6 +63,7 @@ export type UiUpdate =
   | { kind: "cursor"; payload: CursorState };
 
 export type SubtitleDisplayMode = "source" | "translation" | "bilingual";
+export type AppMode = "desktop" | "menubar";
 
 export interface StoredSourceSegment {
   id: string;
