@@ -1,12 +1,15 @@
 /**
- * @purpose 播放控制门面：取 video 元素、播放/暂停/seek/音量、读播放状态。
+ * @purpose 播放控制门面：取 video 元素、播放/暂停/seek/音量，并保留播放器事件原因。
  * @role    SDK 子组件；内容脚本所有播放操作都经过它。
  * @deps    ./YouTubeAdDetector、YouTube 的 video 元素
- * @gotcha  广告播放时 getVideoElement() 刻意返回 null，上层必须处理空值
+ * @gotcha  同一 seek 手势只把首次 seeking 和最终 seeked 标成强制同步原因；广告时上层必须处理空值。
  */
-import { PlayerState } from "./types";
+import { PlayerState, PlayerStateChangeReason } from "./types";
 
-type PlayerStateListener = (state: PlayerState) => void;
+type PlayerStateListener = (
+  state: PlayerState,
+  reason: PlayerStateChangeReason
+) => void;
 type PlayStateListener = (isPlaying: boolean) => void;
 
 export class YouTubePlayerFacade {
@@ -14,6 +17,7 @@ export class YouTubePlayerFacade {
   private stateListeners = new Set<PlayerStateListener>();
   private playStateListeners = new Set<PlayStateListener>();
   private currentVideoCleanup: (() => void) | null = null;
+  private seekInProgress = false;
   // 低频看门狗：万一 video 元素被整个替换（缓存失联导致事件停止），
   // 2 秒内会重新捕获。isConnected 快路径下这基本是零成本
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -45,30 +49,46 @@ export class YouTubePlayerFacade {
       return;
     }
 
-    const notifyState = () => {
+    const notifyState = (reason: PlayerStateChangeReason) => {
       const state = this.detectPlayerState();
-      this.stateListeners.forEach((listener) => listener(state));
+      this.stateListeners.forEach((listener) => listener(state, reason));
       this.playStateListeners.forEach((listener) => listener(!state.isPaused));
     };
 
-    const events = [
+    const simpleEvents = [
       "timeupdate",
       "play",
       "pause",
-      "seeking",
-      "seeked",
       "loadedmetadata",
       "durationchange",
       "volumechange",
     ] as const;
+    const simpleHandlers = simpleEvents.map((eventName) => {
+      const handler = () => notifyState(eventName);
+      video.addEventListener(eventName, handler);
+      return [eventName, handler] as const;
+    });
+    const handleSeeking = () => {
+      const reason = this.seekInProgress ? "timeupdate" : "seeking";
+      this.seekInProgress = true;
+      notifyState(reason);
+    };
+    const handleSeeked = () => {
+      this.seekInProgress = false;
+      notifyState("seeked");
+    };
 
-    events.forEach((eventName) => video.addEventListener(eventName, notifyState));
-    notifyState();
+    video.addEventListener("seeking", handleSeeking);
+    video.addEventListener("seeked", handleSeeked);
+    notifyState("initial");
 
     this.currentVideoCleanup = () => {
-      events.forEach((eventName) =>
-        video.removeEventListener(eventName, notifyState)
+      simpleHandlers.forEach(([eventName, handler]) =>
+        video.removeEventListener(eventName, handler)
       );
+      video.removeEventListener("seeking", handleSeeking);
+      video.removeEventListener("seeked", handleSeeked);
+      this.seekInProgress = false;
     };
   }
 
@@ -104,7 +124,7 @@ export class YouTubePlayerFacade {
 
   public subscribeState(listener: PlayerStateListener) {
     this.stateListeners.add(listener);
-    listener(this.detectPlayerState());
+    listener(this.detectPlayerState(), "initial");
     return () => {
       this.stateListeners.delete(listener);
     };
@@ -134,6 +154,18 @@ export class YouTubePlayerFacade {
       return true;
     }
     return false;
+  }
+
+  public async controlPlayback(action: "play" | "pause") {
+    const video = this.getVideoElement();
+    if (!video) {
+      throw new Error("YouTube 播放器不可用");
+    }
+    if (action === "play") {
+      await video.play();
+      return;
+    }
+    video.pause();
   }
 
   public seekTo(time: number) {
@@ -169,9 +201,9 @@ export class YouTubePlayerFacade {
   public reset() {
     this.detachCurrentVideo();
     this.cachedVideoElement = null;
+    this.seekInProgress = false;
     const emptyState = this.detectPlayerState();
-    this.stateListeners.forEach((listener) => listener(emptyState));
+    this.stateListeners.forEach((listener) => listener(emptyState, "reset"));
     this.playStateListeners.forEach((listener) => listener(false));
   }
 }
-

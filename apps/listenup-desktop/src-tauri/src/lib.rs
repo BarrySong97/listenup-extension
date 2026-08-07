@@ -1,4 +1,4 @@
-// @purpose 桌面端 Rust 入口：GUI/桥接双模式、字幕持久化、session 仲裁、更新插件、可交互 NSPanel 与 tray。
+// @purpose 桌面端 Rust 入口：GUI/桥接双模式、双向播放协议、字幕持久化、session 仲裁、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    database、domain、tauri、serde、window-vibrancy、objc2、std::os::unix::net、编译期环境矩阵
 // @gotcha  桥接 stdout 被协议独占；ready 先入 SQLite 再发 UI；NSPanel 状态切换须刷新鼠标 tracking；2+ session 尊重锁定。
@@ -14,11 +14,15 @@ use std::{
     collections::HashMap,
     env,
     io::{self, Read},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const PROTOCOL_VERSION: u8 = 3;
+const PROTOCOL_VERSION: u8 = 4;
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
@@ -72,7 +76,28 @@ pub struct SessionState {
     subtitles: Vec<SubtitleItem>,
     cursor: Option<CursorState>,
     #[serde(skip)]
+    bridge_id: u64,
+    #[serde(skip)]
     updated_order: u64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum PlaybackAction {
+    Play,
+    Pause,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct PlaybackCommand {
+    kind: String,
+    version: u8,
+    command_id: String,
+    tab_id: i64,
+    session_id: String,
+    video_id: String,
+    action: PlaybackAction,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -111,6 +136,15 @@ enum NativeMessage {
         session_id: String,
         video_id: String,
     },
+    PlaybackCommandResult {
+        version: u8,
+        tab_id: i64,
+        command_id: String,
+        session_id: String,
+        video_id: String,
+        ok: bool,
+        error: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -148,6 +182,14 @@ struct HostStore {
     active_session_id: Option<String>,
     manually_selected_session_id: Option<String>,
     sequence: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct PlaybackTarget {
+    bridge_id: u64,
+    tab_id: i64,
+    session_id: String,
+    video_id: String,
 }
 
 impl HostStore {
@@ -265,7 +307,39 @@ impl HostStore {
         self.sequence
     }
 
+    fn playback_target(&self) -> Result<PlaybackTarget, String> {
+        let session_id = self
+            .active_session_id
+            .as_ref()
+            .ok_or_else(|| "当前没有可控制的 YouTube 视频".to_string())?;
+        let session = self
+            .sessions
+            .get(session_id)
+            .ok_or_else(|| "当前播放会话已经失效".to_string())?;
+        let cursor = session
+            .cursor
+            .as_ref()
+            .ok_or_else(|| "正在等待播放器状态".to_string())?;
+        if cursor.is_ad_playing {
+            return Err("广告播放期间不能控制正片".to_string());
+        }
+        if session.identity_status != "verified" {
+            return Err("正在确认播放会话".to_string());
+        }
+        Ok(PlaybackTarget {
+            bridge_id: session.bridge_id,
+            tab_id: session.tab_id,
+            session_id: session.session_id.clone(),
+            video_id: session.video_id.clone(),
+        })
+    }
+
+    #[cfg(test)]
     fn apply(&mut self, message: NativeMessage) -> Option<UiUpdate> {
+        self.apply_from_bridge(message, 1)
+    }
+
+    fn apply_from_bridge(&mut self, message: NativeMessage, bridge_id: u64) -> Option<UiUpdate> {
         match message {
             NativeMessage::Session {
                 version,
@@ -296,6 +370,7 @@ impl HostStore {
                     track,
                     subtitles,
                     cursor: previous.and_then(|value| value.cursor),
+                    bridge_id,
                     updated_order: order,
                 };
                 self.sessions.insert(session_id.clone(), session.clone());
@@ -329,7 +404,10 @@ impl HostStore {
                 let before = self.snapshot();
                 let order = self.next_sequence();
                 let session = self.sessions.get_mut(&session_id)?;
-                if session.tab_id != tab_id || session.video_id != video_id {
+                if session.bridge_id != bridge_id
+                    || session.tab_id != tab_id
+                    || session.video_id != video_id
+                {
                     return None;
                 }
                 session.cursor = Some(cursor.clone());
@@ -363,7 +441,9 @@ impl HostStore {
                     return None;
                 }
                 let should_remove = self.sessions.get(&session_id).is_some_and(|session| {
-                    session.tab_id == tab_id && session.video_id == video_id
+                    session.bridge_id == bridge_id
+                        && session.tab_id == tab_id
+                        && session.video_id == video_id
                 });
                 if !should_remove {
                     return None;
@@ -373,6 +453,7 @@ impl HostStore {
                 self.reconcile_active_session();
                 Some(UiUpdate::Snapshot(self.snapshot()))
             }
+            NativeMessage::PlaybackCommandResult { .. } => None,
         }
     }
 
@@ -390,6 +471,122 @@ impl HostStore {
 
 #[derive(Default)]
 struct SharedStore(Mutex<HostStore>);
+
+#[cfg(unix)]
+#[derive(Default)]
+struct BridgeRegistry {
+    next_id: u64,
+    connections: HashMap<u64, std::os::unix::net::UnixStream>,
+}
+
+#[cfg(unix)]
+impl BridgeRegistry {
+    fn register(&mut self, stream: std::os::unix::net::UnixStream) -> u64 {
+        self.next_id += 1;
+        let bridge_id = self.next_id;
+        self.connections.insert(bridge_id, stream);
+        bridge_id
+    }
+
+    fn unregister(&mut self, bridge_id: u64) {
+        self.connections.remove(&bridge_id);
+    }
+
+    fn send(&mut self, bridge_id: u64, command: &PlaybackCommand) -> Result<(), String> {
+        let stream = self
+            .connections
+            .get_mut(&bridge_id)
+            .ok_or_else(|| "浏览器桥接已经断开".to_string())?;
+        send_bridge_json_line(stream, command).map_err(|error| {
+            self.connections.remove(&bridge_id);
+            format!("发送播放命令失败：{error}")
+        })
+    }
+}
+
+#[cfg(unix)]
+#[derive(Default)]
+struct SharedBridges(Mutex<BridgeRegistry>);
+
+struct PendingPlaybackCommand {
+    bridge_id: u64,
+    session_id: String,
+    video_id: String,
+    sender: tokio::sync::oneshot::Sender<Result<(), String>>,
+}
+
+#[derive(Default)]
+struct PlaybackCommandState {
+    next_id: u64,
+    pending: HashMap<String, PendingPlaybackCommand>,
+}
+
+impl PlaybackCommandState {
+    fn register(
+        &mut self,
+        bridge_id: u64,
+        session_id: &str,
+        video_id: &str,
+    ) -> (String, tokio::sync::oneshot::Receiver<Result<(), String>>) {
+        self.next_id += 1;
+        let command_id = format!("{}-{}", std::process::id(), self.next_id);
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.pending.insert(
+            command_id.clone(),
+            PendingPlaybackCommand {
+                bridge_id,
+                session_id: session_id.to_string(),
+                video_id: video_id.to_string(),
+                sender,
+            },
+        );
+        (command_id, receiver)
+    }
+
+    fn resolve(
+        &mut self,
+        bridge_id: u64,
+        command_id: &str,
+        session_id: &str,
+        video_id: &str,
+        result: Result<(), String>,
+    ) {
+        let Some(pending) = self.pending.remove(command_id) else {
+            return;
+        };
+        let result = if pending.bridge_id != bridge_id
+            || pending.session_id != session_id
+            || pending.video_id != video_id
+        {
+            Err("播放命令响应身份不匹配".to_string())
+        } else {
+            result
+        };
+        let _ = pending.sender.send(result);
+    }
+
+    fn cancel(&mut self, command_id: &str) {
+        self.pending.remove(command_id);
+    }
+
+    fn fail_bridge(&mut self, bridge_id: u64) {
+        let command_ids = self
+            .pending
+            .iter()
+            .filter_map(|(command_id, pending)| {
+                (pending.bridge_id == bridge_id).then_some(command_id.clone())
+            })
+            .collect::<Vec<_>>();
+        for command_id in command_ids {
+            if let Some(pending) = self.pending.remove(&command_id) {
+                let _ = pending.sender.send(Err("浏览器桥接已经断开".to_string()));
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct SharedPlaybackCommands(Mutex<PlaybackCommandState>);
 
 #[derive(Debug)]
 enum FrameError {
@@ -534,9 +731,9 @@ fn bridge_socket_path() -> std::path::PathBuf {
 }
 
 #[cfg(unix)]
-fn send_bridge_line(
+fn send_bridge_json_line(
     stream: &mut std::os::unix::net::UnixStream,
-    message: &NativeMessage,
+    message: &impl Serialize,
 ) -> io::Result<()> {
     use std::io::Write;
 
@@ -544,6 +741,64 @@ fn send_bridge_line(
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     line.push('\n');
     stream.write_all(line.as_bytes())
+}
+
+#[cfg(unix)]
+fn send_bridge_line(
+    stream: &mut std::os::unix::net::UnixStream,
+    message: &NativeMessage,
+) -> io::Result<()> {
+    send_bridge_json_line(stream, message)
+}
+
+#[cfg(unix)]
+fn write_native_frame(message: &impl Serialize) -> io::Result<()> {
+    use std::io::Write;
+
+    let payload = serde_json::to_vec(message)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if payload.is_empty() || payload.len() > MAX_MESSAGE_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Native Messaging outbound frame has invalid length",
+        ));
+    }
+    let stdout = io::stdout();
+    let mut writer = stdout.lock();
+    writer.write_all(&(payload.len() as u32).to_ne_bytes())?;
+    writer.write_all(&payload)?;
+    writer.flush()
+}
+
+#[cfg(unix)]
+fn forward_gui_commands(stream: std::os::unix::net::UnixStream) {
+    use std::io::{BufRead, BufReader};
+
+    for line in BufReader::new(stream).lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let command = match serde_json::from_str::<PlaybackCommand>(&line) {
+            Ok(command)
+                if command.kind == "playbackCommand" && command.version == PROTOCOL_VERSION =>
+            {
+                command
+            }
+            Ok(_) => {
+                eprintln!("ignored invalid GUI playback command");
+                continue;
+            }
+            Err(error) => {
+                eprintln!("ignored malformed GUI playback command: {error}");
+                continue;
+            }
+        };
+        if let Err(error) = write_native_frame(&command) {
+            eprintln!("failed to send playback command to Chrome: {error}");
+            break;
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -561,6 +816,8 @@ fn connect_bridge(
             return None;
         }
     }
+    let command_stream = stream.try_clone().ok()?;
+    std::thread::spawn(move || forward_gui_commands(command_stream));
     Some(stream)
 }
 
@@ -585,6 +842,7 @@ fn run_bridge() {
                         cached_sessions.remove(session_id);
                     }
                     NativeMessage::Cursor { .. } => {}
+                    NativeMessage::PlaybackCommandResult { .. } => {}
                 }
 
                 if connection.is_none() {
@@ -630,6 +888,20 @@ fn set_bridge_connected(app: &AppHandle, delta: i32) {
 fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStream) {
     use std::io::{BufRead, BufReader};
 
+    let writer = match stream.try_clone() {
+        Ok(writer) => writer,
+        Err(error) => {
+            eprintln!("failed to clone bridge socket: {error}");
+            return;
+        }
+    };
+    let bridge_id = {
+        let bridges = app.state::<SharedBridges>();
+        let Ok(mut bridges) = bridges.0.lock() else {
+            return;
+        };
+        bridges.register(writer)
+    };
     set_bridge_connected(&app, 1);
     let reader = BufReader::new(stream);
     for line in reader.lines() {
@@ -644,6 +916,28 @@ fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStre
                 continue;
             }
         };
+        if let NativeMessage::PlaybackCommandResult {
+            version,
+            tab_id: _,
+            command_id,
+            session_id,
+            video_id,
+            ok,
+            error,
+        } = &message
+        {
+            if *version == PROTOCOL_VERSION {
+                let result = if *ok {
+                    Ok(())
+                } else {
+                    Err(error.clone().unwrap_or_else(|| "播放控制失败".to_string()))
+                };
+                if let Ok(mut commands) = app.state::<SharedPlaybackCommands>().0.lock() {
+                    commands.resolve(bridge_id, command_id, session_id, video_id, result);
+                }
+            }
+            continue;
+        }
         if let Some(snapshot) = source_snapshot_from_message(&message) {
             let database = app.state::<DatabaseState>().0.clone();
             if let Some(database) = database {
@@ -659,13 +953,19 @@ fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStre
                 .0
                 .lock()
                 .ok()
-                .and_then(|mut store| store.apply(message))
+                .and_then(|mut store| store.apply_from_bridge(message, bridge_id))
         };
         if let Some(update) = update {
             if let Err(error) = app.emit(UPDATE_EVENT, update) {
                 eprintln!("failed to emit subtitle update: {error}");
             }
         }
+    }
+    if let Ok(mut bridges) = app.state::<SharedBridges>().0.lock() {
+        bridges.unregister(bridge_id);
+    }
+    if let Ok(mut commands) = app.state::<SharedPlaybackCommands>().0.lock() {
+        commands.fail_bridge(bridge_id);
     }
     set_bridge_connected(&app, -1);
 }
@@ -893,6 +1193,58 @@ fn select_subtitle_session(
     Ok(snapshot)
 }
 
+#[cfg(unix)]
+#[tauri::command]
+async fn control_playback(
+    store: State<'_, SharedStore>,
+    bridges: State<'_, SharedBridges>,
+    commands: State<'_, SharedPlaybackCommands>,
+    action: PlaybackAction,
+) -> Result<(), String> {
+    let target = store
+        .0
+        .lock()
+        .map_err(|_| "字幕会话状态暂时不可用".to_string())?
+        .playback_target()?;
+    let (command_id, receiver) = commands
+        .0
+        .lock()
+        .map_err(|_| "播放命令状态暂时不可用".to_string())?
+        .register(target.bridge_id, &target.session_id, &target.video_id);
+    let command = PlaybackCommand {
+        kind: "playbackCommand".to_string(),
+        version: PROTOCOL_VERSION,
+        command_id: command_id.clone(),
+        tab_id: target.tab_id,
+        session_id: target.session_id,
+        video_id: target.video_id,
+        action,
+    };
+
+    let send_result = bridges
+        .0
+        .lock()
+        .map_err(|_| "浏览器桥接状态暂时不可用".to_string())?
+        .send(target.bridge_id, &command);
+    if let Err(error) = send_result {
+        if let Ok(mut commands) = commands.0.lock() {
+            commands.cancel(&command_id);
+        }
+        return Err(error);
+    }
+
+    match tokio::time::timeout(Duration::from_secs(2), receiver).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => Err("播放命令响应通道已经关闭".to_string()),
+        Err(_) => {
+            if let Ok(mut commands) = commands.0.lock() {
+                commands.cancel(&command_id);
+            }
+            Err("播放控制超时，请确认 YouTube 标签页仍然打开".to_string())
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Chrome 通过 Native Messaging 拉起时进入无窗口桥接模式，
@@ -908,7 +1260,10 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SharedStore::default())
+        .manage(SharedBridges::default())
+        .manage(SharedPlaybackCommands::default())
         .invoke_handler(tauri::generate_handler![
+            control_playback,
             get_snapshot,
             get_subtitle_view,
             select_subtitle_session,
@@ -1191,7 +1546,7 @@ mod tests {
 
     #[test]
     fn reads_a_fragmented_native_messaging_frame() {
-        let json = r#"{"kind":"end","version":3,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
+        let json = r#"{"kind":"end","version":4,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
         let mut reader = ChunkedReader {
             cursor: Cursor::new(frame(json)),
             chunk_size: 2,
@@ -1200,7 +1555,7 @@ mod tests {
         assert_eq!(
             message,
             NativeMessage::End {
-                version: 3,
+                version: PROTOCOL_VERSION,
                 tab_id: 4,
                 session_id: "s1".to_string(),
                 video_id: "v1".to_string(),
@@ -1330,6 +1685,41 @@ mod tests {
             .map(|candidate| candidate.session_id)
             .collect::<Vec<_>>();
         assert_eq!(candidate_ids_after, vec!["one", "two"]);
+    }
+
+    #[test]
+    fn playback_target_keeps_bridge_identity_when_tab_ids_collide() {
+        let mut store = HostStore::default();
+        store.apply_from_bridge(session_message("one", 7), 11);
+        store.apply_from_bridge(session_message("two", 7), 22);
+        store.apply_from_bridge(cursor_message("one", 7, false), 11);
+        store.apply_from_bridge(cursor_message("two", 7, false), 22);
+        store.select_session("one").unwrap();
+
+        assert_eq!(
+            store.playback_target().unwrap(),
+            PlaybackTarget {
+                bridge_id: 11,
+                tab_id: 7,
+                session_id: "one".to_string(),
+                video_id: "video-one".to_string(),
+            }
+        );
+        assert!(store
+            .apply_from_bridge(cursor_message("one", 7, true), 22)
+            .is_none());
+        assert!(!store.sessions["one"].cursor.as_ref().unwrap().is_paused);
+    }
+
+    #[test]
+    fn playback_result_rejects_a_different_bridge_or_session() {
+        let mut commands = PlaybackCommandState::default();
+        let (command_id, receiver) = commands.register(11, "one", "video-one");
+        commands.resolve(22, &command_id, "one", "video-one", Ok(()));
+        assert_eq!(
+            receiver.blocking_recv().unwrap(),
+            Err("播放命令响应身份不匹配".to_string())
+        );
     }
 
     #[cfg(target_os = "macos")]

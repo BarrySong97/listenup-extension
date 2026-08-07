@@ -1,19 +1,22 @@
 /**
- * @purpose 把字幕 session 与播放游标发给 background，供桌面端同步。
+ * @purpose 把字幕/cursor 发给 Desktop，处理精确绑定当前 session 的反向播放命令。
  * @role    内容脚本侧的 Native Messaging 发送端。
- * @deps    src/shared/nativeSubtitleProtocol、chrome.runtime.sendMessage
- * @gotcha  只有与当前 videoId 一致且 verified 的快照能携带字幕和完整轨道身份；pending/failed 必须发送空内容。
+ * @deps    src/shared/nativeSubtitleProtocol、nativeCursorScheduler、youtubeSDK、chrome.runtime
+ * @gotcha  反向命令必须同时校验 tab 外的 session/video/广告态；失败不可尝试控制其他播放器。
  */
 import { useEffect, useMemo, useRef } from "react";
 import type { CaptionTrackDescriptor } from "../lib/captions/types";
 import type { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 import {
+  isNativeSubtitlePlaybackContentMessage,
   NATIVE_SUBTITLE_PROTOCOL_VERSION,
   NativeSubtitleCursorPayload,
   NativeSubtitleExtensionMessage,
   NativeSubtitleIdentityStatus,
   NativeSubtitleLoadStatus,
 } from "@src/shared/nativeSubtitleProtocol";
+import { NativeCursorScheduler } from "./nativeCursorScheduler";
+import { youtubeSDK } from "../lib/youtube-sdk";
 
 interface UseNativeSubtitleBridgeOptions {
   videoId: string | null;
@@ -27,6 +30,7 @@ interface UseNativeSubtitleBridgeOptions {
   currentSubtitleIndex: number;
   isVideoPlaying: boolean;
   isAdPlaying: boolean;
+  cursorForceRevision: number;
 }
 
 const CURSOR_THROTTLE_MS = 250;
@@ -70,15 +74,30 @@ export const useNativeSubtitleBridge = ({
   currentSubtitleIndex,
   isVideoPlaying,
   isAdPlaying,
+  cursorForceRevision,
 }: UseNativeSubtitleBridgeOptions) => {
   const sessionId = useMemo(
     () => (videoId ? crypto.randomUUID() : null),
     [videoId]
   );
-  const latestCursorRef = useRef<NativeSubtitleCursorPayload | null>(null);
-  const cursorTimerRef = useRef<number | null>(null);
-  const lastCursorSentAtRef = useRef(0);
-  const lastSubtitleIndexRef = useRef(-1);
+  const lastForceRevisionRef = useRef(cursorForceRevision);
+  const cursorSchedulerRef = useRef<NativeCursorScheduler | null>(null);
+  if (!cursorSchedulerRef.current) {
+    cursorSchedulerRef.current = new NativeCursorScheduler({
+      throttleMs: CURSOR_THROTTLE_MS,
+      now: () => performance.now(),
+      schedule: (callback, delayMs) => {
+        const timer = window.setTimeout(callback, delayMs);
+        return { cancel: () => window.clearTimeout(timer) };
+      },
+      send: (cursor) => {
+        sendNativeBridgeMessage({
+          type: "NATIVE_SUBTITLE_CURSOR",
+          payload: cursor,
+        });
+      },
+    });
+  }
 
   useEffect(() => {
     if (
@@ -159,11 +178,58 @@ export const useNativeSubtitleBridge = ({
   }, [sessionId, videoId]);
 
   useEffect(() => {
+    if (!videoId || !sessionId) return;
+
+    const handlePlaybackCommand = (
+      message: unknown,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: unknown) => void
+    ) => {
+      if (!isNativeSubtitlePlaybackContentMessage(message)) return undefined;
+      const command = message.payload;
+      const respond = (ok: boolean, commandError: string | null) =>
+        sendResponse({
+          commandId: command.commandId,
+          sessionId: command.sessionId,
+          videoId: command.videoId,
+          ok,
+          error: commandError,
+        });
+
+      if (command.sessionId !== sessionId || command.videoId !== videoId) {
+        respond(false, "播放会话已经变化");
+        return undefined;
+      }
+      if (isAdPlaying) {
+        respond(false, "广告播放期间不能控制正片");
+        return undefined;
+      }
+
+      void youtubeSDK
+        .getPlayerFacade()
+        .controlPlayback(command.action)
+        .then(() => respond(true, null))
+        .catch((commandError: unknown) =>
+          respond(
+            false,
+            commandError instanceof Error
+              ? commandError.message
+              : "播放控制失败"
+          )
+        );
+      return true;
+    };
+
+    chrome.runtime.onMessage.addListener(handlePlaybackCommand);
+    return () => chrome.runtime.onMessage.removeListener(handlePlaybackCommand);
+  }, [isAdPlaying, sessionId, videoId]);
+
+  useEffect(() => {
     if (!videoId || !sessionId || !hasNativeMessagingPermission()) {
       return;
     }
 
-    latestCursorRef.current = {
+    const cursor: NativeSubtitleCursorPayload = {
       version: NATIVE_SUBTITLE_PROTOCOL_VERSION,
       sessionId,
       videoId,
@@ -173,37 +239,11 @@ export const useNativeSubtitleBridge = ({
       isAdPlaying,
       sentAt: Date.now(),
     };
-
-    const flushCursor = () => {
-      cursorTimerRef.current = null;
-      const cursor = latestCursorRef.current;
-      if (!cursor) return;
-
-      lastCursorSentAtRef.current = performance.now();
-      lastSubtitleIndexRef.current = cursor.currentIndex;
-      sendNativeBridgeMessage({
-        type: "NATIVE_SUBTITLE_CURSOR",
-        payload: cursor,
-      });
-    };
-
-    const indexChanged = lastSubtitleIndexRef.current !== currentSubtitleIndex;
-    const elapsed = performance.now() - lastCursorSentAtRef.current;
-    if (indexChanged || elapsed >= CURSOR_THROTTLE_MS) {
-      if (cursorTimerRef.current !== null) {
-        window.clearTimeout(cursorTimerRef.current);
-      }
-      flushCursor();
-      return;
-    }
-
-    if (cursorTimerRef.current === null) {
-      cursorTimerRef.current = window.setTimeout(
-        flushCursor,
-        CURSOR_THROTTLE_MS - elapsed
-      );
-    }
+    const force = lastForceRevisionRef.current !== cursorForceRevision;
+    lastForceRevisionRef.current = cursorForceRevision;
+    cursorSchedulerRef.current?.update(cursor, { force });
   }, [
+    cursorForceRevision,
     currentSubtitleIndex,
     currentTime,
     isAdPlaying,
@@ -214,9 +254,8 @@ export const useNativeSubtitleBridge = ({
 
   useEffect(
     () => () => {
-      if (cursorTimerRef.current !== null) {
-        window.clearTimeout(cursorTimerRef.current);
-      }
+      cursorSchedulerRef.current?.dispose();
+      cursorSchedulerRef.current = null;
     },
     []
   );

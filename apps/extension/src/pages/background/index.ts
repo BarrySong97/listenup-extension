@@ -1,12 +1,15 @@
 /**
- * @purpose Service worker：代抓图片搜索 HTML，并把字幕 session/cursor 转发给桌面端 Native Host。
+ * @purpose Service worker：代抓图片，并在内容脚本与 Desktop Native Host 间双向路由字幕/播放命令。
  * @role    内容脚本通过 chrome.runtime.sendMessage 调它；它是唯一持有 native port 的一方。
  * @deps    src/shared/nativeSubtitleProtocol、chrome.runtime.connectNative、fetch
- * @gotcha  只在 manifest 含 nativeMessaging 时连 host，且只在 session 到达时懒连接；图片抓取放这里是为绕开页面 CSP。见 docs/topics/native-messaging.md
+ * @gotcha  playback command 只路由 Native Host 指定 tab，失败必须回同一 port；仍只在 session 到达时懒连接。见 docs/topics/native-messaging.md
  */
 import {
+  isNativeSubtitlePlaybackCommand,
   isNativeSubtitleExtensionMessage,
   NATIVE_SUBTITLE_HOST,
+  NativeSubtitlePlaybackCommand,
+  NativeSubtitlePlaybackCommandResultPayload,
   NativeSubtitleHostMessage,
 } from "@src/shared/nativeSubtitleProtocol";
 
@@ -33,6 +36,69 @@ let nativeSubtitlePort: chrome.runtime.Port | null = null;
 let nativeSubtitleSessionId: string | null = null;
 let failedNativeSubtitleSessionId: string | null = null;
 
+const playbackFailure = (
+  command: NativeSubtitlePlaybackCommand,
+  error: string
+): NativeSubtitlePlaybackCommandResultPayload => ({
+  version: command.version,
+  commandId: command.commandId,
+  sessionId: command.sessionId,
+  videoId: command.videoId,
+  ok: false,
+  error,
+});
+
+const routePlaybackCommand = async (
+  port: chrome.runtime.Port,
+  command: NativeSubtitlePlaybackCommand
+) => {
+  let result: NativeSubtitlePlaybackCommandResultPayload;
+  try {
+    const response = await chrome.tabs.sendMessage(command.tabId, {
+      type: "NATIVE_PLAYBACK_COMMAND",
+      payload: command,
+    });
+    if (
+      !response ||
+      typeof response !== "object" ||
+      response.commandId !== command.commandId ||
+      response.sessionId !== command.sessionId ||
+      response.videoId !== command.videoId ||
+      typeof response.ok !== "boolean"
+    ) {
+      result = playbackFailure(command, "播放控制返回了无效响应");
+    } else {
+      result = {
+        version: command.version,
+        commandId: command.commandId,
+        sessionId: command.sessionId,
+        videoId: command.videoId,
+        ok: response.ok,
+        error: typeof response.error === "string" ? response.error : null,
+      };
+    }
+  } catch (error) {
+    result = playbackFailure(
+      command,
+      error instanceof Error ? error.message : "目标 YouTube 标签页不可用"
+    );
+  }
+
+  if (nativeSubtitlePort !== port) return;
+  try {
+    port.postMessage({
+      kind: "playbackCommandResult",
+      tabId: command.tabId,
+      ...result,
+    } satisfies NativeSubtitleHostMessage);
+  } catch (error) {
+    console.warn(
+      "[ListenUp:native-subtitles] Failed to return playback result:",
+      error
+    );
+  }
+};
+
 const hasNativeMessagingPermission = () =>
   chrome.runtime.getManifest().permissions?.includes("nativeMessaging") ?? false;
 
@@ -50,6 +116,11 @@ const connectNativeSubtitleHost = (sessionId: string) => {
   nativeSubtitleSessionId = sessionId;
   const port = chrome.runtime.connectNative(NATIVE_SUBTITLE_HOST);
   nativeSubtitlePort = port;
+  port.onMessage.addListener((message) => {
+    if (isNativeSubtitlePlaybackCommand(message)) {
+      void routePlaybackCommand(port, message);
+    }
+  });
   port.onDisconnect.addListener(() => {
     if (chrome.runtime.lastError) {
       console.warn(
@@ -131,9 +202,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         { kind: "cursor", tabId, ...message.payload },
         false
       );
-    } else {
+    } else if (message.type === "NATIVE_SUBTITLE_END") {
       postToNativeSubtitleHost(
         { kind: "end", tabId, ...message.payload },
+        false
+      );
+    } else {
+      postToNativeSubtitleHost(
+        { kind: "playbackCommandResult", tabId, ...message.payload },
         false
       );
     }

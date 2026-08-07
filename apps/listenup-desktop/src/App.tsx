@@ -256,6 +256,38 @@ const UpdateNotice = ({
   );
 };
 
+const PlaybackButton = ({
+  cursor,
+  disabled,
+  pending,
+  onPress,
+  compact = false,
+}: {
+  cursor: CursorState | null;
+  disabled: boolean;
+  pending: boolean;
+  onPress: () => void;
+  compact?: boolean;
+}) => {
+  const action = cursor?.isPaused !== false ? "play" : "pause";
+  const label = action === "play" ? "播放 YouTube" : "暂停 YouTube";
+  return (
+    <button
+      type="button"
+      className={`${compact ? "flex h-6 w-6" : iconButtonClassName} cursor-pointer items-center justify-center border-none bg-transparent text-fg-muted transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-40`}
+      onClick={onPress}
+      disabled={disabled}
+      title={pending ? "正在控制 YouTube…" : label}
+      aria-label={label}
+    >
+      <Icon
+        icon={pending ? "mdi:loading" : action === "play" ? "mdi:play" : "mdi:pause"}
+        className={`h-3.5 w-3.5 flex-none ${pending ? "animate-spin" : ""}`}
+      />
+    </button>
+  );
+};
+
 export default function App() {
   const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
@@ -274,6 +306,8 @@ export default function App() {
   const [translationCopyStatus, setTranslationCopyStatus] =
     useState<TranslationCopyStatus>("idle");
   const [showCinemaToolbarHint, setShowCinemaToolbarHint] = useState(false);
+  const [playbackPending, setPlaybackPending] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const modeRef = useRef(mode);
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledViewRef = useRef<{
@@ -517,6 +551,26 @@ export default function App() {
   }, []);
 
   const cursor: CursorState | null = session?.cursor ?? null;
+  const playbackDisabled =
+    playbackPending ||
+    !connected ||
+    !session ||
+    !cursor ||
+    cursor.isAdPlaying;
+  const controlPlayback = useCallback(async () => {
+    if (!cursor || playbackDisabled) return;
+    setPlaybackPending(true);
+    setPlaybackError(null);
+    try {
+      await invoke("control_playback", {
+        action: cursor.isPaused ? "play" : "pause",
+      });
+    } catch (error) {
+      setPlaybackError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPlaybackPending(false);
+    }
+  }, [cursor, playbackDisabled]);
   const requestedTranslationMissing = Boolean(
     subtitleMode !== "source" &&
       subtitleQuery.isSuccess &&
@@ -700,7 +754,18 @@ export default function App() {
           </div>
           <DevBadge />
           <StatusDot connected={connected} />
-          <span className="text-[11px] text-fg-faint">{playbackLabel}</span>
+          <PlaybackButton
+            compact
+            cursor={cursor}
+            disabled={playbackDisabled}
+            pending={playbackPending}
+            onPress={() => void controlPlayback()}
+          />
+          <span
+            className={`text-[11px] ${playbackError ? "text-red-300" : "text-fg-faint"}`}
+          >
+            {playbackError ?? playbackLabel}
+          </span>
           <span className="text-[11px] text-fg-faint tabular-nums">
             {formatTime(cursor?.currentTime ?? 0)}
           </span>
@@ -753,6 +818,12 @@ export default function App() {
             {session?.title ?? subtitleQuery.data?.source.title ?? "ListenUp Desktop"}
           </h1>
           <DevBadge />
+          <PlaybackButton
+            cursor={cursor}
+            disabled={playbackDisabled}
+            pending={playbackPending}
+            onPress={() => void controlPlayback()}
+          />
           <button
             type="button"
             className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
@@ -798,7 +869,9 @@ export default function App() {
               "字幕同步 Demo"}
           </span>
           <span className="flex-1" />
-          <span>{playbackLabel}</span>
+          <span className={playbackError ? "text-red-300" : undefined}>
+            {playbackError ?? playbackLabel}
+          </span>
           <span className="text-fg-muted tabular-nums">
             {formatTime(cursor?.currentTime ?? 0)}
           </span>

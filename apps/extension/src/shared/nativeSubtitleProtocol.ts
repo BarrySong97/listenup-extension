@@ -1,15 +1,17 @@
 /**
- * @purpose 扩展与桌面端之间 Native Messaging 的消息契约、host 名与深链接。
+ * @purpose 扩展与桌面端之间双向 Native Messaging v4 契约、host 名与深链接。
  * @role    内容脚本、background 与桌面端 Rust 三方对齐的唯一权威。
  * @deps    构建期环境常量、content 的 SubtitleItem 类型
- * @gotcha  v3 的 verified track 必须携带 vssId/isDefault；改字段必须同步 Rust 端。见 docs/topics/native-messaging.md
+ * @gotcha  playback command 必须带 command/session/video/tab 身份；改字段必须同步 background、content 与 Rust。见 docs/topics/native-messaging.md
  */
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 
 // dev 和 production 功能相同，但连接不同 Host / app，避免跨环境串线。
-export const NATIVE_SUBTITLE_HOST = __LISTENUP_NATIVE_HOST__;
-export const DESKTOP_DEEP_LINK = __LISTENUP_DEEP_LINK__;
-export const NATIVE_SUBTITLE_PROTOCOL_VERSION = 3 as const;
+export const NATIVE_SUBTITLE_HOST =
+  typeof __LISTENUP_NATIVE_HOST__ === "string" ? __LISTENUP_NATIVE_HOST__ : "";
+export const DESKTOP_DEEP_LINK =
+  typeof __LISTENUP_DEEP_LINK__ === "string" ? __LISTENUP_DEEP_LINK__ : "";
+export const NATIVE_SUBTITLE_PROTOCOL_VERSION = 4 as const;
 
 export type NativeSubtitleIdentityStatus = "pending" | "verified" | "failed";
 
@@ -56,6 +58,32 @@ export interface NativeSubtitleEndPayload {
   videoId: string;
 }
 
+export type NativeSubtitlePlaybackAction = "play" | "pause";
+
+export interface NativeSubtitlePlaybackCommand {
+  kind: "playbackCommand";
+  version: typeof NATIVE_SUBTITLE_PROTOCOL_VERSION;
+  commandId: string;
+  tabId: number;
+  sessionId: string;
+  videoId: string;
+  action: NativeSubtitlePlaybackAction;
+}
+
+export interface NativeSubtitlePlaybackCommandResultPayload {
+  version: typeof NATIVE_SUBTITLE_PROTOCOL_VERSION;
+  commandId: string;
+  sessionId: string;
+  videoId: string;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface NativeSubtitlePlaybackContentMessage {
+  type: "NATIVE_PLAYBACK_COMMAND";
+  payload: NativeSubtitlePlaybackCommand;
+}
+
 export type NativeSubtitleExtensionMessage =
   | {
       type: "NATIVE_SUBTITLE_SESSION";
@@ -68,17 +96,49 @@ export type NativeSubtitleExtensionMessage =
   | {
       type: "NATIVE_SUBTITLE_END";
       payload: NativeSubtitleEndPayload;
+    }
+  | {
+      type: "NATIVE_PLAYBACK_COMMAND_RESULT";
+      payload: NativeSubtitlePlaybackCommandResultPayload;
     };
 
 export type NativeSubtitleHostMessage =
   | ({ kind: "session"; tabId: number } & NativeSubtitleSessionPayload)
   | ({ kind: "cursor"; tabId: number } & NativeSubtitleCursorPayload)
-  | ({ kind: "end"; tabId: number } & NativeSubtitleEndPayload);
+  | ({ kind: "end"; tabId: number } & NativeSubtitleEndPayload)
+  | ({ kind: "playbackCommandResult"; tabId: number } &
+      NativeSubtitlePlaybackCommandResultPayload);
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object";
+
+export const isNativeSubtitlePlaybackCommand = (
+  value: unknown
+): value is NativeSubtitlePlaybackCommand => {
+  if (!isObject(value)) return false;
+  return (
+    value.kind === "playbackCommand" &&
+    value.version === NATIVE_SUBTITLE_PROTOCOL_VERSION &&
+    typeof value.commandId === "string" &&
+    typeof value.tabId === "number" &&
+    Number.isInteger(value.tabId) &&
+    typeof value.sessionId === "string" &&
+    typeof value.videoId === "string" &&
+    (value.action === "play" || value.action === "pause")
+  );
+};
+
+export const isNativeSubtitlePlaybackContentMessage = (
+  value: unknown
+): value is NativeSubtitlePlaybackContentMessage =>
+  isObject(value) &&
+  value.type === "NATIVE_PLAYBACK_COMMAND" &&
+  isNativeSubtitlePlaybackCommand(value.payload);
 
 export const isNativeSubtitleExtensionMessage = (
   value: unknown
 ): value is NativeSubtitleExtensionMessage => {
-  if (!value || typeof value !== "object") {
+  if (!isObject(value)) {
     return false;
   }
 
@@ -86,6 +146,7 @@ export const isNativeSubtitleExtensionMessage = (
   return (
     type === "NATIVE_SUBTITLE_SESSION" ||
     type === "NATIVE_SUBTITLE_CURSOR" ||
-    type === "NATIVE_SUBTITLE_END"
+    type === "NATIVE_SUBTITLE_END" ||
+    type === "NATIVE_PLAYBACK_COMMAND_RESULT"
   );
 };

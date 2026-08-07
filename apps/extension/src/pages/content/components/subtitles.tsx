@@ -1,8 +1,8 @@
 /**
- * @purpose 字幕面板的编排根：启动 youtubeSDK、加载字幕、协调索引/滚动/循环/Explain/Native 同步。
+ * @purpose 字幕面板的编排根：启动 youtubeSDK、加载字幕、协调索引/滚动/循环/Explain/Native 同步与 seek 强制刷新。
  * @role    内容脚本的主容器组件，被 app.tsx 渲染；向下装配所有面板组件与 hook。
  * @deps    lib/youtube-sdk、hooks/useSubtitles 等全部面板 hook、SubtitlePanelShell、ExplainCard、AiSettingsCard
- * @gotcha  写入 explainTarget 前会先暂停视频；这是面板里唯一该放跨组件编排逻辑的地方。见 docs/modules/extension/content.md
+ * @gotcha  seeking/seeked 必须递增 cursorForceRevision；写入 explainTarget 前会先暂停视频。见 docs/modules/extension/content.md
  */
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { youtubeSDK, YouTubeTheme } from "@pages/content/lib/youtube-sdk";
@@ -113,6 +113,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
   const [playerHeight, setPlayerHeight] = useState<number | null>(null);
   const [isAdPlaying, setIsAdPlaying] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [cursorForceRevision, setCursorForceRevision] = useState(0);
   const [layoutMode, setLayoutMode] = useState<PanelLayoutMode>("inline");
   const [videoId, setVideoId] = useState<string | null>(youtubeSDK.getVideoId());
   const playStateCleanup = useRef<(() => void) | null>(null);
@@ -156,6 +157,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
     currentSubtitleIndex,
     isVideoPlaying,
     isAdPlaying,
+    cursorForceRevision,
   });
 
   const syncLayoutMetrics = useCallback(() => {
@@ -340,8 +342,11 @@ const Subtitles: FC<SubtitlesProps> = () => {
       onAdStateChange: (adState) => {
         setIsAdPlaying(adState.isAdPlaying);
       },
-      onPlayerStateChange: (playerState) => {
+      onPlayerStateChange: (playerState, reason) => {
         setCurrentTime(playerState.currentTime);
+        if (reason === "seeking" || reason === "seeked") {
+          setCursorForceRevision((revision) => revision + 1);
+        }
       },
       onSessionChange: (sessionState) => {
         setVideoId(sessionState.videoId);
