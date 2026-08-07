@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@heroui/styles";
 
 /* 深色毛玻璃：真正的模糊由 macOS vibrancy 提供，这里只做染色。
    全局只用 glass 这一个背景色，header/footer/影院模式保持一致 */

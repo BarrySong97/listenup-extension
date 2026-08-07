@@ -16,6 +16,8 @@
     "host:uninstall": "node scripts/uninstall-host.mjs"
   },
   "dependencies": {
+    "@heroui/react": "catalog:",
+    "@heroui/styles": "catalog:",
     "@iconify/react": "^6.0.0",
     "@tanstack/react-query": "^5.101.4",
     "@tauri-apps/api": "^2.11.1",
