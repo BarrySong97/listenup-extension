@@ -1,4 +1,4 @@
-// @purpose 桌面端 Rust 入口：GUI/桥接双模式、双向播放协议、字幕持久化、session 仲裁、NSPanel 与 tray。
+// @purpose 桌面端 Rust 入口：GUI/桥接双模式、双向播放/字幕 seek 协议、字幕持久化、session 仲裁、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket、编译期环境矩阵
 // @gotcha  stdout 只写 Native Messaging 长度帧；反向控制必须按 bridgeId+session 路由；2+ session 尊重锁定。
@@ -88,6 +88,7 @@ pub struct SessionState {
 enum PlaybackAction {
     Play,
     Pause,
+    Seek,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -100,6 +101,19 @@ struct PlaybackCommand {
     session_id: String,
     video_id: String,
     action: PlaybackAction,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    seek_time: Option<f64>,
+}
+
+fn validate_playback_request(action: PlaybackAction, seek_time: Option<f64>) -> Result<(), String> {
+    match (action, seek_time) {
+        (PlaybackAction::Seek, Some(time)) if time.is_finite() && time >= 0.0 => Ok(()),
+        (PlaybackAction::Seek, _) => Err("字幕跳转时间无效".to_string()),
+        (PlaybackAction::Play | PlaybackAction::Pause, None) => Ok(()),
+        (PlaybackAction::Play | PlaybackAction::Pause, Some(_)) => {
+            Err("播放或暂停命令不能携带跳转时间".to_string())
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -783,7 +797,9 @@ fn forward_gui_commands(stream: std::os::unix::net::UnixStream) {
         }
         let command = match serde_json::from_str::<PlaybackCommand>(&line) {
             Ok(command)
-                if command.kind == "playbackCommand" && command.version == PROTOCOL_VERSION =>
+                if command.kind == "playbackCommand"
+                    && command.version == PROTOCOL_VERSION
+                    && validate_playback_request(command.action, command.seek_time).is_ok() =>
             {
                 command
             }
@@ -1227,7 +1243,9 @@ async fn control_playback(
     bridges: State<'_, SharedBridges>,
     commands: State<'_, SharedPlaybackCommands>,
     action: PlaybackAction,
+    seek_time: Option<f64>,
 ) -> Result<(), String> {
+    validate_playback_request(action, seek_time)?;
     let target = store
         .0
         .lock()
@@ -1246,6 +1264,7 @@ async fn control_playback(
         session_id: target.session_id,
         video_id: target.video_id,
         action,
+        seek_time,
     };
 
     let send_result = bridges
@@ -1607,6 +1626,40 @@ mod tests {
             is_ad_playing: false,
             sent_at: 42,
         }
+    }
+
+    #[test]
+    fn seek_command_requires_a_finite_non_negative_time() {
+        assert_eq!(
+            validate_playback_request(PlaybackAction::Seek, Some(12.5)),
+            Ok(())
+        );
+        assert!(validate_playback_request(PlaybackAction::Seek, None).is_err());
+        assert!(validate_playback_request(PlaybackAction::Seek, Some(-0.1)).is_err());
+        assert!(validate_playback_request(PlaybackAction::Seek, Some(f64::NAN)).is_err());
+        assert!(validate_playback_request(PlaybackAction::Play, Some(12.5)).is_err());
+        assert_eq!(
+            validate_playback_request(PlaybackAction::Pause, None),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn seek_command_serializes_the_target_for_the_extension() {
+        let command = PlaybackCommand {
+            kind: "playbackCommand".to_string(),
+            version: PROTOCOL_VERSION,
+            command_id: "command-1".to_string(),
+            tab_id: 7,
+            session_id: "session-1".to_string(),
+            video_id: "video-1".to_string(),
+            action: PlaybackAction::Seek,
+            seek_time: Some(12.5),
+        };
+        let json = serde_json::to_value(command).unwrap();
+
+        assert_eq!(json["action"], "seek");
+        assert_eq!(json["seekTime"], 12.5);
     }
 
     #[test]

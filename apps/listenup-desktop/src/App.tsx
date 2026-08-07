@@ -1,5 +1,5 @@
 /**
- * @purpose 字幕窗口 UI：实时同步、播放控制、Desktop/菜单栏形态、双语与列表/影院视图。
+ * @purpose 字幕窗口 UI：实时同步、播放/字幕 seek 控制、Desktop/菜单栏形态、双语与列表/影院视图。
  * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、components/ui、SubtitleList、subtitleCursor、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
  * @gotcha  高频 cursor 独立于 viewer；列表只接收字幕边界，不能把连续 currentTime 传回列表子树。
@@ -716,6 +716,24 @@ export default function App() {
       setPlaybackPending(false);
     }
   }, [playbackAction, playbackDisabled]);
+  const seekToSubtitle = useCallback(
+    async (seekTime: number) => {
+      if (playbackDisabled || !Number.isFinite(seekTime) || seekTime < 0) return;
+      setPlaybackPending(true);
+      setPlaybackError(null);
+      try {
+        await invoke("control_playback", {
+          action: "seek",
+          seekTime,
+        });
+      } catch (error) {
+        setPlaybackError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setPlaybackPending(false);
+      }
+    },
+    [playbackDisabled]
+  );
   const requestedTranslationMissing = Boolean(
     subtitleMode !== "source" &&
       subtitleQuery.isSuccess &&
@@ -1104,6 +1122,8 @@ export default function App() {
             isScrolling={isListScrolling}
             onScroll={handleListScroll}
             onScrollEnd={handleListScrollEnd}
+            onSeek={seekToSubtitle}
+            seekDisabled={playbackDisabled}
           />
         )}
       </section>

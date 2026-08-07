@@ -1,11 +1,12 @@
 /**
  * @purpose 渲染并虚拟化 Desktop 字幕列表，只响应字幕边界而非连续播放时间。
  * @role    App 的高成本列表子树；通过 memo 隔离 100ms cursor 更新。
- * @deps    react、virtua、./subtitleCursor
- * @gotcha  props 不得接收 currentTime/cursor；否则会重新引入每帧整表 JSX 构造。
+ * @deps    react、virtua、DesktopButton、./subtitleCursor
+ * @gotcha  props 不得接收 currentTime/cursor；seek 只传稳定 callback 与 disabled primitive。
  */
 import { memo, type RefObject } from "react";
 import { VList, type VListHandle } from "virtua";
+import { DesktopButton } from "./components/ui/DesktopButton";
 import type { TimedSubtitleBlock } from "./subtitleCursor";
 
 export interface DisplayBlock extends TimedSubtitleBlock {
@@ -18,6 +19,8 @@ interface SubtitleRowProps {
   index: number;
   isActive: boolean;
   isPlayed: boolean;
+  isSeekDisabled: boolean;
+  onSeek: (time: number) => void;
   subtitle: DisplayBlock;
 }
 
@@ -32,14 +35,23 @@ const SubtitleRow = memo(function SubtitleRow({
   index,
   isActive,
   isPlayed,
+  isSeekDisabled,
+  onSeek,
   subtitle,
 }: SubtitleRowProps) {
   return (
-    <div
-      className={`mx-2 grid grid-cols-[12px_40px_minmax(0,1fr)] items-start gap-2 rounded-[10px] py-2 pl-2.5 pr-2 transition-colors ${
+    <DesktopButton
+      aria-label={`跳转到 ${formatTime(subtitle.startTime)}`}
+      className={`mx-2 grid h-auto w-[calc(100%-1rem)] grid-cols-[12px_40px_minmax(0,1fr)] items-start justify-start gap-2 whitespace-normal rounded-[10px] py-2 pl-2.5 pr-2 text-left transition-[background-color,box-shadow] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/35 ${
         isActive ? "bg-wash-active" : ""
+      } ${
+        isSeekDisabled
+          ? "cursor-not-allowed opacity-70"
+          : "cursor-pointer hover:bg-white/[0.07]"
       }`}
       data-subtitle-index={index}
+      isDisabled={isSeekDisabled}
+      onPress={() => onSeek(subtitle.startTime)}
     >
       <span
         className={`mt-1.5 h-1.5 w-1.5 rounded-full transition-all ${
@@ -77,7 +89,7 @@ const SubtitleRow = memo(function SubtitleRow({
           </p>
         )}
       </div>
-    </div>
+    </DesktopButton>
   );
 });
 
@@ -88,7 +100,9 @@ interface SubtitleListProps {
   listRef: RefObject<VListHandle | null>;
   onScroll: () => void;
   onScrollEnd: () => void;
+  onSeek: (time: number) => void;
   playedThroughIndex: number;
+  seekDisabled: boolean;
 }
 
 export const SubtitleList = memo(function SubtitleList({
@@ -98,7 +112,9 @@ export const SubtitleList = memo(function SubtitleList({
   listRef,
   onScroll,
   onScrollEnd,
+  onSeek,
   playedThroughIndex,
+  seekDisabled,
 }: SubtitleListProps) {
   return (
     <VList
@@ -115,9 +131,10 @@ export const SubtitleList = memo(function SubtitleList({
           subtitle={subtitle}
           isActive={index === activeIndex}
           isPlayed={index <= playedThroughIndex && index !== activeIndex}
+          isSeekDisabled={seekDisabled}
+          onSeek={onSeek}
         />
       ))}
     </VList>
   );
 });
-
