@@ -4,6 +4,7 @@
 - 状态：已实施，待 DEV 手工回归
 - 关联设计：[`docs/spark/2026-08-07-desktop-heroui-primitives-design.md`](../spark/2026-08-07-desktop-heroui-primitives-design.md)
 - 影响模块：ListenUp Desktop
+- Plane：LISTENUP-4（正式版 Tooltip 不显示与生产 bundle 回归）
 
 ## 实施目标
 

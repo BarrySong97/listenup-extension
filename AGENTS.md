@@ -17,12 +17,13 @@
 ## ✅ 工作流（Definition of Done，缺一不算完成）
 
 1. 读相关模块文档 [docs/modules/](docs/modules/)（跨模块专题看 [docs/topics/](docs/topics/)）+ 待改文件的文件头
-2. 大改先写 [docs/plans/](docs/plans/) 计划（Plan → Approve → Execute）
-3. 改代码，遵循 [docs/conventions.md](docs/conventions.md)
-4. 同步：文件头 + 对应 `docs/modules/<module>/`（跨模块的写 `docs/topics/`）；决策性改动补一条 [ADR](docs/decisions/)
-5. 按 [docs/testing.md](docs/testing.md) **真跑验证**（本仓库没有自动化测试，构建 + 手工回归是底线）
-6. 跑 sensors：`node scripts/check-docs.mjs` + 受影响 app 的构建 / lint，清掉报错
-7. 按 [docs/conventions.md](docs/conventions.md) 提交
+2. 任何需要跟踪的项目工作——新 Feature、体验改进、Bug、技术债、调研、发布事项、回归缺口或后续 TODO——都要**当场创建或更新 Plane work item**；需求/计划文档写明 Plane 编号，不得只留在聊天、代码注释或 Markdown `- [ ]` 中
+3. 大改先写 [docs/plans/](docs/plans/) 计划（Plan → Approve → Execute）
+4. 开工前把对应 Plane work item 转为 `In Progress` 并留言说明方案；改代码遵循 [docs/conventions.md](docs/conventions.md)
+5. 同步：文件头 + 对应 `docs/modules/<module>/`（跨模块的写 `docs/topics/`）；决策性改动补一条 [ADR](docs/decisions/)
+6. 按 [docs/testing.md](docs/testing.md) **真跑验证**（本仓库没有自动化测试，构建 + 手工回归是底线）
+7. 跑 sensors：`node scripts/check-docs.mjs` + 受影响 app 的构建 / lint，清掉报错
+8. 把实现、commit 与验证证据回写 Plane，更新到待验收或完成状态，再按 [docs/conventions.md](docs/conventions.md) 提交
 
 > **Ratchet 棘轮**：agent 犯了错，别只修这一处——固化成一条 lint 规则 / 检查 / ADR，保证同样的错不再犯。
 
