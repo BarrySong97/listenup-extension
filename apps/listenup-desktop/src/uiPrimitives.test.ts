@@ -1,5 +1,5 @@
 /**
- * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定字幕行无 React state 的即时 CSS hover。
+ * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定 Tooltip trigger 与字幕行即时 CSS hover。
  * @role    pnpm desktop test 的 UI 架构棘轮，扫描 src 下全部业务 TSX。
  * @deps    node:assert、node:fs、node:path、node:test、node:url
  * @gotcha  components/ui 是唯一允许封装交互 primitives 的目录；虚拟字幕行必须保留无 React Aria hover state 的专用例外。
@@ -33,6 +33,20 @@ test("Desktop business JSX uses HeroUI primitives instead of native controls", (
     violations,
     [],
     `native button/select found outside components/ui: ${violations.join(", ")}`
+  );
+});
+
+test("Desktop icon tooltips use the explicit HeroUI compound trigger", () => {
+  const source = readFileSync(
+    path.join(UI_PRIMITIVES_ROOT, "DesktopIconButton.tsx"),
+    "utf8"
+  );
+
+  assert.equal(source.includes("<Tooltip.Trigger>"), true);
+  assert.equal(source.includes("</Tooltip.Trigger>"), true);
+  assert.equal(
+    source.indexOf("<Tooltip.Trigger>") < source.indexOf("<Tooltip.Content"),
+    true
   );
 });
 

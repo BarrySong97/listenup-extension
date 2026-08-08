@@ -193,8 +193,10 @@ Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威
 - Desktop 通过 workspace catalog 使用 HeroUI 3；业务 TSX 不直接写原生 `button` / `select`，
   统一经过 `src/components/ui/`。HeroUI 管交互语义，现有 Tailwind class 管最终视觉，见
   [ADR-0012](../../decisions/0012-desktop-heroui-ui-primitives.md)
-- 纯图标操作统一使用 `DesktopIconButton`，Tooltip 和 aria label 必填；带可见文字的按钮及
-  YouTube 标志、状态点、loading / success 等纯展示图标不重复加 Tooltip
+- 纯图标操作统一使用 `DesktopIconButton`，Tooltip 和 aria label 必填；内部必须显式使用
+  HeroUI v3 `Tooltip.Trigger`，不能依赖 React Aria `FocusableProvider` 向嵌套 Button 间接注入
+  trigger ref / hover props（该写法在 Vite DEV 可工作，但 production bundle 冷启动会失效）。
+  带可见文字的按钮及 YouTube 标志、状态点、loading / success 等纯展示图标不重复加 Tooltip
 - 列表模式**只用 `--color-glass` 一个背景色**，header / 列表 / footer 保持一致，不要给局部单独加深
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限

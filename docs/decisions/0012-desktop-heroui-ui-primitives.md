@@ -21,8 +21,9 @@ Desktop 的按钮、图标操作、字幕模式切换和目标语言选择原先
    `DesktopButton`、`DesktopIconButton`、`SubtitleModeControl`、`TargetLanguageSelect`。
 3. HeroUI 提供交互、焦点和无障碍语义；现有 Tailwind token、像素尺寸、透明度和毛玻璃视觉
    继续由 Desktop 样式决定，不采用 HeroUI 默认视觉重设计产品。
-4. 所有纯图标操作必须经过 `DesktopIconButton`，同时提供 Tooltip 与 aria label。带可见文字的
-   按钮和纯展示图标不重复制造 Tooltip。
+4. 所有纯图标操作必须经过 `DesktopIconButton`，同时提供 Tooltip 与 aria label；Tooltip 必须
+   使用 HeroUI v3 的显式 `Tooltip.Trigger` compound 结构，不能依赖 React Aria 对嵌套 Button
+   的间接 trigger 注入。带可见文字的按钮和纯展示图标不重复制造 Tooltip。
 5. 除 primitives 目录外，Desktop 业务 TSX 禁止直接出现原生 `button` 或 `select`；Node test
    扫描这一边界并在回归时失败。
 6. 本决策只约束 Desktop。Website 保持 HeroUI 3 的现有使用方式；Extension 的 HeroUI 2 与
@@ -41,5 +42,5 @@ Desktop 的按钮、图标操作、字幕模式切换和目标语言选择原先
 - Desktop 前端 bundle 会包含 HeroUI 3 / React Aria 交互实现，体积高于原生控件版本；当前以
   统一交互和可访问性优先，构建仍只产生一个本地 Tauri 页面。
 - HeroUI 升级需要先在 primitives 层验证 Button、Tooltip、ToggleButtonGroup 和 Select，
-  业务组件不直接适配版本差异。
+  业务组件不直接适配版本差异；Tooltip 必须同时在 DEV 与冷启动 production `.app` 中回归。
 - 若未来确需新的原生交互元素，应先扩充 primitives，而不是放宽扫描测试。

@@ -85,7 +85,8 @@ node scripts/check-docs.mjs                                              # 永�
   显示块起点，播放中保持播放、暂停中保持暂停，并只随真实 seek cursor 更新高亮
 - Desktop / 菜单栏列表的播放按钮固定在原语 / 译文 / 双语行最右侧；原语模式隐藏语言 Select、
   译文 / 双语显示语言 Select 时都不能移位。纯图标操作 hover / 键盘 focus 都显示 Tooltip，
-  disabled Tooltip 能解释 pending、断连、无 cursor 或广告原因
+  disabled Tooltip 能解释 pending、断连、无 cursor 或广告原因；Tooltip 必须至少在一次冷启动的
+  production `.app` 中回归，Vite DEV / HMR 中显示不能作为发布验收证据
 - 两个 Chrome profile 即使 tabId 相同，命令也只能到产生当前 session 的 bridge；切换选择后
   只能控制新目标。关闭目标 tab、断开 Host、超时和身份变化都显示错误且不改投其他 tab
 - 广告、无 cursor、多视频尚未选择、Host 断开时播放按钮禁用；失败不影响扩展内字幕体验

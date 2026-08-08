@@ -111,6 +111,9 @@ node scripts/check-environment-identifiers.mjs
   性能 warning，不影响 Tauri 本地页面构建。
 - `node scripts/check-docs.mjs`：通过。
 - 运行中的 Desktop DEV 已收到 package reload、样式和 React HMR，控制台无新增编译错误。
+- 2026-08-08：`LISTENUP-4` 将 `DesktopIconButton` 修正为显式
+  `Tooltip.Trigger` compound 结构；12 项前端测试、production 前端构建与完整 Tauri `.app`
+  bundle 构建通过。冷启动 production `.app` 后，用户确认图标 Tooltip 已恢复显示。
 - non-activating NSPanel 无法被当前 macOS 无障碍读取；浏览器直开 Vite 页面又缺少 Tauri
   runtime。因此上方第 2–7 项保留为用户在实际 DEV App 中的最终视觉 / 交互回归。
 
