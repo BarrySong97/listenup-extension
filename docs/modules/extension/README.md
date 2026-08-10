@@ -50,7 +50,7 @@ public/scripts/        注入页面上下文的桥接脚本（web-accessible）
 ## 对外接口
 
 - 浏览器侧：`manifest.json` 声明的 popup / options / devtools 页面、内容脚本、`web_accessible_resources`
-- 对桌面端：`src/shared/nativeSubtitleProtocol.ts` 定义的 v4 双向 session / cursor /
+- 对桌面端：`src/shared/nativeSubtitleProtocol.ts` 定义的 v5 双向 session / cursor /
   playback command-result 消息（见 [Native Messaging 专题](../../topics/native-messaging.md)）
 - 对用户数据：`chrome.storage.local` 的 `ai_settings` / `explain_cache` / `image_search_cache` / 字幕缓存
 

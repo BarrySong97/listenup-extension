@@ -1,8 +1,8 @@
 /**
- * @purpose 扩展与桌面端之间双向 Native Messaging v4 契约、host 名与深链接。
+ * @purpose 扩展与桌面端之间双向 Native Messaging v5 契约、host 名与深链接。
  * @role    内容脚本、background 与桌面端 Rust 三方对齐的唯一权威。
  * @deps    构建期环境常量、content 的 SubtitleItem 类型
- * @gotcha  playback command 必须带 command/session/video/tab 身份；seek 还必须带有限非负时间。改字段必须同步 background、content 与 Rust。
+ * @gotcha  cursor 必须带单调 playbackEpoch；command 必须带 command/session/video/tab 身份。改字段必须同步 background、content 与 Rust。
  */
 import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 
@@ -11,7 +11,7 @@ export const NATIVE_SUBTITLE_HOST =
   typeof __LISTENUP_NATIVE_HOST__ === "string" ? __LISTENUP_NATIVE_HOST__ : "";
 export const DESKTOP_DEEP_LINK =
   typeof __LISTENUP_DEEP_LINK__ === "string" ? __LISTENUP_DEEP_LINK__ : "";
-export const NATIVE_SUBTITLE_PROTOCOL_VERSION = 4 as const;
+export const NATIVE_SUBTITLE_PROTOCOL_VERSION = 5 as const;
 
 export type NativeSubtitleIdentityStatus = "pending" | "verified" | "failed";
 
@@ -45,6 +45,7 @@ export interface NativeSubtitleCursorPayload {
   version: typeof NATIVE_SUBTITLE_PROTOCOL_VERSION;
   sessionId: string;
   videoId: string;
+  playbackEpoch: number;
   currentTime: number;
   currentIndex: number;
   isPaused: boolean;
@@ -155,15 +156,49 @@ export const isNativeSubtitlePlaybackContentMessage = (
 export const isNativeSubtitleExtensionMessage = (
   value: unknown
 ): value is NativeSubtitleExtensionMessage => {
-  if (!isObject(value)) {
-    return false;
-  }
+  if (!isObject(value) || !isObject(value.payload)) return false;
+  const { type, payload } = value;
+  const hasBaseIdentity =
+    payload.version === NATIVE_SUBTITLE_PROTOCOL_VERSION &&
+    typeof payload.sessionId === "string" &&
+    typeof payload.videoId === "string";
+  if (!hasBaseIdentity) return false;
 
-  const type = (value as { type?: unknown }).type;
-  return (
-    type === "NATIVE_SUBTITLE_SESSION" ||
-    type === "NATIVE_SUBTITLE_CURSOR" ||
-    type === "NATIVE_SUBTITLE_END" ||
-    type === "NATIVE_PLAYBACK_COMMAND_RESULT"
-  );
+  if (type === "NATIVE_SUBTITLE_SESSION") {
+    return (
+      typeof payload.title === "string" &&
+      (payload.identityStatus === "pending" ||
+        payload.identityStatus === "verified" ||
+        payload.identityStatus === "failed") &&
+      (payload.status === "loading" ||
+        payload.status === "ready" ||
+        payload.status === "empty" ||
+        payload.status === "error") &&
+      (payload.error === null || typeof payload.error === "string") &&
+      Array.isArray(payload.subtitles)
+    );
+  }
+  if (type === "NATIVE_SUBTITLE_CURSOR") {
+    return (
+      Number.isInteger(payload.playbackEpoch) &&
+      (payload.playbackEpoch as number) >= 0 &&
+      typeof payload.currentTime === "number" &&
+      Number.isFinite(payload.currentTime) &&
+      typeof payload.currentIndex === "number" &&
+      Number.isInteger(payload.currentIndex) &&
+      typeof payload.isPaused === "boolean" &&
+      typeof payload.isAdPlaying === "boolean" &&
+      typeof payload.sentAt === "number" &&
+      Number.isFinite(payload.sentAt)
+    );
+  }
+  if (type === "NATIVE_SUBTITLE_END") return true;
+  if (type === "NATIVE_PLAYBACK_COMMAND_RESULT") {
+    return (
+      typeof payload.commandId === "string" &&
+      typeof payload.ok === "boolean" &&
+      (payload.error === null || typeof payload.error === "string")
+    );
+  }
+  return false;
 };

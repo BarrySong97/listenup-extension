@@ -72,7 +72,7 @@ GUI 使用 Tauri app-data 目录下的 `listenup.sqlite`：
 - production：`~/Library/Application Support/com.listenup.desktop/listenup.sqlite`
 - development：`~/Library/Application Support/com.listenup.desktop.dev/listenup.sqlite`
 
-连接开启 WAL、foreign keys 和 5 秒 busy timeout，migration 编译进 Rust。只有协议 v4 中
+连接开启 WAL、foreign keys 和 5 秒 busy timeout，migration 编译进 Rust。只有协议 v5 中
 `identityStatus=verified`、`status=ready` 且字幕非空的 session 才写库；cursor、pending、
 loading、empty 和 error 都不写。写库发生在对应 UI snapshot event 之前。
 

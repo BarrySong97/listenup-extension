@@ -2,7 +2,7 @@
  * @purpose 前端侧实时会话、播放控制、appMode 与 SQLite 字幕视图类型契约。
  * @role    App.tsx、React Query 和 Rust command/event 之间的类型契约。
  * @deps    无
- * @gotcha  Native v4 与 Rust serde 必须同步；appMode 是 Rust 持久化的唯一权威。
+ * @gotcha  Native v5 playbackEpoch 与 Rust serde 必须同步；appMode 是 Rust 持久化的唯一权威。
  */
 export interface SubtitleItem {
   id: number | string;
@@ -22,6 +22,7 @@ export interface SubtitleTrack {
 export interface CursorState {
   sessionId: string;
   videoId: string;
+  playbackEpoch: number;
   currentTime: number;
   currentIndex: number;
   isPaused: boolean;

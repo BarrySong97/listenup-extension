@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native 协议、原始音轨、Desktop hover/启动更新/本地 bundle 清理、CLI/updater 发布边界与 migration 不漂移。
+ * @purpose 校验环境标识、Native v5/playbackEpoch、共享原始音轨、Desktop hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
- * @deps    环境矩阵、extension manifests/protocol/bridge/selector、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
+ * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
  * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
  */
 import assert from "node:assert/strict";
@@ -190,7 +190,8 @@ const protocolSource = await readFile(
 );
 assert.match(protocolSource, /__LISTENUP_NATIVE_HOST__/);
 assert.match(protocolSource, /__LISTENUP_DEEP_LINK__/);
-assert.match(protocolSource, /NATIVE_SUBTITLE_PROTOCOL_VERSION = 4/);
+assert.match(protocolSource, /NATIVE_SUBTITLE_PROTOCOL_VERSION = 5/);
+assert.match(protocolSource, /playbackEpoch: number/);
 assert.match(protocolSource, /vssId: string/);
 assert.match(protocolSource, /isDefault: boolean/);
 assert.match(
@@ -202,7 +203,7 @@ assert.match(
 const selectorSource = await readFile(
   resolve(
     ROOT,
-    "apps/extension/src/pages/content/lib/captions/SubtitleTrackSelector.ts"
+    "packages/youtube-core/src/captionTrack.ts"
   ),
   "utf8"
 );
@@ -244,7 +245,8 @@ const rustSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/src/lib.rs"),
   "utf8"
 );
-assert.match(rustSource, /const PROTOCOL_VERSION: u8 = 4/);
+assert.match(rustSource, /const PROTOCOL_VERSION: u8 = 5/);
+assert.match(rustSource, /playback_epoch: u64/);
 assert.match(
   rustSource,
   /bridge_id: u64/,

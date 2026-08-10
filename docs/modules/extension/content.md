@@ -20,7 +20,7 @@
 - 承接选词 → `explainTarget`（写入前先暂停视频，避免边听边读错过内容）
 - 把字幕快照与播放游标交给 background；播放时 100ms 采样且普通游标最多 100ms 一次，字幕索引变化、
   `seeking` 与最终 `seeked` 强制立即发，避免拖进无字幕间隙或同一句内部时 Desktop 停在旧位置
-- 校验 Desktop v4 播放 / 字幕 seek 命令的 session/video/ad 身份，只在当前页面匹配时调用播放器适配层，
+- 校验 Desktop v5 播放 / 字幕 seek 命令的 session/video/ad 身份，只在当前页面匹配时调用播放器适配层，
   并把成功或失败结果沿原 bridge 返回
 
 ## 字幕加载层：`hooks/useSubtitles.ts`
@@ -60,7 +60,7 @@ Extension transport 适配器，并通过兼容 re-export 保持既有相对导�
 校验页面 session videoId、轨道来源 videoId、字幕 URL 的 `v` 参数三者一致。
 未验证轨道不能读写缓存、下载字幕或发布 ready；缓存结构为 v3，并同时保存
 `videoId` 与 `sourceVideoId`。规则见 [ADR-0007](../../decisions/0007-desktop-owned-video-session-selection.md)。
-Desktop 同步协议 v4 继续发送 `vssId` 与 `isDefault`，并增加播放控制往返，见
+Desktop 同步协议 v5 继续发送 `vssId` 与 `isDefault`，cursor 增加 `playbackEpoch`，并保留播放控制往返，见
 [ADR-0008](../../decisions/0008-desktop-sqlite-bilingual-subtitles-and-safe-cli.md)。
 
 ## 纯处理层：`lib/subtitles/`
@@ -88,6 +88,6 @@ Desktop 同步协议 v4 继续发送 `vssId` 与 `isDefault`，并增加播放�
 ## Native cursor 调度测试
 
 `hooks/nativeCursorScheduler.ts` 是无 DOM 副作用的调度器；Node 测试固定普通节流、latest-wins、
-seek 强制刷新、`currentIndex=-1` 间隙和卸载取消。协议守卫测试同时固定 v4 command/result 的
-必填身份字段，以及字幕 seek 的有限非负时间。修改 Native 同步时运行
+seek 强制刷新、`currentIndex=-1` 间隙和卸载取消。协议守卫测试同时固定 v5 command/result 的
+必填身份字段、cursor 的非负整数 `playbackEpoch`，以及字幕 seek 的有限非负时间。修改 Native 同步时运行
 `pnpm --filter @listenup/extension test`。

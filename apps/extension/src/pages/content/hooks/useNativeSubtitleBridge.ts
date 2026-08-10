@@ -2,8 +2,9 @@
  * @purpose 把字幕/cursor 发给 Desktop，处理精确绑定当前 session 的反向播放与字幕 seek 命令。
  * @role    内容脚本侧的 Native Messaging 发送端。
  * @deps    src/shared/nativeSubtitleProtocol、nativeCursorScheduler、youtubeSDK、chrome.runtime
- * @gotcha  反向命令必须同时校验 tab 外的 session/video/广告态；失败不可尝试控制其他播放器。
+ * @gotcha  playbackEpoch 只在非广告的暂停→播放时递增；反向命令失败不可尝试控制其他播放器。
  */
+import { PlaybackEpochTracker } from "@listenup/youtube-core";
 import { useEffect, useMemo, useRef } from "react";
 import type { CaptionTrackDescriptor } from "../lib/captions/types";
 import type { SubtitleItem } from "../lib/subtitles/subtitleTypes";
@@ -80,6 +81,10 @@ export const useNativeSubtitleBridge = ({
   const sessionId = useMemo(
     () => (videoId ? crypto.randomUUID() : null),
     [videoId]
+  );
+  const playbackEpochTracker = useMemo(
+    () => new PlaybackEpochTracker(),
+    [sessionId]
   );
   const lastForceRevisionRef = useRef(cursorForceRevision);
   const cursorSchedulerRef = useRef<NativeCursorScheduler | null>(null);
@@ -236,10 +241,14 @@ export const useNativeSubtitleBridge = ({
       return;
     }
 
+    const playbackEpoch = isAdPlaying
+      ? playbackEpochTracker.suspend()
+      : playbackEpochTracker.update(isVideoPlaying);
     const cursor: NativeSubtitleCursorPayload = {
       version: NATIVE_SUBTITLE_PROTOCOL_VERSION,
       sessionId,
       videoId,
+      playbackEpoch,
       currentTime,
       currentIndex: currentSubtitleIndex,
       isPaused: !isVideoPlaying,
@@ -255,6 +264,7 @@ export const useNativeSubtitleBridge = ({
     currentTime,
     isAdPlaying,
     isVideoPlaying,
+    playbackEpochTracker,
     sessionId,
     videoId,
   ]);

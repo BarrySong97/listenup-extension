@@ -10,7 +10,8 @@ Extension 与 ListenUp Desktop EmbeddedSource 共用的 YouTube 纯逻辑：原�
 - 不访问 `chrome.*`、Tauri IPC、React、网络、Cookie、SQLite 或文件系统。
 - BrowserSource 与 EmbeddedSource 分别保留页面读取和 transport 适配器。
 - `CaptionTrackDescriptor.sourceVideoId`、播放器 videoId 与 track URL 的 `v` 必须同时一致。
-- `PlaybackEpochTracker` 只在暂停→播放或新 session 首次播放时递增；seek 和周期 cursor 不递增。
+- `PlaybackEpochTracker` 只在暂停→播放或新 session 首次播放时递增；seek 和周期 cursor 不递增，
+  广告区间使用 `suspend()` 保留进入广告前的播放状态与 epoch。
 
 ## 验证
 

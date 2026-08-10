@@ -40,7 +40,7 @@ Desktop 把高频 cursor 与低频 viewer/session 状态分开：实时原语列
 
 ## 消息与身份状态
 
-- **session** —— 一次字幕快照（videoId + 标题 + 身份状态 + 全量字幕）。协议 v4 的
+- **session** —— 一次字幕快照（videoId + 标题 + 身份状态 + 全量字幕）。协议 v5 的
   `identityStatus` 为 `pending | verified | failed`；只有 verified session 可以携带
   ready / empty 结果和字幕。ready track 还带 `languageCode`、`displayName`、`kind`、
   `vssId` 和 `isDefault`，用于建立不会跨语言覆盖的持久轨道身份。
@@ -49,6 +49,8 @@ Desktop 把高频 cursor 与低频 viewer/session 状态分开：实时原语列
 - **cursor** —— 播放游标。视频播放期间由 100ms clock 采样，普通消息**最多 100ms 一次**；暂停
   后停止周期采样。当前字幕索引变化、拖动开始和
   最终 `seeked` 立即发。`currentIndex=-1` 也必须发送，保证拖进字幕间隙后 Desktop 清掉旧高亮。
+  v5 还携带每个 session 单调递增的 `playbackEpoch`：首次播放及暂停→播放时递增，普通 cursor、
+  seek 和广告区间不递增，供 Desktop 区分旧播放流与退出 EmbeddedSource 后的新播放事件。
 - **playbackCommand** —— GUI 生成唯一 commandId，携带完整 session/video/tab 身份和
   `play | pause | seek`；seek 额外要求有限、非负的 `seekTime`。Rust 只向该 session 的 bridge
   写命令，background 只向该 tab 发消息，content 再校验当前 session/video/ad 状态后操作真实
@@ -95,7 +97,7 @@ Desktop GUI 每次启动都会按编译环境重写自己的 manifest 与 wrappe
 - 两套 Host 的 `allowed_origins` 只能包含各自固定 Extension ID
 - 桥接模式的 **stdout 专供 Native Messaging 长度帧**；现在它会写反向 command，诊断仍只能写 stderr
 - 改 `nativeSubtitleProtocol.ts` 的字段必须两端同步改
-- v4 原语轨身份字段不可删除；默认选轨不得恢复固定英语、当前配音或字幕首项优先
+- v5 中继承的原语轨身份字段不可删除；默认选轨不得恢复固定英语、当前配音或字幕首项优先
 - 反向命令不得只按 tabId 路由，必须保留 bridgeId + tabId + sessionId + videoId 全链校验
 
 见 [ADR-0003](../decisions/0003-native-messaging-single-binary.md) 与

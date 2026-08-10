@@ -100,3 +100,11 @@ test("increments playbackEpoch only on a paused-to-playing transition", () => {
     [0, 1, 1, 1, 1, 1, 2]
   );
 });
+
+test("does not treat an ad interval as a new playback transition", () => {
+  const tracker = new PlaybackEpochTracker();
+  assert.equal(tracker.update(true), 1);
+  assert.equal(tracker.suspend(), 1);
+  assert.equal(tracker.suspend(), 1);
+  assert.equal(tracker.update(true), 1);
+});

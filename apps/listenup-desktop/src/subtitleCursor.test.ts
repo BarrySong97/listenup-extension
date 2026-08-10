@@ -25,6 +25,7 @@ const cursor = (
 ): CursorState => ({
   sessionId: "session",
   videoId: "video",
+  playbackEpoch: 1,
   currentTime,
   currentIndex,
   isPaused: false,

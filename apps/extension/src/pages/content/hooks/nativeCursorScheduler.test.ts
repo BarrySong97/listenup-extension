@@ -22,6 +22,7 @@ const cursor = (
   version: NATIVE_SUBTITLE_PROTOCOL_VERSION,
   sessionId: "session",
   videoId: "video",
+  playbackEpoch: 1,
   currentTime,
   currentIndex,
   isPaused: false,

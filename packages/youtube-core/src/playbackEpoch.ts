@@ -14,6 +14,10 @@ export class PlaybackEpochTracker {
     return this.epoch;
   }
 
+  suspend(): number {
+    return this.epoch;
+  }
+
   current(): number {
     return this.epoch;
   }

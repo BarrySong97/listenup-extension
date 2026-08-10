@@ -1,7 +1,7 @@
 // @purpose 桌面端 Rust 入口：GUI/桥接双模式、双向播放/字幕 seek 协议、字幕持久化、session 仲裁、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket、编译期环境矩阵
-// @gotcha  stdout 只写 Native Messaging 长度帧；反向控制必须按 bridgeId+session 路由；2+ session 尊重锁定。
+// @gotcha  stdout 只写 Native Messaging 长度帧；v5 cursor 必须保留 playbackEpoch；反向控制按 bridgeId+session 路由。
 mod app_mode;
 pub mod cli;
 pub mod database;
@@ -24,7 +24,7 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const PROTOCOL_VERSION: u8 = 4;
+const PROTOCOL_VERSION: u8 = 5;
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
@@ -57,6 +57,7 @@ pub struct SubtitleTrack {
 pub struct CursorState {
     session_id: String,
     video_id: String,
+    playback_epoch: u64,
     current_time: f64,
     current_index: i64,
     is_paused: bool,
@@ -140,6 +141,7 @@ enum NativeMessage {
         tab_id: i64,
         session_id: String,
         video_id: String,
+        playback_epoch: u64,
         current_time: f64,
         current_index: i64,
         is_paused: bool,
@@ -398,6 +400,7 @@ impl HostStore {
                 tab_id,
                 session_id,
                 video_id,
+                playback_epoch,
                 current_time,
                 current_index,
                 is_paused,
@@ -411,6 +414,7 @@ impl HostStore {
                 let cursor = CursorState {
                     session_id: session_id.clone(),
                     video_id: video_id.clone(),
+                    playback_epoch,
                     current_time,
                     current_index,
                     is_paused,
@@ -1620,6 +1624,7 @@ mod tests {
             tab_id,
             session_id: session_id.to_string(),
             video_id: format!("video-{session_id}"),
+            playback_epoch: 1,
             current_time: 12.5,
             current_index: 3,
             is_paused,
@@ -1673,7 +1678,7 @@ mod tests {
 
     #[test]
     fn reads_a_fragmented_native_messaging_frame() {
-        let json = r#"{"kind":"end","version":4,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
+        let json = r#"{"kind":"end","version":5,"tabId":4,"sessionId":"s1","videoId":"v1"}"#;
         let mut reader = ChunkedReader {
             cursor: Cursor::new(frame(json)),
             chunk_size: 2,
