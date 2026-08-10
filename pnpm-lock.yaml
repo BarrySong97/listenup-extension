@@ -32,6 +32,9 @@ importers:
       '@iconify/react':
         specifier: ^6.0.0
         version: 6.0.0(react@19.2.4)
+      '@listenup/youtube-core':
+        specifier: workspace:*
+        version: link:../../packages/youtube-core
       ai:
         specifier: ^6.0.168
         version: 6.0.168(zod@4.3.6)
@@ -265,6 +268,15 @@ importers:
         version: 19.1.7(@types/react@19.1.10)
       typescript:
         specifier: ^5
+        version: 5.9.2
+
+  packages/youtube-core:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.10
+        version: 24.2.1
+      typescript:
+        specifier: ^5.8.3
         version: 5.9.2
 
 packages:

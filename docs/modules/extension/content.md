@@ -44,6 +44,10 @@ pending 快照，避免一帧内把旧字幕发布给 Native。
 
 两个来源：`PlayerResponseCaptionSource`（读 `ytInitialPlayerResponse`）与 `BridgeCaptionSource`（经 `PageBridge` 进页面上下文取）。`SubtitleRepository` 合并去重后按来源能力择优。
 
+原始音轨语言、原语选轨、带 POT 的 JSON3 URL 构建、videoId 三重身份校验与字幕基础类型的
+唯一权威在 workspace 包 `@listenup/youtube-core`。`lib/captions/` 保留 YouTube 页面读取和
+Extension transport 适配器，并通过兼容 re-export 保持既有相对导入稳定；不得在这里复制共享规则。
+
 默认选轨先读取同一 player response 的 `streamingData.*.audioTrack.audioIsDefault=true`，把
 该原始音轨的 BCP 47 语言映射到字幕轨；这不受用户当前选择的自动配音或字幕列表顺序影响。
 原始音轨元数据缺失时才回退 `defaultCaptionTrackIndex`，再回退 YouTube 返回的第一条可用
@@ -61,7 +65,9 @@ Desktop 同步协议 v4 继续发送 `vssId` 与 `isDefault`，并增加播放�
 
 ## 纯处理层：`lib/subtitles/`
 
-`subtitleParser.ts`（自动识别 JSON / XML / WebVTT）、`subtitleCleaner.ts`（去噪）、`subtitleMerger.ts`（合并短句与相邻片段）、`subtitleConfig.ts`（读本地处理配置）。
+`subtitleParser.ts` 从 `@listenup/youtube-core` 兼容转出 JSON3 / XML / WebVTT 解析；
+`subtitleCleaner.ts` 负责去噪，`subtitleMerger.ts` 合并短句与相邻片段，`subtitleConfig.ts`
+读取本地处理配置。
 
 这层对 DOM 和 `chrome.*` 零依赖，是最该先补自动化测试的地方。**保持它无副作用。**
 

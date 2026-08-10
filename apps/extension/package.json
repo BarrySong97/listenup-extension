@@ -16,6 +16,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@listenup/youtube-core": "workspace:*",
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@heroui/react": "^2.8.2",
     "@iconify/react": "^6.0.0",

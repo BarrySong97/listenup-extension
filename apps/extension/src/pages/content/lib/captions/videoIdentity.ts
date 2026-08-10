@@ -1,48 +1,14 @@
 /**
- * @purpose 校验页面、播放器响应与字幕轨 URL 是否共同指向同一个 YouTube videoId。
- * @role    SubtitleRepository 进入缓存与网络请求前的纯函数安全门。
- * @deps    URL
- * @gotcha  任一身份缺失都视为未验证；不能用页面 URL 替代播放器或字幕轨身份。
+ * @purpose 向 SubtitleRepository 转出共享 videoId 三重身份校验。
+ * @role    Extension captions 层的兼容适配器。
+ * @deps    @listenup/youtube-core
+ * @gotcha  逻辑权威已迁到 youtube-core；任一身份缺失都必须失败。
  */
-import type { CaptionTrackDescriptor } from "./types";
-
-export interface CaptionVideoIdentityInput {
-  expectedVideoId: string;
-  sessionVideoId: string | null;
-  track: Pick<
-    CaptionTrackDescriptor,
-    "sourceVideoId" | "baseUrl" | "requestUrl"
-  >;
-}
-
-export interface CaptionVideoIdentityResult {
-  ok: boolean;
-  trackVideoId: string | null;
-}
-
-export const extractVideoIdFromTrackUrl = (url: string): string | null => {
-  try {
-    return new URL(url).searchParams.get("v");
-  } catch {
-    return null;
-  }
-};
-
-export const validateCaptionVideoIdentity = ({
-  expectedVideoId,
-  sessionVideoId,
-  track,
-}: CaptionVideoIdentityInput): CaptionVideoIdentityResult => {
-  const trackVideoId = extractVideoIdFromTrackUrl(
-    track.requestUrl || track.baseUrl
-  );
-
-  return {
-    ok:
-      Boolean(expectedVideoId) &&
-      sessionVideoId === expectedVideoId &&
-      track.sourceVideoId === expectedVideoId &&
-      trackVideoId === expectedVideoId,
-    trackVideoId,
-  };
-};
+export {
+  extractVideoIdFromTrackUrl,
+  validateCaptionVideoIdentity,
+} from "@listenup/youtube-core";
+export type {
+  CaptionVideoIdentityInput,
+  CaptionVideoIdentityResult,
+} from "@listenup/youtube-core";

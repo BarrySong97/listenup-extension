@@ -29,7 +29,7 @@
 
 ## 📚 导航
 
-- **模块**：[extension](docs/modules/extension/) · [website](docs/modules/website/) · [listenup-desktop](docs/modules/listenup-desktop/) · [listenup-cli](docs/modules/listenup-cli/) · [mock-ui](docs/modules/mock-ui/)
+- **模块**：[extension](docs/modules/extension/) · [website](docs/modules/website/) · [listenup-desktop](docs/modules/listenup-desktop/) · [listenup-cli](docs/modules/listenup-cli/) · [mock-ui](docs/modules/mock-ui/) · [youtube-core](docs/modules/youtube-core/)
 - **专题（跨模块）**：[Native Messaging 字幕同步](docs/topics/native-messaging.md) · [构建产物与分发](docs/topics/release-and-distribution.md)
 - 设计系统 [design.md](design.md) · 运行手册 [docs/run.md](docs/run.md) · 规范&术语 [docs/conventions.md](docs/conventions.md)
 - 测试&验证 [docs/testing.md](docs/testing.md) · 需求 [docs/specs/](docs/specs/) · 计划 [docs/plans/](docs/plans/) · 决策 [docs/decisions/](docs/decisions/)
