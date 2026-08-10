@@ -75,6 +75,38 @@ YouTube/Chrome content script
 这次探针证明的是单个、无需登录的公开视频在当前机器上可加载和取字幕；没有证明 Google
 登录、受限内容、长时间播放、广告、多音轨、SPA 连续切换或不同 macOS 版本均可用。
 
+### 未登录清晰度补充探针
+
+同日使用无持久 Cookie、`loggedIn=false` 的 WKWebView 加载 4K60 HDR 公共视频
+`LXb3EKWsInQ`。YouTube 播放器实际返回以下手动清晰度档位：
+
+```text
+2160p60 / 1440p60 / 1080p60 / 720p60 / 480p / 360p / 240p / 144p
+```
+
+player response 同时提供 2160p60 VP9、2160p60 VP9.2 HDR 与 2160p60 AV1 HDR 格式；
+`MediaCapabilities.decodingInfo()` 对 3840×2160、60fps、20Mbps VP9 返回
+`supported=true`、`smooth=true`、`powerEfficient=true`。因此在本机 Apple Silicon 与当前
+WebKit 上，**未登录不会把普通公开视频限制在 720p/1080p，4K60 可以出现并具备硬件友好的
+解码能力**。
+
+实际自动选择仍由 YouTube 根据网速、播放器尺寸、原视频质量和浏览器格式能力动态决定；小窗口
+启动时可能先选较低清晰度，这不等于账号限制。官方建议 1080p 持续带宽约 5Mbps、4K 约
+20Mbps，并说明 Safari/macOS 属于支持 YouTube 高质量格式的组合。
+[YouTube 清晰度说明](https://support.google.com/youtube/answer/91449)、
+[高质量格式浏览器支持](https://support.google.com/youtube/answer/6322658)、
+[YouTube 推荐带宽](https://support.google.com/youtube/answer/3037019)
+
+未登录真正缺少的是账号/Premium 能力：`1080p Premium` 是 Premium 会员专属的增强码率版本，
+普通 1080p、1440p 和 4K 并不因此消失。部分年龄限制、未成年人相关或其他受限内容可能要求
+登录，属于可播放范围问题，不是普通公开视频的清晰度降级。
+[YouTube Premium 1080p](https://support.google.com/youtube/answer/6308116)、
+[YouTube 播放错误与登录限制](https://support.google.com/youtube/answer/3037019)
+
+产品上应保留 YouTube 原生齿轮与 Quality 菜单，并给 Player 足够大的布局；不需要自造一套
+非官方清晰度强制接口。PoC 需记录实际 `videoWidth/videoHeight` 与 Stats for Nerds，而不能只
+根据 player response 中“可用档位”判断最终播放清晰度。
+
 ## 平台与官方 API 边界
 
 ### Tauri / WKWebView
