@@ -295,3 +295,6 @@ Rust 单测覆盖帧解析、0/1/2+ 播放 session、锁定、暂停、pending�
 - `src-tauri/target/`、`src-tauri/gen/`、`dist/` 都是生成物
 - `Info.plist` 由脚本生成；production CI 与本地 DEV 构建都会按目标环境重新生成，不能依赖工作树里上一次生成的 scheme（见 `.github/workflows/release-desktop.yml`）
 - 窗口 UI 改了记得看一眼 [`@listenup/mock-ui`](../mock-ui/README.md)——官网首屏那张产品图是它的静态复刻，不会自动跟着变
+- 当前版本不内嵌 YouTube，播放来源仍是 Chrome Extension。WKWebView 公共视频、字幕抓取、
+  Google 登录和远程 capability 边界的可行性结论见
+  [Desktop 内嵌 YouTube 技术调研](../../plans/2026-08-10-desktop-embedded-youtube-research.md)。
