@@ -29,7 +29,9 @@ src/queryClient.ts          窗口 focus refetch；无轮询 / watcher
 src/main.tsx       React 挂载与 QueryClientProvider
 src/types.ts       与 Rust 侧共享的实时快照 / 持久字幕视图类型
 src/styles.css     Tailwind v4 @theme（唯一的设计 token 权威，见 design.md）
-src-tauri/src/lib.rs   Tauri 入口、双向 socket、状态机、SQLite composition、NSPanel/tray
+src-tauri/src/lib.rs   Tauri 入口、双向 socket、SQLite composition、NSPanel/tray
+src-tauri/src/browser_source.rs  浏览器字幕影子状态、多视频仲裁与 bridgeId 控制目标
+src-tauri/src/source_coordinator.rs  双来源权威、Embedded 锁与 playbackEpoch 退出屏障
 src-tauri/src/app_mode.rs  版本化偏好、activation policy、窗口属性与事务切换
 src-tauri/src/positioning.rs  tray 下方定位、多显示器 work area clamp 与坐标缩放
 src-tauri/src/database/ SQLite repository、WAL 连接、原语 revision 与译文事务
@@ -72,7 +74,9 @@ GUI 使用 Tauri app-data 目录下的 `listenup.sqlite`：
 - production：`~/Library/Application Support/com.listenup.desktop/listenup.sqlite`
 - development：`~/Library/Application Support/com.listenup.desktop.dev/listenup.sqlite`
 
-连接开启 WAL、foreign keys 和 5 秒 busy timeout，migration 编译进 Rust。只有协议 v5 中
+连接开启 WAL、foreign keys 和 5 秒 busy timeout，migration 编译进 Rust。BrowserSource 写入先
+经过 `SourceCoordinator` 权威门；Embedded 锁定和退出等待期间的浏览器 session 只更新影子状态，
+不会写库。权威来源中只有协议 v5 的
 `identityStatus=verified`、`status=ready` 且字幕非空的 session 才写库；cursor、pending、
 loading、empty 和 error 都不写。写库发生在对应 UI snapshot event 之前。
 
@@ -174,15 +178,25 @@ activation、resizable/skip-taskbar 和持久化任一步失败都会回滚旧�
 `acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免非激活 NSPanel 偶发停止命中
 CSS `:hover`。
 
-## 多视频仲裁
+## 来源权威与多视频仲裁
 
-Rust `HostStore` 是播放候选、当前显示项和用户锁定的唯一权威：
+Rust `SourceCoordinator` 是 viewer、SQLite 和播放控制来源的唯一权威。浏览器消息先进入
+`BrowserSourceStore` 影子状态；正常浏览器模式下再放行现有多视频仲裁：
 
 - 只有一个视频播放时自动跟随；
 - 两个及以上视频播放且没有有效锁定时，verified 候选达到两个后显示选择遮罩；
 - 用户选择保持锁定，后来开始播放的视频不会抢占；
 - 所选视频停止后，剩一个自动跟随，仍有多个则重新选择；
 - pending 视频可以作为唯一项显示 loading，但不会出现在选择列表。
+
+进入 Desktop 内置播放后，状态依次为 `EnteringEmbedded`、`EmbeddedActive` 或
+`EmbeddedRecovering`，三者都持有 Embedded 锁。锁定期间浏览器 session/cursor 仍做协议和身份
+校验并更新影子状态，但不能改变 viewer、写 SQLite、显示多视频选择器或成为控制目标；暂停失败、
+暂停超时和 Player 恢复也都不会隐式释放锁。
+
+显式退出内置播放会立即返回空状态，并将进入前及锁定期间观察到的
+`(bridgeId, sessionId, videoId, playbackEpoch)` 放入隔离集合。只有退出后出现未隔离的新播放世代
+（重新播放、换视频或自动连播），BrowserSource 才能重新成为权威；旧视频的周期 cursor 不会抢回。
 
 选择器只在播放来源冲突时自动出现，不提供 footer 或影院工具条的常驻列表入口。
 冲突遮罩不可关闭。见 [ADR-0007](../../decisions/0007-desktop-owned-video-session-selection.md)。

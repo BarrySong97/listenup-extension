@@ -120,15 +120,15 @@ BrowserSource。
 
 ### 批次 2：SourceCoordinator 与浏览器屏障
 
-6. [ ] 从 `lib.rs` 提取 `BrowserSourceStore`，用现有 HostStore tests 证明 0/1/2+ 视频仲裁、
+6. [x] 从 `lib.rs` 提取 `BrowserSourceStore`，用现有 HostStore tests 证明 0/1/2+ 视频仲裁、
    bridgeId 路由、暂停保留和断连行为无变化。
-7. [ ] 新增 `SourceCoordinator` 状态机和 `SourceRef`；把 BrowserSource 消息、SQLite 持久化、
+7. [x] 新增 `SourceCoordinator` 状态机和 `SourceRef`；把 BrowserSource 消息、SQLite 持久化、
    viewer emit 与 control target 都放到同一权威门之后。
-8. [ ] 实现 `EnteringEmbedded`、`EmbeddedActive`、`EmbeddedRecovering`、显式退出和浏览器
+8. [x] 实现 `EnteringEmbedded`、`EmbeddedActive`、`EmbeddedRecovering`、显式退出和浏览器
    playbackEpoch 隔离集合；锁定期间 BrowserSource 只更新安全校验后的 shadow state。
-9. [ ] 用 Rust 表驱动测试覆盖进入、暂停成功/失败/超时、锁中旧事件、退出空态、旧 epoch 拒绝、
+9. [x] 用 Rust 表驱动测试覆盖进入、暂停成功/失败/超时、锁中旧事件、退出空态、旧 epoch 拒绝、
    新手动播放/换视频/自动连播接入，以及故障不释放锁。
-10. [ ] 提交 `refactor(desktop): isolate browser source state` 与
+10. [x] 提交 `refactor(desktop): isolate browser source state` 与
     `feat(desktop): coordinate browser and embedded sources`。
 
 ### 批次 3：受限 EmbeddedSource 与 Player 原生容器

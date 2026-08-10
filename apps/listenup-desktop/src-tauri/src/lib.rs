@@ -1,6 +1,6 @@
-// @purpose 桌面端 Rust 入口：GUI/桥接双模式、双向播放/字幕 seek 协议、字幕持久化、session 仲裁、NSPanel 与 tray。
+// @purpose 桌面端 Rust 入口：GUI/桥接双模式、来源协调、双向播放/字幕 seek、字幕持久化、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
-// @deps    database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket、编译期环境矩阵
+// @deps    browser_source、source_coordinator、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
 // @gotcha  stdout 只写 Native Messaging 长度帧；v5 cursor 必须保留 playbackEpoch；反向控制按 bridgeId+session 路由。
 mod app_mode;
 mod browser_source;
@@ -8,14 +8,15 @@ pub mod cli;
 pub mod database;
 pub mod domain;
 mod positioning;
+mod source_coordinator;
 
-use browser_source::BrowserSourceStore;
 #[cfg(test)]
-use browser_source::PlaybackTarget;
+use browser_source::{BrowserSourceStore, PlaybackTarget};
 use database::{
     DatabaseState, SourceSnapshot, SourceSnapshotSegment, SubtitleDatabase, SubtitleView,
 };
 use serde::{Deserialize, Serialize};
+use source_coordinator::SourceCoordinator;
 use std::{
     collections::HashMap,
     env,
@@ -197,7 +198,7 @@ enum UiUpdate {
 }
 
 #[derive(Default)]
-struct SharedStore(Mutex<BrowserSourceStore>);
+struct SharedStore(Mutex<SourceCoordinator>);
 
 #[cfg(unix)]
 #[derive(Default)]
@@ -602,13 +603,7 @@ fn set_bridge_connected(app: &AppHandle, delta: i32) {
         let Ok(mut store) = shared.0.lock() else {
             return;
         };
-        if delta > 0 {
-            store.bridge_connections += 1;
-        } else {
-            store.bridge_connections = store.bridge_connections.saturating_sub(1);
-        }
-        store.connected = store.bridge_connections > 0;
-        store.connected
+        store.set_browser_connected(delta)
     };
     let _ = app.emit(CONNECTION_EVENT, connected);
 }
@@ -667,23 +662,31 @@ fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStre
             }
             continue;
         }
-        if let Some(snapshot) = source_snapshot_from_message(&message) {
-            let database = app.state::<DatabaseState>().0.clone();
-            if let Some(database) = database {
-                if let Err(error) = tauri::async_runtime::block_on(database.store_source(snapshot))
-                {
-                    eprintln!("failed to cache subtitle source: {error}");
-                }
-            }
-        }
-        let update = {
+        let source_snapshot = source_snapshot_from_message(&message);
+        let outcome = {
             let shared = app.state::<SharedStore>();
             shared
                 .0
                 .lock()
                 .ok()
-                .and_then(|mut store| store.apply_from_bridge(message, bridge_id))
+                .map(|mut store| store.apply_browser_message(message, bridge_id))
         };
+        if outcome
+            .as_ref()
+            .is_some_and(|outcome| outcome.persist_source)
+        {
+            if let Some(snapshot) = source_snapshot {
+                let database = app.state::<DatabaseState>().0.clone();
+                if let Some(database) = database {
+                    if let Err(error) =
+                        tauri::async_runtime::block_on(database.store_source(snapshot))
+                    {
+                        eprintln!("failed to cache subtitle source: {error}");
+                    }
+                }
+            }
+        }
+        let update = outcome.and_then(|outcome| outcome.update);
         if let Some(update) = update {
             if let Err(error) = app.emit(UPDATE_EVENT, update) {
                 eprintln!("failed to emit subtitle update: {error}");
@@ -942,7 +945,7 @@ fn select_subtitle_session(
         .0
         .lock()
         .map_err(|_| "字幕会话状态暂时不可用".to_string())?
-        .select_session(&session_id)?;
+        .select_browser_session(&session_id)?;
     let _ = app.emit(UPDATE_EVENT, UiUpdate::Snapshot(snapshot.clone()));
     Ok(snapshot)
 }
@@ -961,7 +964,7 @@ async fn control_playback(
         .0
         .lock()
         .map_err(|_| "字幕会话状态暂时不可用".to_string())?
-        .playback_target()?;
+        .browser_playback_target()?;
     let (command_id, receiver) = commands
         .0
         .lock()
