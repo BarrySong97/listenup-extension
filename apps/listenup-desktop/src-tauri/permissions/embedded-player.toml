@@ -27,3 +27,13 @@ commands.allow = ["embedded_source_event"]
 identifier = "allow-control-playback"
 description = "Allows trusted local viewer UI to route play, pause and seek only to the coordinator-owned source."
 commands.allow = ["control_playback"]
+
+[[permission]]
+identifier = "allow-reload-embedded-playback"
+description = "Allows player-ui to reload only its coordinator-owned YouTube child webview."
+commands.allow = ["reload_embedded_playback"]
+
+[[permission]]
+identifier = "allow-replace-embedded-playback"
+description = "Allows player-ui to replace the current Embedded source with another validated watch URL."
+commands.allow = ["replace_embedded_playback"]

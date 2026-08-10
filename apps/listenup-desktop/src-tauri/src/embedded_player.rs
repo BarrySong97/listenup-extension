@@ -34,6 +34,7 @@ const EMBEDDED_BRIDGE_BUNDLE: &str = include_str!(concat!(env!("OUT_DIR"), "/emb
 struct EmbeddedRuntime {
     source: SourceRef,
     youtube_webview_label: String,
+    normalized_url: String,
     limiter: EmbeddedRateLimiter,
     violations: u8,
     last_message_at: Instant,
@@ -166,6 +167,30 @@ fn create_player_container(
         )
         .map_err(|error| format!("创建本地 Player UI 失败：{error}"))?;
 
+    if let Err(error) = add_youtube_child(app, &window, source, normalized_url) {
+        let _ = window.close();
+        return Err(error);
+    }
+
+    let app_on_destroy = app.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Destroyed) {
+            release_current_embedded_source(&app_on_destroy);
+        }
+    });
+    window
+        .show()
+        .map_err(|error| format!("显示 Player 窗口失败：{error}"))?;
+    window.set_focus().ok();
+    Ok(())
+}
+
+fn add_youtube_child(
+    app: &AppHandle,
+    window: &tauri::Window,
+    source: &SourceRef,
+    normalized_url: &str,
+) -> Result<(), String> {
     let youtube_label = format!("{YOUTUBE_WEBVIEW_PREFIX}{}", source.source_id);
     let expected_video_id = source.video_id.clone();
     let builder = WebviewBuilder::new(
@@ -190,6 +215,7 @@ fn create_player_container(
             .map_err(|_| "Embedded runtime 状态暂时不可用".to_string())? = Some(EmbeddedRuntime {
             source: source.clone(),
             youtube_webview_label: youtube_label.clone(),
+            normalized_url: normalized_url.to_string(),
             limiter: EmbeddedRateLimiter::new(Instant::now()),
             violations: 0,
             last_message_at: Instant::now(),
@@ -204,25 +230,9 @@ fn create_player_container(
         tauri::LogicalPosition::new(0.0, 56.0),
         tauri::LogicalSize::new(960.0, 540.0),
     ) {
-        if let Ok(mut runtime) = app.state::<SharedEmbeddedRuntime>().0.lock() {
-            *runtime = None;
-        }
-        let _ = window.close();
         return Err(format!("创建受限 YouTube WebView 失败：{error}"));
     }
-
-    let source_on_destroy = source.clone();
-    let app_on_destroy = app.clone();
-    window.on_window_event(move |event| {
-        if matches!(event, WindowEvent::Destroyed) {
-            release_embedded_source(&app_on_destroy, &source_on_destroy);
-        }
-    });
     spawn_embedded_watchdog(app.clone(), source.clone());
-    window
-        .show()
-        .map_err(|error| format!("显示 Player 窗口失败：{error}"))?;
-    window.set_focus().ok();
     Ok(())
 }
 
@@ -290,6 +300,19 @@ fn release_embedded_source(app: &AppHandle, source: &SourceRef) {
         .and_then(|mut coordinator| coordinator.exit_embedded(source).ok());
     if let Some(snapshot) = snapshot {
         let _ = app.emit(UPDATE_EVENT, UiUpdate::Snapshot(snapshot));
+    }
+}
+
+fn release_current_embedded_source(app: &AppHandle) {
+    let source = app
+        .state::<SharedEmbeddedRuntime>()
+        .0
+        .lock()
+        .ok()
+        .and_then(|runtime| runtime.as_ref().map(|active| active.source.clone()))
+        .or_else(|| app.state::<SharedStore>().0.lock().ok()?.current_source());
+    if let Some(source) = source {
+        release_embedded_source(app, &source);
     }
 }
 
@@ -603,6 +626,112 @@ pub(crate) fn stop_embedded_playback(
         let _ = window.close();
     }
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn reload_embedded_playback(
+    webview: Webview,
+    app: AppHandle,
+    runtime: State<'_, SharedEmbeddedRuntime>,
+    store: State<'_, SharedStore>,
+) -> Result<(), String> {
+    if webview.label() != PLAYER_UI_LABEL {
+        return Err("只有本地 Player UI 可以重新加载视频".to_string());
+    }
+    let (source, label, normalized_url) = {
+        let mut runtime = runtime
+            .0
+            .lock()
+            .map_err(|_| "Embedded runtime 状态暂时不可用".to_string())?;
+        let active = runtime
+            .as_mut()
+            .ok_or_else(|| "YouTube WebView 已经关闭".to_string())?;
+        active.limiter = EmbeddedRateLimiter::new(Instant::now());
+        active.last_message_at = Instant::now();
+        active.recovering_reported = false;
+        (
+            active.source.clone(),
+            active.youtube_webview_label.clone(),
+            active.normalized_url.clone(),
+        )
+    };
+    let snapshot = store.0.lock().ok().and_then(|mut coordinator| {
+        coordinator.mark_embedded_recovering(&source).ok()?;
+        Some(coordinator.snapshot())
+    });
+    if let Some(snapshot) = snapshot {
+        let _ = app.emit(UPDATE_EVENT, UiUpdate::Snapshot(snapshot));
+    }
+    if let Some(youtube) = app.get_webview(&label) {
+        return youtube
+            .reload()
+            .map_err(|error| format!("重新加载 YouTube 失败：{error}"));
+    }
+    let window = app
+        .get_window(PLAYER_WINDOW_LABEL)
+        .ok_or_else(|| "Player 窗口已经关闭".to_string())?;
+    add_youtube_child(&app, &window, &source, &normalized_url)
+}
+
+#[tauri::command]
+pub(crate) fn replace_embedded_playback(
+    webview: Webview,
+    app: AppHandle,
+    runtime: State<'_, SharedEmbeddedRuntime>,
+    store: State<'_, SharedStore>,
+    url: String,
+) -> Result<StartEmbeddedResult, String> {
+    if webview.label() != PLAYER_UI_LABEL {
+        return Err("只有本地 Player UI 可以更换视频".to_string());
+    }
+    let (normalized_url, video_id) = normalize_youtube_watch_url(&url)?;
+    let (old_source, old_label) = {
+        let mut runtime = runtime
+            .0
+            .lock()
+            .map_err(|_| "Embedded runtime 状态暂时不可用".to_string())?;
+        let active = runtime
+            .take()
+            .ok_or_else(|| "Desktop 播放已经退出".to_string())?;
+        for (_, sender) in active.pending_commands {
+            let _ = sender.send(Err("正在更换 Desktop 视频".to_string()));
+        }
+        (active.source, active.youtube_webview_label)
+    };
+    if let Some(youtube) = app.get_webview(&old_label) {
+        let _ = youtube.close();
+    }
+
+    let source = next_source(video_id);
+    let snapshot = {
+        let mut coordinator = store
+            .0
+            .lock()
+            .map_err(|_| "字幕来源状态暂时不可用".to_string())?;
+        coordinator.exit_embedded(&old_source)?;
+        coordinator.enter_embedded(source.clone())?;
+        coordinator.snapshot()
+    };
+    let _ = app.emit(UPDATE_EVENT, UiUpdate::Snapshot(snapshot));
+
+    let window = app
+        .get_window(PLAYER_WINDOW_LABEL)
+        .ok_or_else(|| "Player 窗口已经关闭".to_string())?;
+    if let Err(error) = add_youtube_child(&app, &window, &source, &normalized_url) {
+        let snapshot = store.0.lock().ok().and_then(|mut coordinator| {
+            coordinator.mark_embedded_recovering(&source).ok()?;
+            Some(coordinator.snapshot())
+        });
+        if let Some(snapshot) = snapshot {
+            let _ = app.emit(UPDATE_EVENT, UiUpdate::Snapshot(snapshot));
+        }
+        return Err(error);
+    }
+    Ok(StartEmbeddedResult {
+        source,
+        normalized_url,
+        pause_warning: None,
+    })
 }
 
 #[cfg(test)]

@@ -17,8 +17,10 @@ Tauri v2，Rust 后端 + React 前端。
 ## 文件清单与关系
 
 ```
-src/App.tsx        窗口 UI：播放控制、appMode、原语 / 译文 / 双语、列表 / 影院、多视频选择
+src/App.tsx        主窗口 UI：浏览器/链接双入口、播放控制、appMode、列表 / 影院、多视频选择
 player.html / src/player-main.tsx / src/PlayerShell.tsx  本地可信 Player UI、视频槽 bounds 上报
+src/useViewerSession.ts / src/SubtitleViewer.tsx  主窗口与 Player 共用的快照订阅和字幕展示层
+src/EmbeddedSourceEntry.tsx / src/embeddedPlayback.ts  双入口和本地 YouTube URL 安全门
 src/embedded/bridge.ts  document-start YouTube 适配器；只调用 Rust 注入的固定 bridge API
 vite.embedded.config.ts  把适配器与 youtube-core 打成 Cargo OUT_DIR 单文件 IIFE
 src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，HeroUI 行点击发送块起点
@@ -113,6 +115,14 @@ session 2Hz。连续五次非法消息会隔离 child 并进入 `EmbeddedRecover
 同样进入恢复态但继续持有 Embedded 锁。顶层导航仅允许当前规范化 watch URL，popup、新窗口、
 下载、首页/频道/账户及其他 videoId 均拒绝。Player 关闭或显式退出时先销毁远程 child，再建立
 浏览器 playbackEpoch 重接屏障。
+
+主窗口只有在 coordinator 无权威来源时才显示双入口：浏览器扩展可继续自动接入，用户也可粘贴
+单个 HTTPS watch/youtu.be 链接启动 Desktop 播放。链接先在本地纯函数校验，再由 Rust 独立复验；
+无效输入不会暂停浏览器或建立 Embedded 锁。Player 使用“上视频、下字幕”布局，复用同一
+`SubtitleViewer`、原语/译文/双语偏好、播放/暂停和字幕 seek，并提供换链接、reload 与显式退出。
+浏览器自动暂停失败只显示警告，不释放 Embedded 锁；watchdog/隔离失败进入恢复态后仍可重新加载、
+换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到浏览器
+出现下一次手动播放、换视频或自动连播。
 
 ## 原语 / 译文 / 双语与刷新
 

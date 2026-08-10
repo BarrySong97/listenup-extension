@@ -4,7 +4,10 @@
   "description": "Local trusted controls for the isolated Desktop player shell",
   "webviews": ["player-ui"],
   "permissions": [
+    "clipboard-manager:allow-write-text",
     "allow-control-playback",
+    "allow-reload-embedded-playback",
+    "allow-replace-embedded-playback",
     "allow-set-embedded-video-bounds",
     "allow-stop-embedded-playback"
   ]

@@ -110,7 +110,10 @@ assert.deepEqual(defaultCapability.webviews, ["main"]);
 assert.ok(!Object.hasOwn(defaultCapability, "windows"));
 assert.deepEqual(playerCapability.webviews, ["player-ui"]);
 assert.deepEqual(playerCapability.permissions, [
+  "clipboard-manager:allow-write-text",
   "allow-control-playback",
+  "allow-reload-embedded-playback",
+  "allow-replace-embedded-playback",
   "allow-set-embedded-video-bounds",
   "allow-stop-embedded-playback",
 ]);

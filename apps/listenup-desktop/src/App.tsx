@@ -17,6 +17,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VListHandle } from "virtua";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
+import { EmbeddedSourceEntry } from "./EmbeddedSourceEntry";
+import { shouldShowSourceEntry } from "./embeddedPlayback";
 import { SubtitleModeControl } from "./components/ui/SubtitleModeControl";
 import { TargetLanguageSelect } from "./components/ui/TargetLanguageSelect";
 import { buildLocalAiTranslationPrompt } from "./localAiTranslationPrompt";
@@ -28,19 +30,20 @@ import {
   TranslationMissingState,
   type TranslationCopyStatus,
 } from "./TranslationMissingState";
-import { SubtitleList, type DisplayBlock } from "./SubtitleList";
+import type { DisplayBlock } from "./SubtitleList";
+import { SubtitleViewer } from "./SubtitleViewer";
 import { resolveSubtitleCursorPresentation } from "./subtitleCursor";
+import { groupTranslationBlocks } from "./subtitleBlocks";
 import type {
   AppMode,
-  CursorState,
   SessionState,
   SubtitleDisplayMode,
-  UiUpdate,
   ViewerSnapshot,
 } from "./types";
 import { useDesktopUpdater, type DesktopUpdateState } from "./useDesktopUpdater";
 import { useSubtitleView } from "./useSubtitleView";
 import { VideoSessionPicker } from "./VideoSessionPicker";
+import { useViewerSession } from "./useViewerSession";
 
 type ViewMode = AppWindowViewMode;
 
@@ -75,19 +78,6 @@ const DEFAULT_SIZES: Record<ViewMode, WindowSize> = {
 
 const SCROLLBAR_IDLE_DELAY_MS = 700;
 const CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000;
-const EMPTY_VIEWER_SNAPSHOT: ViewerSnapshot = {
-  connected: false,
-  sourceMode: "empty",
-  source: null,
-  browserPauseState: "notNeeded",
-  awaitingBrowserPlayback: false,
-  activeSession: null,
-  playingCandidates: [],
-  playingSessionCount: 0,
-  selectedSessionId: null,
-  selectionRequired: false,
-};
-
 const IS_DEV_BUILD = import.meta.env.VITE_LISTENUP_ENV === "development";
 
 const DevBadge = () =>
@@ -109,37 +99,6 @@ const loadStoredMode = (): ViewMode =>
 const loadStoredSubtitleMode = (): SubtitleDisplayMode => {
   const stored = localStorage.getItem(SUBTITLE_MODE_STORAGE_KEY);
   return stored === "translation" || stored === "bilingual" ? stored : "source";
-};
-
-const groupTranslationBlocks = (
-  segments: NonNullable<ReturnType<typeof useSubtitleView>["data"]>["translation"]
-): DisplayBlock[] => {
-  if (!segments) return [];
-  const blocks: DisplayBlock[] = [];
-  for (const segment of segments.segments) {
-    const startTime = segment.startTimeMs / 1000;
-    const endTime = segment.endTimeMs / 1000;
-    const previous = blocks.at(-1);
-    if (
-      previous &&
-      previous.startTime === startTime &&
-      previous.endTime === endTime &&
-      previous.sourceText === segment.sourceText
-    ) {
-      previous.translationText = [previous.translationText, segment.text]
-        .filter(Boolean)
-        .join("\n");
-      continue;
-    }
-    blocks.push({
-      id: segment.id,
-      startTime,
-      endTime,
-      sourceText: segment.sourceText,
-      translationText: segment.text,
-    });
-  }
-  return blocks;
 };
 
 const loadStoredSize = (mode: ViewMode): WindowSize | null => {
@@ -372,9 +331,7 @@ const PlaybackTime = memo(function PlaybackTime({
 });
 
 export default function App() {
-  const [viewer, setViewer] = useState<ViewerSnapshot>(EMPTY_VIEWER_SNAPSHOT);
-  const [connected, setConnected] = useState(false);
-  const [cursor, setCursor] = useState<CursorState | null>(null);
+  const { viewer, connected, cursor, applyViewerSnapshot } = useViewerSession();
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
   const [appMode, setAppModeState] = useState<AppMode>("desktop");
   const [appModeError, setAppModeError] = useState<string | null>(null);
@@ -396,7 +353,6 @@ export default function App() {
   const [playbackPending, setPlaybackPending] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const modeRef = useRef(mode);
-  const activeSessionIdRef = useRef<string | null>(null);
   const desktopModeRef = useRef<ViewMode>(loadStoredMode());
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledViewRef = useRef<{
@@ -413,59 +369,6 @@ export default function App() {
     subtitleMode,
     targetLanguage
   );
-
-  const applyViewerSnapshot = useCallback(
-    (snapshot: ViewerSnapshot, connectionOverride?: boolean) => {
-      activeSessionIdRef.current = snapshot.activeSession?.sessionId ?? null;
-      setViewer(snapshot);
-      setCursor(snapshot.activeSession?.cursor ?? null);
-      setConnected(connectionOverride ?? snapshot.connected);
-    },
-    []
-  );
-
-  useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | null = null;
-    let unlistenConnection: (() => void) | null = null;
-
-    const initialize = async () => {
-      unlistenConnection = await listen<boolean>(
-        "native-subtitle-connection",
-        (event) => {
-          setConnected(Boolean(event.payload));
-        }
-      );
-      unlisten = await listen<UiUpdate>("native-subtitle-update", (event) => {
-        const update = event.payload;
-        if (update.kind === "snapshot") {
-          applyViewerSnapshot(update.payload, true);
-          return;
-        }
-
-        const nextCursor = update.payload;
-        if (activeSessionIdRef.current === nextCursor.sessionId) {
-          setConnected(true);
-          setCursor(nextCursor);
-        }
-      });
-
-      const snapshot = await invoke<ViewerSnapshot>("get_snapshot");
-      if (!disposed) {
-        applyViewerSnapshot(snapshot);
-      }
-    };
-
-    void initialize();
-    return () => {
-      disposed = true;
-      unlisten?.();
-      unlistenConnection?.();
-      if (scrollIdleTimerRef.current !== null) {
-        window.clearTimeout(scrollIdleTimerRef.current);
-      }
-    };
-  }, [applyViewerSnapshot]);
 
   useEffect(() => {
     let disposed = false;
@@ -519,6 +422,7 @@ export default function App() {
 
   const session = liveSession;
   const pickerVisible = viewer.selectionRequired;
+  const sourceEntryVisible = shouldShowSourceEntry(viewer);
 
   useEffect(() => {
     const revision = subtitleQuery.data?.source.revision;
@@ -832,7 +736,11 @@ export default function App() {
     return () => window.cancelAnimationFrame(frame);
   }, [currentIndex, displayBlocks, session?.sessionId, mode]);
 
-  const connectionLabel = connected ? "已连接" : "等待扩展连接";
+  const connectionLabel = viewer.awaitingBrowserPlayback
+    ? "等待下一次浏览器播放"
+    : connected
+      ? "已连接"
+      : "等待扩展连接";
   const playbackLabel = useMemo(() => {
     if (!cursor) return "等待播放";
     if (cursor.isAdPlaying) return "广告播放中";
@@ -1100,34 +1008,27 @@ export default function App() {
       </header>
 
       <section className="relative min-h-0 overflow-hidden" aria-live="polite">
-        {requestedTranslationMissing ? (
-          <TranslationMissingState
-            copyStatus={translationCopyStatus}
-            onCopy={() => void copyLocalAiTranslationPrompt()}
+        {sourceEntryVisible ? (
+          <EmbeddedSourceEntry
+            awaitingBrowserPlayback={viewer.awaitingBrowserPlayback}
+            browserConnected={connected}
           />
-        ) : emptyMessage ? (
-          <div className="grid min-h-full place-content-center justify-items-center text-center text-fg-muted">
-            <div className="mb-3 grid h-8 w-11 place-items-center rounded-[7px] border border-white/25 text-xs font-bold text-fg">
-              CC
-            </div>
-            <p className="m-0 mb-1.5 text-[13px] text-fg">{emptyMessage}</p>
-            {!connected && (
-              <small className="max-w-[280px] leading-normal text-fg-faint">
-                在 YouTube 播放带字幕的视频，扩展会自动连接过来。
-              </small>
-            )}
-          </div>
         ) : (
-          <SubtitleList
+          <SubtitleViewer
             listRef={vListRef}
             blocks={displayBlocks}
             activeIndex={currentIndex}
             playedThroughIndex={playedThroughIndex}
+            connected={connected}
+            copyStatus={translationCopyStatus}
+            emptyMessage={emptyMessage}
             isScrolling={isListScrolling}
             onScroll={handleListScroll}
             onScrollEnd={handleListScrollEnd}
-            onSeek={seekToSubtitle}
+            onCopyTranslationPrompt={() => void copyLocalAiTranslationPrompt()}
+            onSeek={(seekTime) => void seekToSubtitle(seekTime)}
             seekDisabled={playbackDisabled}
+            translationMissing={requestedTranslationMissing}
           />
         )}
       </section>

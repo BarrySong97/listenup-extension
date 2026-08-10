@@ -1,7 +1,7 @@
 # Desktop 内嵌 YouTube 播放与字幕通信 — 实施计划
 
 - 日期：2026-08-10
-- 状态：待批准，尚未修改产品代码
+- 状态：执行中（批次 1–4 已完成）
 - 关联设计：`docs/spark/2026-08-10-desktop-embedded-youtube-player-design.md`
 - 前置调研：`docs/plans/2026-08-10-desktop-embedded-youtube-research.md`
 - Plane：LISTENUP-7
@@ -147,16 +147,16 @@ BrowserSource。
 
 ### 批次 4：双入口与复合 Player UI
 
-17. [ ] 抽取 `useViewerSession` 与 `SubtitleViewer`，先用 Desktop tests 和 production frontend
+17. [x] 抽取 `useViewerSession` 与 `SubtitleViewer`，先用 Desktop tests 和 production frontend
     build 证明现有 BrowserSource list/cinema/menubar、React cursor 边界和样式不变。
-18. [ ] 在无权威来源时显示双入口；URL 本地校验通过后才调用 `start_embedded_playback`，无效
+18. [x] 在无权威来源时显示双入口；URL 本地校验通过后才调用 `start_embedded_playback`，无效
     输入不暂停浏览器、不建锁。
-19. [ ] Player App 实现“上视频、下字幕”、换链接、reload、退出、暂停失败警告、无字幕和
+19. [x] Player App 实现“上视频、下字幕”、换链接、reload、退出、暂停失败警告、无字幕和
     受限/崩溃恢复；退出先销毁远程 WebView，再恢复 main 空状态。
-20. [ ] 复用原语/译文/双语、SubtitleList、播放/暂停和字幕 seek；Embedded control 按
+20. [x] 复用原语/译文/双语、SubtitleList、播放/暂停和字幕 seek；Embedded control 按
     `SourceRef` 路由，不能走 bridge fallback。
-21. [ ] 给 URL 解析、双入口状态、Player 错误动作和窗口 label 路由补前端 Node tests。
-22. [ ] 提交 `feat(desktop): add embedded playback experience`。
+21. [x] 给 URL 解析、双入口状态、Player 错误动作和窗口 label 路由补前端 Node tests。
+22. [x] 提交 `feat(desktop): add embedded playback experience`。
 
 ### 批次 5：手动 Cookie 与 macOS Keychain
 

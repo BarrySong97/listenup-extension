@@ -1068,6 +1068,8 @@ pub fn run() {
             app_mode::set_app_mode,
             control_playback,
             embedded_player::embedded_source_event,
+            embedded_player::reload_embedded_playback,
+            embedded_player::replace_embedded_playback,
             embedded_player::set_embedded_video_bounds,
             embedded_player::start_embedded_playback,
             embedded_player::stop_embedded_playback,
