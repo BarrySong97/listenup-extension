@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildSubtitleUrl,
+  normalizeCaptionTracksFromPlayerResponse,
   parseJSONSubtitles,
   PlaybackEpochTracker,
   selectCaptionTrack,
@@ -42,6 +43,49 @@ test("selects manual captions only inside the original audio language", () => {
   ]);
   assert.equal(selected?.languageCode, "en");
   assert.equal(selected?.kind, "manual");
+});
+
+test("normalizes player response tracks against the original audio language", () => {
+  const tracks = normalizeCaptionTracksFromPlayerResponse(
+    {
+      videoDetails: { videoId: VIDEO_ID },
+      streamingData: {
+        adaptiveFormats: [
+          { audioTrack: { id: "pt.1", languageCode: "pt" } },
+          {
+            audioTrack: {
+              id: "en.4",
+              languageCode: "en",
+              audioIsDefault: true,
+            },
+          },
+        ],
+      },
+      captions: {
+        playerCaptionsTracklistRenderer: {
+          captionTracks: [
+            {
+              baseUrl: `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=pt`,
+              languageCode: "pt",
+              vssId: ".pt",
+              name: { simpleText: "Português" },
+            },
+            {
+              baseUrl: `https://www.youtube.com/api/timedtext?v=${VIDEO_ID}&lang=en`,
+              languageCode: "en",
+              vssId: ".en",
+              name: { simpleText: "English" },
+            },
+          ],
+        },
+      },
+    },
+    "player-response"
+  );
+
+  assert.equal(tracks[0].isOriginalAudioLanguage, false);
+  assert.equal(tracks[1].isOriginalAudioLanguage, true);
+  assert.equal(tracks[1].sourceVideoId, VIDEO_ID);
 });
 
 test("builds a JSON3 URL from the current track request with POT context", () => {

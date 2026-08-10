@@ -44,9 +44,11 @@ pending 快照，避免一帧内把旧字幕发布给 Native。
 
 两个来源：`PlayerResponseCaptionSource`（读 `ytInitialPlayerResponse`）与 `BridgeCaptionSource`（经 `PageBridge` 进页面上下文取）。`SubtitleRepository` 合并去重后按来源能力择优。
 
-原始音轨语言、原语选轨、带 POT 的 JSON3 URL 构建、videoId 三重身份校验与字幕基础类型的
-唯一权威在 workspace 包 `@listenup/youtube-core`。`lib/captions/` 保留 YouTube 页面读取和
-Extension transport 适配器，并通过兼容 re-export 保持既有相对导入稳定；不得在这里复制共享规则。
+原始音轨语言、player response 字幕轨归一化、原语选轨、带 POT 的 JSON3 URL 构建、videoId
+三重身份校验与字幕基础类型的唯一权威在 workspace 包 `@listenup/youtube-core`。
+`PlayerResponseCaptionSource` 只负责从页面选择同一份 response，再交给共享归一化函数；
+`lib/captions/` 其余部分保留页面读取和 Extension transport 适配器，并通过兼容 re-export
+保持既有相对导入稳定；不得在这里复制共享规则。
 
 默认选轨先读取同一 player response 的 `streamingData.*.audioTrack.audioIsDefault=true`，把
 该原始音轨的 BCP 47 语言映射到字幕轨；这不受用户当前选择的自动配音或字幕列表顺序影响。

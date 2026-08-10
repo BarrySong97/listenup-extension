@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "player-ui",
+  "description": "Local trusted controls for the isolated Desktop player shell",
+  "webviews": ["player-ui"],
+  "permissions": [
+    "allow-control-playback",
+    "allow-set-embedded-video-bounds",
+    "allow-stop-embedded-playback"
+  ]
+}

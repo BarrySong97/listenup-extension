@@ -1,9 +1,9 @@
-// @purpose 构建脚本：注入环境矩阵与独立 CLI 版本，再走 tauri_build。
+// @purpose 构建脚本：打包 Embedded bridge、注入环境矩阵与独立 CLI 版本，再走 tauri_build。
 // @role    dev / production 两个 app 隔离的 Rust 配置入口。
-// @deps    tauri-build、serde_json、config/listenup-environments.json、LISTENUP_CLI_VERSION
-// @gotcha  CLI 发布版本与 Desktop/Cargo 版本解耦；缺省仅供开发构建回退 Cargo package 版本。
+// @deps    pnpm/Vite、tauri-build、serde_json、config/listenup-environments.json、LISTENUP_CLI_VERSION
+// @gotcha  Embedded bridge 只写 Cargo OUT_DIR，不得生成进仓库；CLI 版本与 Desktop/Cargo 版本解耦。
 use serde::Deserialize;
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +24,38 @@ struct Environments {
 fn main() {
     println!("cargo:rerun-if-env-changed=LISTENUP_ENV");
     println!("cargo:rerun-if-env-changed=LISTENUP_CLI_VERSION");
+    let desktop_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("desktop app directory")
+        .to_path_buf();
+    let embedded_bridge_path = desktop_dir.join("src/embedded/bridge.ts");
+    let embedded_vite_config = desktop_dir.join("vite.embedded.config.ts");
+    let youtube_core_dir = desktop_dir.join("../../packages/youtube-core/src");
+    println!("cargo:rerun-if-changed={}", embedded_bridge_path.display());
+    println!("cargo:rerun-if-changed={}", embedded_vite_config.display());
+    for entry in fs::read_dir(&youtube_core_dir).expect("failed to read youtube-core sources") {
+        let path = entry
+            .expect("failed to read youtube-core source entry")
+            .path();
+        if path.extension().is_some_and(|extension| extension == "ts") {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
+
+    let output_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("Cargo OUT_DIR"));
+    let bridge_status = Command::new("pnpm")
+        .current_dir(&desktop_dir)
+        .args([
+            "exec",
+            "vite",
+            "build",
+            "--config",
+            "vite.embedded.config.ts",
+        ])
+        .env("LISTENUP_EMBEDDED_BRIDGE_OUT_DIR", &output_dir)
+        .status()
+        .expect("failed to start Vite for Embedded bridge");
+    assert!(bridge_status.success(), "failed to bundle Embedded bridge");
     let config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../../config/listenup-environments.json");
     println!("cargo:rerun-if-changed={}", config_path.display());

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native v5/playbackEpoch、共享原始音轨、Desktop hover/更新/CLI 与发布边界不漂移。
+ * @purpose 校验环境标识、Native v5/Embedded WebView 隔离、共享原始音轨、Desktop hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
- * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、website page、Tauri/CLI/Query 配置、node assert/crypto/fs
+ * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities、website/Tauri/CLI/Query 配置
  * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
  */
 import assert from "node:assert/strict";
@@ -96,6 +96,62 @@ assert.deepEqual(developmentTauri.bundle.externalBin, [
   "target/sidecars/listenup",
 ]);
 assert.deepEqual(cliTauri.bundle.externalBin, ["target/sidecars/listenup"]);
+
+const defaultCapability = await readJson(
+  "apps/listenup-desktop/src-tauri/capabilities/default.json"
+);
+const playerCapability = await readJson(
+  "apps/listenup-desktop/src-tauri/capabilities/player-ui.json"
+);
+const youtubeCapability = await readJson(
+  "apps/listenup-desktop/src-tauri/capabilities/youtube-embedded.json"
+);
+assert.deepEqual(defaultCapability.webviews, ["main"]);
+assert.ok(!Object.hasOwn(defaultCapability, "windows"));
+assert.deepEqual(playerCapability.webviews, ["player-ui"]);
+assert.deepEqual(playerCapability.permissions, [
+  "allow-control-playback",
+  "allow-set-embedded-video-bounds",
+  "allow-stop-embedded-playback",
+]);
+assert.equal(youtubeCapability.local, false);
+assert.deepEqual(youtubeCapability.webviews, ["youtube-*"]);
+assert.deepEqual(youtubeCapability.remote?.urls, [
+  "https://www.youtube.com/watch*",
+]);
+assert.deepEqual(youtubeCapability.permissions, [
+  "allow-embedded-source-event",
+]);
+for (const forbiddenPermission of [
+  "core:default",
+  "clipboard-manager:allow-write-text",
+  "updater:default",
+  "process:allow-restart",
+  "shell:default",
+  "fs:default",
+]) {
+  assert.ok(
+    !youtubeCapability.permissions.includes(forbiddenPermission),
+    `youtube-* must not receive ${forbiddenPermission}`
+  );
+}
+
+const embeddedBridgeSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src/embedded/bridge.ts"),
+  "utf8"
+);
+assert.doesNotMatch(
+  embeddedBridgeSource,
+  /__TAURI_INTERNALS__|\binvoke\s*\(/,
+  "remote Embedded bridge must only call the fixed Rust-injected API"
+);
+const embeddedRustSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/src/embedded_source.rs"),
+  "utf8"
+);
+assert.match(embeddedRustSource, /MAX_SESSION_MESSAGE_BYTES: usize = 4 \* 1024 \* 1024/);
+assert.match(embeddedRustSource, /MAX_INCREMENTAL_MESSAGE_BYTES: usize = 8 \* 1024/);
+assert.match(embeddedRustSource, /TokenBucket::new\(20, 10, now\)/);
 
 assert.equal(
   rootPackage.scripts["clean:desktop:bundles"],

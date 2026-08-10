@@ -133,17 +133,17 @@ BrowserSource。
 
 ### 批次 3：受限 EmbeddedSource 与 Player 原生容器
 
-11. [ ] 建立 Embedded 消息 schema、4 MiB/8 KiB 大小限制、10Hz cursor/20 burst、2Hz session
+11. [x] 建立 Embedded 消息 schema、4 MiB/8 KiB 大小限制、10Hz cursor/20 burst、2Hz session
     限流和 source/session/video/command 身份校验；测试错版本、错身份、迟到与超限。
-12. [ ] 构建 document-start 主 frame bridge，复用 youtube-core 发现播放器、字幕轨、JSON3、
+12. [x] 构建 document-start 主 frame bridge，复用 youtube-core 发现播放器、字幕轨、JSON3、
     cursor、广告与 control result；远程脚本不含 Tauri 通用 invoke。
-13. [ ] 动态创建普通 Player window 的本地 `player-ui` 和远程 `youtube` child WebView；本地 UI
+13. [x] 动态创建普通 Player window 的本地 `player-ui` 和远程 `youtube` child WebView；本地 UI
     用 ResizeObserver 上报视频槽 bounds，Rust 同步 child WebView 尺寸。
-14. [ ] 导航只接受规范化 watch URL；拒绝非 YouTube 顶层跳转、首页/频道/账户、popup、新窗口
+14. [x] 导航只接受规范化 watch URL；拒绝非 YouTube 顶层跳转、首页/频道/账户、popup、新窗口
     和下载。WebView crash 进入 Recovering，只有显式退出释放来源锁。
-15. [ ] 拆分 capability，并扩展环境 sensor，确定性证明 `youtube` label 无 clipboard、updater、
+15. [x] 拆分 capability，并扩展环境 sensor，确定性证明 `youtube` label 无 clipboard、updater、
     process、shell、文件系统、窗口或通用 invoke 权限。
-16. [ ] 提交 `feat(desktop): add isolated embedded YouTube source`。
+16. [x] 提交 `feat(desktop): add isolated embedded YouTube source`。
 
 ### 批次 4：双入口与复合 Player UI
 

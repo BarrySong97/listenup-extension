@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 
 use super::{
+    source_coordinator::{BrowserPauseState, SourceMode},
     CursorState, NativeMessage, PlayingCandidate, SessionState, UiUpdate, ViewerSnapshot,
     PROTOCOL_VERSION,
 };
@@ -126,6 +127,14 @@ impl BrowserSourceStore {
             .collect();
         ViewerSnapshot {
             connected: self.connected,
+            source_mode: if self.sessions.is_empty() {
+                SourceMode::Empty
+            } else {
+                SourceMode::BrowserActive
+            },
+            source: None,
+            browser_pause_state: BrowserPauseState::NotNeeded,
+            awaiting_browser_playback: false,
             active_session: self
                 .active_session_id
                 .as_ref()

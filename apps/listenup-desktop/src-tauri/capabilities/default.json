@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for the native subtitle demo window",
-  "windows": ["main"],
+  "webviews": ["main"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -16,6 +16,9 @@
     "core:window:allow-close",
     "clipboard-manager:allow-write-text",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "allow-control-playback",
+    "allow-start-embedded-playback",
+    "allow-stop-embedded-playback"
   ]
 }

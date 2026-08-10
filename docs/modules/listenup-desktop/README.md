@@ -7,9 +7,10 @@ macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标�
 两种形态间切换。同时将原字幕保存到 SQLite，并显示用户通过 CLI 导入的 AI 译文。
 Tauri v2，Rust 后端 + React 前端。
 
-边界：**管** 窗口渲染、Native Messaging Host、字幕持久化、安全 CLI、双形态生命周期和
-当前 session 的播放 / 暂停和显示字幕块起点 seek；**不管** 字幕抓取（那是扩展的事），不内置
-翻译模型，也不提供任意进度条、音量、倍速等更宽的播放器遥控。
+边界：**管** 窗口渲染、Native Messaging Host、受限 Embedded YouTube WebView、字幕持久化、
+安全 CLI、双形态生命周期和当前 session 的播放 / 暂停及字幕块起点 seek；浏览器页面字幕抓取仍
+由扩展负责，EmbeddedSource 只在用户显式提交链接后采集其隔离 WebView。不内置翻译模型，也不
+提供任意进度条、音量、倍速等更宽的播放器遥控。
 
 跨模块的协议与联调流程写在 [Native Messaging 专题](../../topics/native-messaging.md)，本文只讲这个 app 自身。
 
@@ -17,6 +18,9 @@ Tauri v2，Rust 后端 + React 前端。
 
 ```
 src/App.tsx        窗口 UI：播放控制、appMode、原语 / 译文 / 双语、列表 / 影院、多视频选择
+player.html / src/player-main.tsx / src/PlayerShell.tsx  本地可信 Player UI、视频槽 bounds 上报
+src/embedded/bridge.ts  document-start YouTube 适配器；只调用 Rust 注入的固定 bridge API
+vite.embedded.config.ts  把适配器与 youtube-core 打成 Cargo OUT_DIR 单文件 IIFE
 src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，HeroUI 行点击发送块起点
 src/subtitleCursor.ts  live 原语索引直用、译文 / fallback 时间映射的纯 selector
 src/components/ui/ HeroUI 3 primitives；DesktopRowButton 是虚拟字幕热路径的无 hover state 例外
@@ -32,6 +36,8 @@ src/styles.css     Tailwind v4 @theme（唯一的设计 token 权威，见 desig
 src-tauri/src/lib.rs   Tauri 入口、双向 socket、SQLite composition、NSPanel/tray
 src-tauri/src/browser_source.rs  浏览器字幕影子状态、多视频仲裁与 bridgeId 控制目标
 src-tauri/src/source_coordinator.rs  双来源权威、Embedded 锁与 playbackEpoch 退出屏障
+src-tauri/src/embedded_source.rs  Embedded schema、大小/频率/身份校验与单会话状态
+src-tauri/src/embedded_player.rs  Player 双 WebView 容器、导航门、IPC、bounds、watchdog 与退出
 src-tauri/src/app_mode.rs  版本化偏好、activation policy、窗口属性与事务切换
 src-tauri/src/positioning.rs  tray 下方定位、多显示器 work area clamp 与坐标缩放
 src-tauri/src/database/ SQLite repository、WAL 连接、原语 revision 与译文事务
@@ -43,7 +49,8 @@ src-tauri/src/main.rs  薄入口，调 lib::run()
 src-tauri/build.rs     把 LISTENUP_ENV 透传给 Rust（socket 路径按 bundle id 区分）
 src-tauri/tauri.conf.json / tauri.dev.conf.json / tauri.cli.conf.json   环境与 CLI sidecar 配置
 src-tauri/Info.plist   深链接 scheme（由 gen-info-plist.mjs 生成，不要手改）
-src-tauri/capabilities/default.json   窗口尺寸、updater 安装与进程重启权限声明
+src-tauri/capabilities/default.json / player-ui.json / youtube-embedded.json  按 WebView label 分权
+src-tauri/permissions/embedded-player.toml  Embedded 自定义命令的精确 allow-list
 scripts/gen-info-plist.mjs      按 LISTENUP_ENV 生成 Info.plist，构建前自动跑
 scripts/prepare-cli.mjs         构建 listenup sidecar 并放入 .app
 scripts/clean-bundle-artifacts.mjs  本地 bundle 回归后删除 target 下 `.app`，避免系统登记重复应用
@@ -87,6 +94,25 @@ loading、empty 和 error 都不写。写库发生在对应 UI snapshot event �
 SQLx migration 一经发布不可修改，`check-environment-identifiers.mjs` 固定首个 migration 的
 SHA-384。早期开发数据库存在一条已知旧 checksum；连接层仅在该 checksum 命中且所有预期
 schema 对象完整时原子修复 migration 元数据，未知不匹配仍拒绝打开。
+
+## 受限 Embedded Player 容器
+
+Desktop 自播使用一个普通 `player` 原生窗口承载两个 child WebView：本地 `player-ui` 只渲染
+可信控制/字幕壳并通过 `ResizeObserver` 上报视频槽，远程 `youtube-*` 只显示规范化后的
+`https://www.youtube.com/watch?v=<videoId>`。两者不共享 capability；远程 WebView 只有
+`allow-embedded-source-event` 一个 app command 权限，没有 `core:default`、clipboard、updater、
+process、shell、文件系统或通用窗口权限。
+
+Rust 在 document-start、仅主 frame 注入固定 bridge 与打包后的 YouTube 适配器。适配器复用
+`@listenup/youtube-core` 的 player response 归一化、原语选轨、JSON3、身份校验、字幕解析和
+playbackEpoch；其 bundle 不引用 Tauri invoke。固定 bridge 自动附加 source/session/video 身份，
+原生入口再验证 WebView label、协议版本和四元身份。
+
+安全预算为 session 最大 4 MiB、cursor/control result 最大 8 KiB、cursor 10Hz（20 burst）、
+session 2Hz。连续五次非法消息会隔离 child 并进入 `EmbeddedRecovering`；五秒无消息 watchdog
+同样进入恢复态但继续持有 Embedded 锁。顶层导航仅允许当前规范化 watch URL，popup、新窗口、
+下载、首页/频道/账户及其他 videoId 均拒绝。Player 关闭或显式退出时先销毁远程 child，再建立
+浏览器 playbackEpoch 重接屏障。
 
 ## 原语 / 译文 / 双语与刷新
 

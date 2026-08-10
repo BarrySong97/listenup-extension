@@ -52,6 +52,20 @@ export interface PlayingCandidate {
 
 export interface ViewerSnapshot {
   connected: boolean;
+  sourceMode: "empty" | "browserActive" | "enteringEmbedded" | "embeddedActive" | "embeddedRecovering";
+  source: {
+    kind: "browser" | "embedded";
+    sourceId: string;
+    sessionId: string;
+    videoId: string;
+  } | null;
+  browserPauseState:
+    | "notNeeded"
+    | "pending"
+    | "succeeded"
+    | "timedOut"
+    | { failed: string };
+  awaitingBrowserPlayback: boolean;
   activeSession: SessionState | null;
   playingCandidates: PlayingCandidate[];
   playingSessionCount: number;

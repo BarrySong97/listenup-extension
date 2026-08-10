@@ -7,16 +7,21 @@ mod browser_source;
 pub mod cli;
 pub mod database;
 pub mod domain;
+mod embedded_player;
+mod embedded_source;
 mod positioning;
 mod source_coordinator;
 
 #[cfg(test)]
-use browser_source::{BrowserSourceStore, PlaybackTarget};
+use browser_source::BrowserSourceStore;
+use browser_source::PlaybackTarget;
 use database::{
     DatabaseState, SourceSnapshot, SourceSnapshotSegment, SubtitleDatabase, SubtitleView,
 };
 use serde::{Deserialize, Serialize};
-use source_coordinator::SourceCoordinator;
+use source_coordinator::{
+    BrowserPauseState, PlaybackRoute, SourceCoordinator, SourceMode, SourceRef,
+};
 use std::{
     collections::HashMap,
     env,
@@ -183,6 +188,10 @@ struct PlayingCandidate {
 #[serde(rename_all = "camelCase")]
 struct ViewerSnapshot {
     connected: bool,
+    source_mode: SourceMode,
+    source: Option<SourceRef>,
+    browser_pause_state: BrowserPauseState,
+    awaiting_browser_playback: bool,
     active_session: Option<SessionState>,
     playing_candidates: Vec<PlayingCandidate>,
     playing_session_count: usize,
@@ -912,6 +921,10 @@ fn get_snapshot(store: State<'_, SharedStore>) -> ViewerSnapshot {
         .map(|store| store.snapshot())
         .unwrap_or(ViewerSnapshot {
             connected: false,
+            source_mode: SourceMode::Empty,
+            source: None,
+            browser_pause_state: BrowserPauseState::NotNeeded,
+            awaiting_browser_playback: false,
             active_session: None,
             playing_candidates: Vec::new(),
             playing_session_count: 0,
@@ -953,18 +966,45 @@ fn select_subtitle_session(
 #[cfg(unix)]
 #[tauri::command]
 async fn control_playback(
+    app: AppHandle,
     store: State<'_, SharedStore>,
+    embedded_runtime: State<'_, embedded_player::SharedEmbeddedRuntime>,
     bridges: State<'_, SharedBridges>,
     commands: State<'_, SharedPlaybackCommands>,
     action: PlaybackAction,
     seek_time: Option<f64>,
 ) -> Result<(), String> {
     validate_playback_request(action, seek_time)?;
-    let target = store
+    let route = store
         .0
         .lock()
         .map_err(|_| "字幕会话状态暂时不可用".to_string())?
-        .browser_playback_target()?;
+        .playback_route()?;
+    match route {
+        PlaybackRoute::Browser(target) => {
+            dispatch_browser_playback_command(&bridges, &commands, target, action, seek_time).await
+        }
+        PlaybackRoute::Embedded(source) => {
+            embedded_player::dispatch_embedded_playback_command(
+                &app,
+                &embedded_runtime,
+                &source,
+                action,
+                seek_time,
+            )
+            .await
+        }
+    }
+}
+
+#[cfg(unix)]
+pub(crate) async fn dispatch_browser_playback_command(
+    bridges: &SharedBridges,
+    commands: &SharedPlaybackCommands,
+    target: PlaybackTarget,
+    action: PlaybackAction,
+    seek_time: Option<f64>,
+) -> Result<(), String> {
     let (command_id, receiver) = commands
         .0
         .lock()
@@ -1020,12 +1060,17 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SharedStore::default())
+        .manage(embedded_player::SharedEmbeddedRuntime::default())
         .manage(SharedBridges::default())
         .manage(SharedPlaybackCommands::default())
         .invoke_handler(tauri::generate_handler![
             app_mode::get_app_mode,
             app_mode::set_app_mode,
             control_playback,
+            embedded_player::embedded_source_event,
+            embedded_player::set_embedded_video_bounds,
+            embedded_player::start_embedded_playback,
+            embedded_player::stop_embedded_playback,
             get_snapshot,
             get_subtitle_view,
             select_subtitle_session,

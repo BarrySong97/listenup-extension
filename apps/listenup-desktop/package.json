@@ -16,6 +16,7 @@
     "host:uninstall": "node scripts/uninstall-host.mjs"
   },
   "dependencies": {
+    "@listenup/youtube-core": "workspace:*",
     "@heroui/react": "catalog:",
     "@heroui/styles": "catalog:",
     "@iconify/react": "^6.0.0",
@@ -33,6 +34,7 @@
     "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/node": "^24.0.10",
     "@vitejs/plugin-react": "^4.7.0",
     "babel-plugin-react-compiler": "1.0.0",
     "tailwindcss": "^4.3.0",

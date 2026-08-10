@@ -5,10 +5,11 @@
 
 use std::collections::HashSet;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::{
     browser_source::{BrowserSourceStore, PlaybackTarget},
+    embedded_source::{EmbeddedMessage, EmbeddedSourceStore},
     NativeMessage, UiUpdate, ViewerSnapshot, PROTOCOL_VERSION,
 };
 
@@ -23,14 +24,14 @@ pub(crate) enum SourceMode {
     EmbeddedRecovering,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum SourceKind {
     Browser,
     Embedded,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SourceRef {
     pub(crate) kind: SourceKind,
@@ -110,10 +111,21 @@ pub(crate) struct EnterEmbeddedOutcome {
     pub(crate) pause_target: Option<PlaybackTarget>,
 }
 
+pub(crate) enum PlaybackRoute {
+    Browser(PlaybackTarget),
+    Embedded(SourceRef),
+}
+
+pub(crate) struct EmbeddedMessageOutcome {
+    pub(crate) update: Option<UiUpdate>,
+    pub(crate) persist_source: bool,
+}
+
 pub(crate) struct SourceCoordinator {
     browser: BrowserSourceStore,
     mode: SourceMode,
     embedded_source: Option<SourceRef>,
+    embedded_store: Option<EmbeddedSourceStore>,
     browser_pause_state: BrowserPauseState,
     browser_reconnect_barrier: bool,
     quarantined_browser_epochs: HashSet<BrowserPlaybackEpoch>,
@@ -125,6 +137,7 @@ impl Default for SourceCoordinator {
             browser: BrowserSourceStore::default(),
             mode: SourceMode::Empty,
             embedded_source: None,
+            embedded_store: None,
             browser_pause_state: BrowserPauseState::NotNeeded,
             browser_reconnect_barrier: false,
             quarantined_browser_epochs: HashSet::new(),
@@ -133,10 +146,6 @@ impl Default for SourceCoordinator {
 }
 
 impl SourceCoordinator {
-    pub(crate) fn mode(&self) -> SourceMode {
-        self.mode
-    }
-
     pub(crate) fn current_source(&self) -> Option<SourceRef> {
         if self.is_embedded_locked() {
             return self.embedded_source.clone();
@@ -145,14 +154,6 @@ impl SourceCoordinator {
             .playback_target()
             .ok()
             .map(|target| SourceRef::browser(&target))
-    }
-
-    pub(crate) fn browser_pause_state(&self) -> &BrowserPauseState {
-        &self.browser_pause_state
-    }
-
-    pub(crate) fn is_browser_persistence_authoritative(&self) -> bool {
-        !self.is_embedded_locked() && !self.browser_reconnect_barrier
     }
 
     fn is_embedded_locked(&self) -> bool {
@@ -167,6 +168,10 @@ impl SourceCoordinator {
     fn empty_snapshot(&self) -> ViewerSnapshot {
         ViewerSnapshot {
             connected: self.browser.connected,
+            source_mode: self.mode,
+            source: self.embedded_source.clone(),
+            browser_pause_state: self.browser_pause_state.clone(),
+            awaiting_browser_playback: self.browser_reconnect_barrier,
             active_session: None,
             playing_candidates: Vec::new(),
             playing_session_count: 0,
@@ -176,10 +181,20 @@ impl SourceCoordinator {
     }
 
     pub(crate) fn snapshot(&self) -> ViewerSnapshot {
-        if self.is_embedded_locked() || self.browser_reconnect_barrier {
+        if self.mode == SourceMode::EmbeddedActive {
+            self.embedded_store
+                .as_ref()
+                .map(|store| store.snapshot(true))
+                .unwrap_or_else(|| self.empty_snapshot())
+        } else if self.is_embedded_locked() || self.browser_reconnect_barrier {
             self.empty_snapshot()
         } else {
-            self.browser.snapshot()
+            let mut snapshot = self.browser.snapshot();
+            snapshot.source_mode = self.mode;
+            snapshot.source = self.current_source();
+            snapshot.browser_pause_state = self.browser_pause_state.clone();
+            snapshot.awaiting_browser_playback = false;
+            snapshot
         }
     }
 
@@ -264,6 +279,20 @@ impl SourceCoordinator {
         self.browser.playback_target()
     }
 
+    pub(crate) fn playback_route(&self) -> Result<PlaybackRoute, String> {
+        match self.mode {
+            SourceMode::BrowserActive => self.browser_playback_target().map(PlaybackRoute::Browser),
+            SourceMode::EmbeddedActive => self
+                .embedded_source
+                .clone()
+                .map(PlaybackRoute::Embedded)
+                .ok_or_else(|| "Embedded 播放来源已经失效".to_string()),
+            SourceMode::EnteringEmbedded => Err("Desktop 播放器正在初始化".to_string()),
+            SourceMode::EmbeddedRecovering => Err("Desktop 播放器正在恢复".to_string()),
+            SourceMode::Empty => Err("当前没有可控制的视频".to_string()),
+        }
+    }
+
     pub(crate) fn enter_embedded(
         &mut self,
         source: SourceRef,
@@ -283,6 +312,7 @@ impl SourceCoordinator {
             BrowserPauseState::NotNeeded
         };
         self.embedded_source = Some(source);
+        self.embedded_store = self.embedded_source.clone().map(EmbeddedSourceStore::new);
         self.browser_reconnect_barrier = false;
         self.mode = SourceMode::EnteringEmbedded;
         Ok(EnterEmbeddedOutcome { pause_target })
@@ -299,10 +329,39 @@ impl SourceCoordinator {
         }
     }
 
-    pub(crate) fn activate_embedded(&mut self, source: &SourceRef) -> Result<(), String> {
+    pub(crate) fn apply_embedded_message(
+        &mut self,
+        source: &SourceRef,
+        message: EmbeddedMessage,
+    ) -> Result<EmbeddedMessageOutcome, String> {
         self.require_current_embedded(source)?;
-        self.mode = SourceMode::EmbeddedActive;
-        Ok(())
+        let persist_source = matches!(
+            &message,
+            EmbeddedMessage::Session {
+                identity_status,
+                status,
+                subtitles,
+                ..
+            } if identity_status == "verified" && status == "ready" && !subtitles.is_empty()
+        );
+        let store = self
+            .embedded_store
+            .as_mut()
+            .ok_or_else(|| "Embedded 会话状态已经失效".to_string())?;
+        if store.source() != source {
+            return Err("Embedded store 来源身份不匹配".to_string());
+        }
+        let is_session = matches!(&message, EmbeddedMessage::Session { .. });
+        let mut update = store.apply(message);
+        if is_session && update.is_some() {
+            self.mode = SourceMode::EmbeddedActive;
+        } else if self.mode == SourceMode::EmbeddedRecovering {
+            update = None;
+        }
+        Ok(EmbeddedMessageOutcome {
+            update,
+            persist_source,
+        })
     }
 
     pub(crate) fn mark_embedded_recovering(&mut self, source: &SourceRef) -> Result<(), String> {
@@ -315,6 +374,7 @@ impl SourceCoordinator {
         self.require_current_embedded(source)?;
         self.quarantine_observed_browser_epochs();
         self.embedded_source = None;
+        self.embedded_store = None;
         self.browser_pause_state = BrowserPauseState::NotNeeded;
         self.browser_reconnect_barrier = true;
         self.mode = SourceMode::Empty;
@@ -417,7 +477,7 @@ mod tests {
 
         let outcome = coordinator.enter_embedded(source.clone()).unwrap();
         assert_eq!(outcome.pause_target.unwrap().bridge_id, 11);
-        assert_eq!(coordinator.mode(), SourceMode::EnteringEmbedded);
+        assert_eq!(coordinator.mode, SourceMode::EnteringEmbedded);
         assert_eq!(coordinator.current_source(), Some(source));
         assert!(coordinator.snapshot().active_session.is_none());
         assert!(coordinator.browser_playback_target().is_err());
@@ -439,8 +499,8 @@ mod tests {
             coordinator.enter_embedded(embedded_source()).unwrap();
             coordinator.record_browser_pause_result(result.clone());
 
-            assert_eq!(coordinator.mode(), SourceMode::EnteringEmbedded);
-            assert_eq!(coordinator.browser_pause_state(), &result);
+            assert_eq!(coordinator.mode, SourceMode::EnteringEmbedded);
+            assert_eq!(coordinator.browser_pause_state, result);
             assert!(coordinator.browser_playback_target().is_err());
         }
     }
@@ -451,15 +511,14 @@ mod tests {
         establish_browser_playback(&mut coordinator);
         let source = embedded_source();
         coordinator.enter_embedded(source.clone()).unwrap();
-        coordinator.activate_embedded(&source).unwrap();
         coordinator.mark_embedded_recovering(&source).unwrap();
 
-        assert_eq!(coordinator.mode(), SourceMode::EmbeddedRecovering);
+        assert_eq!(coordinator.mode, SourceMode::EmbeddedRecovering);
         coordinator.apply_browser_message(cursor("browser-1", "video-1", 2, false), 11);
-        assert_eq!(coordinator.mode(), SourceMode::EmbeddedRecovering);
+        assert_eq!(coordinator.mode, SourceMode::EmbeddedRecovering);
 
         let snapshot = coordinator.exit_embedded(&source).unwrap();
-        assert_eq!(coordinator.mode(), SourceMode::Empty);
+        assert_eq!(coordinator.mode, SourceMode::Empty);
         assert!(snapshot.active_session.is_none());
     }
 
@@ -477,13 +536,13 @@ mod tests {
             let outcome =
                 coordinator.apply_browser_message(cursor("browser-1", "video-1", epoch, false), 11);
             assert!(outcome.update.is_none());
-            assert_eq!(coordinator.mode(), SourceMode::Empty);
+            assert_eq!(coordinator.mode, SourceMode::Empty);
         }
 
         let outcome =
             coordinator.apply_browser_message(cursor("browser-1", "video-1", 3, false), 11);
         assert!(matches!(outcome.update, Some(UiUpdate::Snapshot(_))));
-        assert_eq!(coordinator.mode(), SourceMode::BrowserActive);
+        assert_eq!(coordinator.mode, SourceMode::BrowserActive);
         assert_eq!(coordinator.current_source().unwrap().source_id, "11");
     }
 
@@ -506,7 +565,7 @@ mod tests {
             let outcome =
                 coordinator.apply_browser_message(cursor(session_id, video_id, epoch, false), 11);
             assert!(outcome.update.is_some());
-            assert_eq!(coordinator.mode(), SourceMode::BrowserActive);
+            assert_eq!(coordinator.mode, SourceMode::BrowserActive);
         }
 
         let mut coordinator = SourceCoordinator::default();
@@ -517,6 +576,6 @@ mod tests {
         let periodic =
             coordinator.apply_browser_message(cursor("browser-1", "video-1", 1, false), 11);
         assert!(periodic.update.is_none());
-        assert_eq!(coordinator.mode(), SourceMode::Empty);
+        assert_eq!(coordinator.mode, SourceMode::Empty);
     }
 }

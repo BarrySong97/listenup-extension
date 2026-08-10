@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "youtube-embedded",
+  "description": "Single fixed-schema event ingress for isolated YouTube child webviews",
+  "local": false,
+  "remote": {
+    "urls": ["https://www.youtube.com/watch*"]
+  },
+  "webviews": ["youtube-*"],
+  "permissions": ["allow-embedded-source-event"]
+}

@@ -77,6 +77,10 @@ const SCROLLBAR_IDLE_DELAY_MS = 700;
 const CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000;
 const EMPTY_VIEWER_SNAPSHOT: ViewerSnapshot = {
   connected: false,
+  sourceMode: "empty",
+  source: null,
+  browserPauseState: "notNeeded",
+  awaitingBrowserPlayback: false,
   activeSession: null,
   playingCandidates: [],
   playingSessionCount: 0,

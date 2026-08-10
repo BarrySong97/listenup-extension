@@ -1,0 +1,29 @@
+# @purpose 为可信 main/player-ui 与远程 youtube-* 精确声明 Embedded 播放自定义命令权限。
+# @role    capability 引用的 app command allow-list；不包含任何插件、文件、进程或通用窗口权限。
+# @deps    embedded_player.rs Tauri commands
+# @gotcha  youtube-* 只能获得 allow-embedded-source-event；不能把 player/main 权限合并进来。
+
+[[permission]]
+identifier = "allow-start-embedded-playback"
+description = "Allows the trusted main webview to start a validated Embedded playback session."
+commands.allow = ["start_embedded_playback"]
+
+[[permission]]
+identifier = "allow-stop-embedded-playback"
+description = "Allows trusted local UI to explicitly stop the current Embedded playback session."
+commands.allow = ["stop_embedded_playback"]
+
+[[permission]]
+identifier = "allow-set-embedded-video-bounds"
+description = "Allows player-ui to resize the isolated YouTube child webview within validated bounds."
+commands.allow = ["set_embedded_video_bounds"]
+
+[[permission]]
+identifier = "allow-embedded-source-event"
+description = "Allows youtube-* to submit one size-limited, rate-limited, identity-bound event envelope."
+commands.allow = ["embedded_source_event"]
+
+[[permission]]
+identifier = "allow-control-playback"
+description = "Allows trusted local viewer UI to route play, pause and seek only to the coordinator-owned source."
+commands.allow = ["control_playback"]
