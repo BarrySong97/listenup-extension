@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native v5/Embedded WebView 隔离、共享原始音轨、Desktop hover/更新/CLI 与发布边界不漂移。
+ * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
- * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities、website/Tauri/CLI/Query 配置
+ * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault、website/Tauri/CLI/Query 配置
  * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
  */
 import assert from "node:assert/strict";
@@ -52,6 +52,15 @@ assert.ok(
   developmentManifest.permissions.includes("nativeMessaging"),
   "development extension must include nativeMessaging"
 );
+for (const [environmentName, manifest] of [
+  ["production", productionManifest],
+  ["development", developmentManifest],
+]) {
+  assert.ok(
+    !manifest.permissions.includes("cookies"),
+    `${environmentName} Extension must never request browser Cookie access`
+  );
+}
 assert.ok(
   !Object.hasOwn(productionManifest, "key"),
   "production manifest must not include a local key; Chrome Web Store owns its ID"
@@ -100,53 +109,76 @@ assert.deepEqual(cliTauri.bundle.externalBin, ["target/sidecars/listenup"]);
 const defaultCapability = await readJson(
   "apps/listenup-desktop/src-tauri/capabilities/default.json"
 );
-const playerCapability = await readJson(
-  "apps/listenup-desktop/src-tauri/capabilities/player-ui.json"
-);
-const youtubeCapability = await readJson(
-  "apps/listenup-desktop/src-tauri/capabilities/youtube-embedded.json"
-);
 assert.deepEqual(defaultCapability.webviews, ["main"]);
 assert.ok(!Object.hasOwn(defaultCapability, "windows"));
-assert.deepEqual(playerCapability.webviews, ["player-ui"]);
-assert.deepEqual(playerCapability.permissions, [
-  "clipboard-manager:allow-write-text",
-  "allow-control-playback",
-  "allow-reload-embedded-playback",
-  "allow-replace-embedded-playback",
-  "allow-set-embedded-video-bounds",
-  "allow-stop-embedded-playback",
-]);
-assert.equal(youtubeCapability.local, false);
-assert.deepEqual(youtubeCapability.webviews, ["youtube-*"]);
-assert.deepEqual(youtubeCapability.remote?.urls, [
-  "https://www.youtube.com/watch*",
-]);
-assert.deepEqual(youtubeCapability.permissions, [
+for (const permission of [
+  "allow-clear-youtube-cookies",
   "allow-embedded-source-event",
-]);
-for (const forbiddenPermission of [
-  "core:default",
-  "clipboard-manager:allow-write-text",
-  "updater:default",
-  "process:allow-restart",
-  "shell:default",
-  "fs:default",
+  "allow-fetch-youtube-caption-document",
+  "allow-fetch-youtube-player-response",
+  "allow-get-embedded-player-host-url",
+  "allow-get-youtube-cookie-status",
+  "allow-main-window-commands",
+  "allow-reload-embedded-playback",
+  "allow-report-embedded-player-failure",
+  "allow-replace-embedded-playback",
+  "allow-save-youtube-cookies",
+  "allow-viewer-read",
 ]) {
   assert.ok(
-    !youtubeCapability.permissions.includes(forbiddenPermission),
-    `youtube-* must not receive ${forbiddenPermission}`
+    defaultCapability.permissions.includes(permission),
+    `main must retain ${permission} after custom command ACL is enabled`
   );
 }
-
-const embeddedBridgeSource = await readFile(
-  resolve(ROOT, "apps/listenup-desktop/src/embedded/bridge.ts"),
+const iframePlayerSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src/useYoutubeIframePlayer.ts"),
   "utf8"
 );
+assert.match(iframePlayerSource, /get_embedded_player_host_url/);
+assert.match(iframePlayerSource, /event\.source !== iframe\.contentWindow/);
+assert.match(iframePlayerSource, /event\.origin !== playerOrigin/);
 assert.doesNotMatch(
-  embeddedBridgeSource,
-  /__TAURI_INTERNALS__|\binvoke\s*\(/,
-  "remote Embedded bridge must only call the fixed Rust-injected API"
+  iframePlayerSource,
+  /contentDocument|contentWindow\.document|document\.cookie|ytInitialPlayerResponse/,
+  "main must not read cross-origin iframe DOM, Cookie, or internal player response"
+);
+const embeddedPlayerHostSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/src/embedded_player_host.rs"),
+  "utf8"
+);
+assert.match(embeddedPlayerHostSource, /https:\/\/www\.youtube\.com\/iframe_api/);
+assert.match(embeddedPlayerHostSource, /enablejsapi:\s*1/);
+assert.match(embeddedPlayerHostSource, /origin:\s*location\.origin/);
+assert.match(embeddedPlayerHostSource, /TcpListener::bind\(\("127\.0\.0\.1", 0\)\)/);
+assert.doesNotMatch(
+  embeddedPlayerHostSource.replace(/#\[cfg\(test\)\][\s\S]*$/, ""),
+  /__TAURI__|document\.cookie/i
+);
+const embeddedLayoutSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src/App.tsx"),
+  "utf8"
+);
+assert.match(embeddedLayoutSource, /<EmbeddedVideoPanel/);
+assert.match(embeddedLayoutSource, /<SubtitleViewer/);
+assert.doesNotMatch(
+  embeddedLayoutSource,
+  /PlayerShell/,
+  "Desktop iframe mode must reuse the existing main layout and SubtitleViewer"
+);
+assert.doesNotMatch(
+  embeddedLayoutSource,
+  /set_vibrancy", \{ enabled: false \}/,
+  "Desktop iframe mode must preserve the home layout vibrancy and transparency"
+);
+assert.doesNotMatch(
+  embeddedLayoutSource,
+  /setMinSize\(new LogicalSize\(720, 620\)\)/,
+  "Desktop iframe mode must preserve the home layout minimum window size"
+);
+assert.doesNotMatch(
+  embeddedLayoutSource,
+  /embeddedWindowActiveRef|failed to (?:expand|restore) embedded iframe layout/,
+  "entering or exiting Desktop iframe mode must not resize the user's window"
 );
 const embeddedRustSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/src/embedded_source.rs"),
@@ -155,6 +187,83 @@ const embeddedRustSource = await readFile(
 assert.match(embeddedRustSource, /MAX_SESSION_MESSAGE_BYTES: usize = 4 \* 1024 \* 1024/);
 assert.match(embeddedRustSource, /MAX_INCREMENTAL_MESSAGE_BYTES: usize = 8 \* 1024/);
 assert.match(embeddedRustSource, /TokenBucket::new\(20, 10, now\)/);
+
+const embeddedPlayerSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/src/embedded_player.rs"),
+  "utf8"
+);
+assert.doesNotMatch(
+  embeddedPlayerSource,
+  /WindowBuilder|WebviewBuilder|WebviewUrl|initialization_script|add_child/,
+  "iframe playback must not recreate a Player window or remote watch child WebView"
+);
+const youtubeSubtitleSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/src/youtube_subtitles.rs"),
+  "utf8"
+);
+assert.match(youtubeSubtitleSource, /url\.path\(\) != "\/api\/timedtext"/);
+assert.match(youtubeSubtitleSource, /key == "v" && value == expected_video_id/);
+assert.match(youtubeSubtitleSource, /TVHTML5_SIMPLY/);
+assert.match(youtubeSubtitleSource, /x-goog-visitor-id/);
+assert.match(youtubeSubtitleSource, /bytes\.is_empty\(\)/);
+assert.match(youtubeSubtitleSource, /Finder \/ LaunchServices/);
+assert.match(youtubeSubtitleSource, /matches!\(shell\.as_str\(\), "\/bin\/zsh" \| "\/bin\/bash"\)/);
+assert.match(youtubeSubtitleSource, /for attempt in 0\.\.3/);
+assert.match(youtubeSubtitleSource, /error\.is_connect\(\) \|\| error\.is_timeout\(\)/);
+assert.match(youtubeSubtitleSource, /StatusCode::TOO_MANY_REQUESTS/);
+assert.match(youtubeSubtitleSource, /response\.status\(\)\.is_server_error\(\)/);
+assert.match(youtubeSubtitleSource, /static YOUTUBE_CLIENT: OnceLock/);
+assert.match(youtubeSubtitleSource, /YOUTUBE_CLIENT\.get_or_init\(build_client\)/);
+assert.doesNotMatch(
+  youtubeSubtitleSource,
+  /proxy_url.*(?:println|dbg)|(?:println|dbg).*proxy_url/,
+  "ADR-0015: resolved proxy URLs or credentials must never enter logs"
+);
+const captionTransportSource = youtubeSubtitleSource.match(
+  /pub\(crate\) async fn fetch_youtube_caption_document[\s\S]*?(?=\n}\n\n#\[cfg\(test\)\])/
+)?.[0];
+assert.ok(captionTransportSource, "ADR-0015: caption transport must remain inspectable");
+assert.match(captionTransportSource, /USER_AGENT, TV_USER_AGENT/);
+assert.match(
+  captionTransportSource,
+  /with_cookie\(request, &vault\)/,
+  "ADR-0015: timedtext must keep the same manual Cookie identity as watch and TV player"
+);
+assert.equal(
+  (youtubeSubtitleSource.match(/with_cookie\(request, &vault\)/g) ?? []).length,
+  3,
+  "ADR-0015: watch, TV player, and timedtext must share one Cookie identity"
+);
+assert.doesNotMatch(
+  youtubeSubtitleSource,
+  /\b(?:e?println|dbg)!\s*\(/,
+  "YouTube subtitle transport must never log Cookie-bearing request state"
+);
+
+const cookieVaultSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/src/cookie_vault.rs"),
+  "utf8"
+);
+assert.match(cookieVaultSource, /env!\("LISTENUP_BUNDLE_ID"\)/);
+assert.match(cookieVaultSource, /youtube-cookie-vault/);
+assert.doesNotMatch(
+  cookieVaultSource,
+  /\b(?:e?println|dbg)!\s*\(/,
+  "Cookie vault must never log secret-bearing state"
+);
+for (const boundaryPath of [
+  "apps/listenup-desktop/src/types.ts",
+  "apps/listenup-desktop/src-tauri/src/source_coordinator.rs",
+  "apps/listenup-desktop/src-tauri/src/database/mod.rs",
+  "apps/extension/src/shared/nativeSubtitleProtocol.ts",
+]) {
+  const source = await readFile(resolve(ROOT, boundaryPath), "utf8");
+  assert.doesNotMatch(
+    source,
+    /cookie/i,
+    `${boundaryPath} must not gain Cookie fields or transport paths`
+  );
+}
 
 assert.equal(
   rootPackage.scripts["clean:desktop:bundles"],
