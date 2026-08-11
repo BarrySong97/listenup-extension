@@ -360,7 +360,7 @@ GUI 启动时会在 `~/Library/Application Support/Google/Chrome/NativeMessaging
 
 DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.json` 也关闭 updater artifact 生成。首个带 updater 的正式版本仍需用户手工安装一次，从下一版开始才能应用内更新。
 
-当前发布基线为 `v0.3.4`；`v0.2.0 → v0.2.1` 用作首条真实应用内更新回归链路。
+当前发布基线为 `v0.4.0`；`v0.3.4 → v0.4.0` 是同窗 YouTube 播放与字幕 transport 的更新回归链路。
 
 ## 验证
 
