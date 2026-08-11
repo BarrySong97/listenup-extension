@@ -1,7 +1,7 @@
 /**
- * @purpose 字幕窗口 UI：实时同步、播放/字幕 seek 控制、Desktop/菜单栏形态、双语与列表/影院视图。
- * @role    桌面端唯一页面，组合 Rust session events 与 React Query 持久字幕视图。
- * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、components/ui、SubtitleList、subtitleCursor、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
+ * @purpose 字幕窗口 UI：在既有 Desktop layout 中组合浏览器同步或官方 YouTube iframe、自播控制与双语字幕。
+ * @role    桌面端唯一页面；无论来源如何都复用同一标题栏、按钮、字幕组件、底栏与视觉 token。
+ * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、components/ui、EmbeddedVideoPanel、SubtitleList、subtitleCursor、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
  * @gotcha  高频 cursor 独立于 viewer；列表只接收字幕边界，不能把连续 currentTime 传回列表子树。
  */
 import { Icon } from "@iconify/react";
@@ -17,8 +17,14 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VListHandle } from "virtua";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
+import { DesktopTextField } from "./components/ui/DesktopTextField";
+import { CookieSettings } from "./CookieSettings";
 import { EmbeddedSourceEntry } from "./EmbeddedSourceEntry";
-import { shouldShowSourceEntry } from "./embeddedPlayback";
+import { EmbeddedVideoPanel } from "./EmbeddedVideoPanel";
+import {
+  normalizeYoutubeWatchUrl,
+  shouldShowSourceEntry,
+} from "./embeddedPlayback";
 import { SubtitleModeControl } from "./components/ui/SubtitleModeControl";
 import { TargetLanguageSelect } from "./components/ui/TargetLanguageSelect";
 import { buildLocalAiTranslationPrompt } from "./localAiTranslationPrompt";
@@ -352,6 +358,15 @@ export default function App() {
   const [showCinemaToolbarHint, setShowCinemaToolbarHint] = useState(false);
   const [playbackPending, setPlaybackPending] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [embeddedActionPending, setEmbeddedActionPending] = useState<
+    "reload" | "replace" | "exit" | null
+  >(null);
+  const [embeddedActionError, setEmbeddedActionError] = useState<string | null>(
+    null
+  );
+  const [showEmbeddedLinkEditor, setShowEmbeddedLinkEditor] = useState(false);
+  const [showCookieSettings, setShowCookieSettings] = useState(false);
+  const [replacementUrl, setReplacementUrl] = useState("");
   const modeRef = useRef(mode);
   const desktopModeRef = useRef<ViewMode>(loadStoredMode());
   const vListRef = useRef<VListHandle>(null);
@@ -423,6 +438,8 @@ export default function App() {
   const session = liveSession;
   const pickerVisible = viewer.selectionRequired;
   const sourceEntryVisible = shouldShowSourceEntry(viewer);
+  const embeddedSource =
+    viewer.source?.kind === "embedded" ? viewer.source : null;
 
   useEffect(() => {
     const revision = subtitleQuery.data?.source.revision;
@@ -584,6 +601,54 @@ export default function App() {
     void getCurrentWindow().close();
   }, []);
 
+  const runEmbeddedAction = useCallback(
+    async (
+      action: "reload" | "replace" | "exit",
+      task: () => Promise<unknown>
+    ) => {
+      setEmbeddedActionPending(action);
+      setEmbeddedActionError(null);
+      try {
+        await task();
+      } catch (error) {
+        setEmbeddedActionError(
+          error instanceof Error ? error.message : String(error)
+        );
+      } finally {
+        setEmbeddedActionPending(null);
+      }
+    },
+    []
+  );
+
+  const reloadEmbeddedPlayback = useCallback(
+    () =>
+      runEmbeddedAction("reload", () => invoke("reload_embedded_playback")),
+    [runEmbeddedAction]
+  );
+
+  const replaceEmbeddedPlayback = useCallback(async () => {
+    let normalizedUrl: string;
+    try {
+      normalizedUrl = normalizeYoutubeWatchUrl(replacementUrl);
+    } catch (error) {
+      setEmbeddedActionError(
+        error instanceof Error ? error.message : "YouTube 链接无效"
+      );
+      return;
+    }
+    await runEmbeddedAction("replace", async () => {
+      await invoke("replace_embedded_playback", { url: normalizedUrl });
+      setReplacementUrl("");
+      setShowEmbeddedLinkEditor(false);
+    });
+  }, [replacementUrl, runEmbeddedAction]);
+
+  const stopEmbeddedPlayback = useCallback(
+    () => runEmbeddedAction("exit", () => invoke("stop_embedded_playback")),
+    [runEmbeddedAction]
+  );
+
   const handleListScroll = useCallback(() => {
     setIsListScrolling(true);
     if (scrollIdleTimerRef.current !== null) {
@@ -603,9 +668,10 @@ export default function App() {
     setIsListScrolling(false);
   }, []);
 
+  const authoritativeConnected = Boolean(embeddedSource) || connected;
   const playbackDisabled =
     playbackPending ||
-    !connected ||
+    !authoritativeConnected ||
     !session ||
     !cursor ||
     cursor.isAdPlaying;
@@ -736,11 +802,15 @@ export default function App() {
     return () => window.cancelAnimationFrame(frame);
   }, [currentIndex, displayBlocks, session?.sessionId, mode]);
 
-  const connectionLabel = viewer.awaitingBrowserPlayback
-    ? "等待下一次浏览器播放"
-    : connected
-      ? "已连接"
-      : "等待扩展连接";
+  const connectionLabel = embeddedSource
+    ? viewer.sourceMode === "embeddedRecovering"
+      ? "播放器需要处理"
+      : "Desktop 自播"
+    : viewer.awaitingBrowserPlayback
+      ? "等待下一次浏览器播放"
+      : connected
+        ? "已连接"
+        : "等待扩展连接";
   const playbackLabel = useMemo(() => {
     if (!cursor) return "等待播放";
     if (cursor.isAdPlaying) return "广告播放中";
@@ -749,8 +819,8 @@ export default function App() {
   const playbackSecond = Math.floor(cursor?.currentTime ?? 0);
   const playbackDisabledReason = playbackPending
     ? "正在控制 YouTube…"
-    : !connected
-      ? "扩展未连接，暂不可控制"
+    : !authoritativeConnected
+      ? "当前没有可控制的播放来源"
       : !session
         ? "等待可控制的视频"
         : !cursor
@@ -759,7 +829,7 @@ export default function App() {
             ? "广告播放中，暂不可控制"
             : undefined;
 
-  if (mode === "cinema" && appMode === "desktop") {
+  if (!embeddedSource && mode === "cinema" && appMode === "desktop") {
     return (
       <main
         className="group relative flex h-full cursor-grab select-none items-center justify-center overflow-hidden rounded-2xl bg-glass-cinema px-5 py-2 active:cursor-grabbing"
@@ -834,7 +904,7 @@ export default function App() {
             onChange={switchSubtitleMode}
           />
           <DevBadge />
-          <StatusDot connected={connected} />
+          <StatusDot connected={authoritativeConnected} />
           <PlaybackButton
             compact
             isPaused={cursor?.isPaused ?? null}
@@ -881,7 +951,11 @@ export default function App() {
 
   return (
     <main
-      className={`${shellClassName} relative grid grid-rows-[auto_minmax(0,1fr)_auto]`}
+      className={`${shellClassName} relative grid ${
+        embeddedSource
+          ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+          : "grid-rows-[auto_minmax(0,1fr)_auto]"
+      }`}
     >
       <UpdateNotice
         state={updater.state}
@@ -908,63 +982,137 @@ export default function App() {
             {session?.title ?? subtitleQuery.data?.source.title ?? "ListenUp Desktop"}
           </h1>
           <DevBadge />
-          <DesktopIconButton
-            className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
-            onPress={() => void updater.checkForUpdates()}
-            isDisabled={updater.isBusy}
-            tooltip={updater.state.message ?? "检查更新"}
-            ariaLabel="检查更新"
-            icon={
-              <Icon
-                icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
-                className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-            }
-          />
-          {appMode === "desktop" && (
-            <DesktopIconButton
-              className={iconButtonClassName}
-              onPress={() => void switchMode("cinema")}
-              tooltip="影院模式：字幕条悬浮在视频上"
-              ariaLabel="切换到影院模式"
-              icon={
-                <Icon
-                  icon="mdi:movie-open-outline"
-                  className="h-3.5 w-3.5 flex-none"
-                  aria-hidden="true"
-                />
-              }
-            />
-          )}
-          <DesktopIconButton
-            className={iconButtonClassName}
-            onPress={() => void switchAppMode()}
-            tooltip={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
-            ariaLabel={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
-            icon={
-              <Icon
+          {embeddedSource ? (
+            <>
+              <DesktopIconButton
+                className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
+                onPress={() => void reloadEmbeddedPlayback()}
+                isDisabled={embeddedActionPending !== null}
+                tooltip="重新加载当前视频"
+                ariaLabel="重新加载当前视频"
                 icon={
-                  appMode === "desktop" ? "mdi:dock-top" : "mdi:application-outline"
+                  <Icon
+                    icon={
+                      embeddedActionPending === "reload"
+                        ? "mdi:loading"
+                        : "mdi:reload"
+                    }
+                    className={`h-3.5 w-3.5 flex-none ${embeddedActionPending === "reload" ? "animate-spin" : ""}`}
+                    aria-hidden="true"
+                  />
                 }
-                className="h-3.5 w-3.5 flex-none"
-                aria-hidden="true"
               />
-            }
-          />
-          <DesktopIconButton
-            className={iconButtonClassName}
-            onPress={closeWindow}
-            tooltip="收进菜单栏"
-            ariaLabel="收进菜单栏"
-            icon={
-              <Icon
-                icon="mdi:close"
-                className="h-3.5 w-3.5 flex-none"
-                aria-hidden="true"
+              <DesktopIconButton
+                className={iconButtonClassName}
+                onPress={() => {
+                  setEmbeddedActionError(null);
+                  setShowEmbeddedLinkEditor(true);
+                }}
+                tooltip="粘贴新链接"
+                ariaLabel="粘贴新链接"
+                icon={
+                  <Icon
+                    icon="mdi:link-variant"
+                    className="h-3.5 w-3.5 flex-none"
+                    aria-hidden="true"
+                  />
+                }
               />
-            }
-          />
+              <DesktopIconButton
+                className={iconButtonClassName}
+                onPress={() => setShowCookieSettings(true)}
+                tooltip="YouTube Cookie"
+                ariaLabel="设置 YouTube Cookie"
+                icon={
+                  <Icon
+                    icon="mdi:key-chain-variant"
+                    className="h-3.5 w-3.5 flex-none"
+                    aria-hidden="true"
+                  />
+                }
+              />
+              <DesktopIconButton
+                className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
+                onPress={() => void stopEmbeddedPlayback()}
+                isDisabled={embeddedActionPending !== null}
+                tooltip="退出 Desktop 播放并保持空态"
+                ariaLabel="退出 Desktop 播放"
+                icon={
+                  <Icon
+                    icon={
+                      embeddedActionPending === "exit"
+                        ? "mdi:loading"
+                        : "mdi:close"
+                    }
+                    className={`h-3.5 w-3.5 flex-none ${embeddedActionPending === "exit" ? "animate-spin" : ""}`}
+                    aria-hidden="true"
+                  />
+                }
+              />
+            </>
+          ) : (
+            <>
+              <DesktopIconButton
+                className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
+                onPress={() => void updater.checkForUpdates()}
+                isDisabled={updater.isBusy}
+                tooltip={updater.state.message ?? "检查更新"}
+                ariaLabel="检查更新"
+                icon={
+                  <Icon
+                    icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
+                    className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
+                    aria-hidden="true"
+                  />
+                }
+              />
+              {appMode === "desktop" && (
+                <DesktopIconButton
+                  className={iconButtonClassName}
+                  onPress={() => void switchMode("cinema")}
+                  tooltip="影院模式：字幕条悬浮在视频上"
+                  ariaLabel="切换到影院模式"
+                  icon={
+                    <Icon
+                      icon="mdi:movie-open-outline"
+                      className="h-3.5 w-3.5 flex-none"
+                      aria-hidden="true"
+                    />
+                  }
+                />
+              )}
+              <DesktopIconButton
+                className={iconButtonClassName}
+                onPress={() => void switchAppMode()}
+                tooltip={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
+                ariaLabel={appMode === "desktop" ? "切换到菜单栏 App" : "切换到自由窗口"}
+                icon={
+                  <Icon
+                    icon={
+                      appMode === "desktop"
+                        ? "mdi:dock-top"
+                        : "mdi:application-outline"
+                    }
+                    className="h-3.5 w-3.5 flex-none"
+                    aria-hidden="true"
+                  />
+                }
+              />
+              <DesktopIconButton
+                className={iconButtonClassName}
+                onPress={closeWindow}
+                tooltip="收进菜单栏"
+                ariaLabel="收进菜单栏"
+                icon={
+                  <Icon
+                    icon="mdi:close"
+                    className="h-3.5 w-3.5 flex-none"
+                    aria-hidden="true"
+                  />
+                }
+              />
+            </>
+          )}
         </div>
         <div
           className="mt-2 flex min-w-0 items-center gap-[7px] text-[11px] text-fg-faint"
@@ -979,8 +1127,17 @@ export default function App() {
               "字幕同步 Demo"}
           </span>
           <span className="flex-1" />
-          <span className={appModeError || playbackError ? "text-red-300" : undefined}>
-            {appModeError ?? playbackError ?? playbackLabel}
+          <span
+            className={
+              appModeError || playbackError || embeddedActionError
+                ? "text-red-300"
+                : undefined
+            }
+          >
+            {appModeError ??
+              playbackError ??
+              embeddedActionError ??
+              playbackLabel}
           </span>
           <PlaybackTime seconds={playbackSecond} />
         </div>
@@ -1007,6 +1164,17 @@ export default function App() {
         </div>
       </header>
 
+      {embeddedSource && (
+        <EmbeddedVideoPanel
+          source={embeddedSource}
+          subtitles={
+            session?.sessionId === embeddedSource.sessionId
+              ? session.subtitles
+              : []
+          }
+        />
+      )}
+
       <section className="relative min-h-0 overflow-hidden" aria-live="polite">
         {sourceEntryVisible ? (
           <EmbeddedSourceEntry
@@ -1019,7 +1187,7 @@ export default function App() {
             blocks={displayBlocks}
             activeIndex={currentIndex}
             playedThroughIndex={playedThroughIndex}
-            connected={connected}
+            connected={authoritativeConnected}
             copyStatus={translationCopyStatus}
             emptyMessage={emptyMessage}
             isScrolling={isListScrolling}
@@ -1043,6 +1211,73 @@ export default function App() {
           busySessionId={busySessionId}
           error={pickerError}
           onSelect={(sessionId) => void selectVideoSession(sessionId)}
+        />
+      )}
+      {showEmbeddedLinkEditor && embeddedSource && (
+        <div className="absolute inset-0 z-20 grid place-items-center bg-glass/95 p-5 backdrop-blur-xl">
+          <div className="w-full max-w-[360px] rounded-xl border border-hairline bg-glass p-4 shadow-2xl">
+            <div className="flex items-center gap-2">
+              <Icon
+                icon="mdi:link-variant"
+                className="h-4 w-4 flex-none text-fg-muted"
+                aria-hidden="true"
+              />
+              <h2 className="m-0 flex-1 text-[13px] font-[650] text-fg">
+                播放新链接
+              </h2>
+              <DesktopIconButton
+                className={iconButtonClassName}
+                onPress={() => {
+                  setReplacementUrl("");
+                  setEmbeddedActionError(null);
+                  setShowEmbeddedLinkEditor(false);
+                }}
+                tooltip="取消"
+                ariaLabel="取消更换链接"
+                icon={
+                  <Icon
+                    icon="mdi:close"
+                    className="h-3.5 w-3.5"
+                    aria-hidden="true"
+                  />
+                }
+              />
+            </div>
+            <p className="mb-3 mt-2 text-[11px] leading-relaxed text-fg-muted">
+              当前窗口会原地切换视频，标题栏、字幕区和所有操作保持不变。
+            </p>
+            <div className="flex gap-2">
+              <DesktopTextField
+                autoFocus
+                aria-label="新的 YouTube 视频链接"
+                placeholder="https://youtu.be/..."
+                value={replacementUrl}
+                onChange={(event) => setReplacementUrl(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void replaceEmbeddedPlayback();
+                }}
+                className="h-9 flex-1 rounded-lg border border-hairline bg-black/25 px-3 text-[11px] text-fg placeholder:text-fg-faint"
+              />
+              <DesktopButton
+                className="h-9 cursor-pointer rounded-lg bg-yt px-3 text-[11px] font-semibold text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-50"
+                isDisabled={embeddedActionPending !== null}
+                onPress={() => void replaceEmbeddedPlayback()}
+              >
+                {embeddedActionPending === "replace" ? "切换中" : "播放"}
+              </DesktopButton>
+            </div>
+            {embeddedActionError && (
+              <p className="mb-0 mt-2 text-[10px] text-red-300">
+                {embeddedActionError}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+      {showCookieSettings && embeddedSource && (
+        <CookieSettings
+          onClose={() => setShowCookieSettings(false)}
+          onCredentialsChanged={() => void reloadEmbeddedPlayback()}
         />
       )}
     </main>

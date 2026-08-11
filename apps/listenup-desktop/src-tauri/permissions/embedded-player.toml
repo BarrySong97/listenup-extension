@@ -1,7 +1,7 @@
-# @purpose 为可信 main/player-ui 与远程 youtube-* 精确声明 Embedded 播放自定义命令权限。
-# @role    capability 引用的 app command allow-list；不包含任何插件、文件、进程或通用窗口权限。
+# @purpose 为可信 main 精确声明 iframe Embedded 播放与只读 YouTube 字幕 transport 权限。
+# @role    capability 引用的 app command allow-list；iframe 本身没有任何 Tauri capability。
 # @deps    embedded_player.rs Tauri commands
-# @gotcha  youtube-* 只能获得 allow-embedded-source-event；不能把 player/main 权限合并进来。
+# @gotcha  fetch commands 必须在 Rust 内再次校验 main、YouTube host/path 与同一 videoId。
 
 [[permission]]
 identifier = "allow-start-embedded-playback"
@@ -14,13 +14,8 @@ description = "Allows trusted local UI to explicitly stop the current Embedded p
 commands.allow = ["stop_embedded_playback"]
 
 [[permission]]
-identifier = "allow-set-embedded-video-bounds"
-description = "Allows player-ui to resize the isolated YouTube child webview within validated bounds."
-commands.allow = ["set_embedded_video_bounds"]
-
-[[permission]]
 identifier = "allow-embedded-source-event"
-description = "Allows youtube-* to submit one size-limited, rate-limited, identity-bound event envelope."
+description = "Allows trusted main to submit one size-limited, rate-limited, identity-bound iframe event envelope."
 commands.allow = ["embedded_source_event"]
 
 [[permission]]
@@ -30,10 +25,55 @@ commands.allow = ["control_playback"]
 
 [[permission]]
 identifier = "allow-reload-embedded-playback"
-description = "Allows player-ui to reload only its coordinator-owned YouTube child webview."
+description = "Allows main to request recreation of its coordinator-owned YouTube iframe."
 commands.allow = ["reload_embedded_playback"]
 
 [[permission]]
+identifier = "allow-report-embedded-player-failure"
+description = "Allows trusted main to move its current identity-bound iframe source into recovery state."
+commands.allow = ["report_embedded_player_failure"]
+
+[[permission]]
 identifier = "allow-replace-embedded-playback"
-description = "Allows player-ui to replace the current Embedded source with another validated watch URL."
+description = "Allows main to replace the current Embedded source with another validated videoId."
 commands.allow = ["replace_embedded_playback"]
+
+[[permission]]
+identifier = "allow-get-youtube-cookie-status"
+description = "Allows main to read only the redacted manual YouTube Cookie vault status."
+commands.allow = ["get_youtube_cookie_status"]
+
+[[permission]]
+identifier = "allow-save-youtube-cookies"
+description = "Allows main to atomically replace a manually pasted YouTube Cookie string in Keychain."
+commands.allow = ["save_youtube_cookies"]
+
+[[permission]]
+identifier = "allow-clear-youtube-cookies"
+description = "Allows main to clear the manual YouTube Cookie Keychain item."
+commands.allow = ["clear_youtube_cookies"]
+
+[[permission]]
+identifier = "allow-viewer-read"
+description = "Allows trusted local viewer webviews to read coordinator snapshots and persisted subtitle views."
+commands.allow = ["get_snapshot", "get_subtitle_view"]
+
+[[permission]]
+identifier = "allow-main-window-commands"
+description = "Allows only main to manage app mode, video selection, and its NSPanel vibrancy."
+commands.allow = ["get_app_mode", "set_app_mode", "select_subtitle_session", "set_vibrancy"]
+
+[[permission]]
+identifier = "allow-fetch-youtube-player-response"
+description = "Allows main to fetch a size-limited watch player response for one validated videoId."
+commands.allow = ["fetch_youtube_player_response"]
+
+[[permission]]
+identifier = "allow-fetch-youtube-caption-document"
+description = "Allows main to fetch one size-limited YouTube timedtext URL bound to the same videoId."
+commands.allow = ["fetch_youtube_caption_document"]
+
+[[permission]]
+identifier = "allow-get-embedded-player-host-url"
+description = "Allows trusted main to read the current random loopback player wrapper URL."
+commands.allow = ["get_embedded_player_host_url"]

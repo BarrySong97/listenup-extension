@@ -17,8 +17,20 @@
     "clipboard-manager:allow-write-text",
     "updater:default",
     "process:allow-restart",
+    "allow-clear-youtube-cookies",
     "allow-control-playback",
+    "allow-embedded-source-event",
+    "allow-fetch-youtube-caption-document",
+    "allow-fetch-youtube-player-response",
+    "allow-get-youtube-cookie-status",
+    "allow-get-embedded-player-host-url",
+    "allow-main-window-commands",
+    "allow-reload-embedded-playback",
+    "allow-report-embedded-player-failure",
+    "allow-replace-embedded-playback",
+    "allow-save-youtube-cookies",
     "allow-start-embedded-playback",
-    "allow-stop-embedded-playback"
+    "allow-stop-embedded-playback",
+    "allow-viewer-read"
   ]
 }

@@ -69,7 +69,7 @@ export const EmbeddedSourceEntry = ({
           在 Desktop 里播放
         </div>
         <p className="mb-3 mt-2 text-[11px] leading-relaxed text-fg-muted">
-          粘贴单个 YouTube 视频链接，将在独立窗口中显示上方视频和下方字幕。
+          粘贴单个 YouTube 视频链接，当前窗口会原地显示上方官方播放器和下方字幕。
         </p>
         <div className="flex gap-2">
           <DesktopTextField

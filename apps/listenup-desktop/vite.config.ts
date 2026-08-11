@@ -5,7 +5,6 @@
  * @gotcha  Compiler 必须是首个 Babel plugin；strictPort 固定 1421 且忽略 src-tauri 变更。
  */
 import { defineConfig } from "vite";
-import path from "node:path";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -19,14 +18,6 @@ export default defineConfig({
     tailwindcss(),
   ],
   clearScreen: false,
-  build: {
-    rollupOptions: {
-      input: {
-        main: path.resolve(import.meta.dirname, "index.html"),
-        player: path.resolve(import.meta.dirname, "player.html"),
-      },
-    },
-  },
   server: {
     port: 1421,
     strictPort: true,

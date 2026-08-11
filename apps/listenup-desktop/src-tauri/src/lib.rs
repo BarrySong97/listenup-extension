@@ -1,16 +1,19 @@
 // @purpose 桌面端 Rust 入口：GUI/桥接双模式、来源协调、双向播放/字幕 seek、字幕持久化、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
-// @deps    browser_source、source_coordinator、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
+// @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
 // @gotcha  stdout 只写 Native Messaging 长度帧；v5 cursor 必须保留 playbackEpoch；反向控制按 bridgeId+session 路由。
 mod app_mode;
 mod browser_source;
 pub mod cli;
+mod cookie_vault;
 pub mod database;
 pub mod domain;
 mod embedded_player;
+mod embedded_player_host;
 mod embedded_source;
 mod positioning;
 mod source_coordinator;
+mod youtube_subtitles;
 
 #[cfg(test)]
 use browser_source::BrowserSourceStore;
@@ -1060,6 +1063,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(SharedStore::default())
+        .manage(cookie_vault::SharedCookieVault::default())
         .manage(embedded_player::SharedEmbeddedRuntime::default())
         .manage(SharedBridges::default())
         .manage(SharedPlaybackCommands::default())
@@ -1067,18 +1071,25 @@ pub fn run() {
             app_mode::get_app_mode,
             app_mode::set_app_mode,
             control_playback,
+            cookie_vault::clear_youtube_cookies,
+            cookie_vault::get_youtube_cookie_status,
+            cookie_vault::save_youtube_cookies,
             embedded_player::embedded_source_event,
             embedded_player::reload_embedded_playback,
+            embedded_player::report_embedded_player_failure,
             embedded_player::replace_embedded_playback,
-            embedded_player::set_embedded_video_bounds,
             embedded_player::start_embedded_playback,
             embedded_player::stop_embedded_playback,
+            embedded_player_host::get_embedded_player_host_url,
+            youtube_subtitles::fetch_youtube_caption_document,
+            youtube_subtitles::fetch_youtube_player_response,
             get_snapshot,
             get_subtitle_view,
             select_subtitle_session,
             set_vibrancy
         ])
         .setup(|app| {
+            app.manage(embedded_player_host::start().map_err(std::io::Error::other)?);
             let app_data_dir = app.path().app_data_dir()?;
             let app_mode_path = app_mode::preference_path(&app_data_dir);
             let initial_app_mode = app_mode::load(&app_mode_path);
