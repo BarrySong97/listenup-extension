@@ -1,7 +1,7 @@
 # Desktop 内嵌 YouTube 播放与字幕通信 — 设计
 
 - 日期：2026-08-10
-- 状态：已确认，待实施计划
+- 状态：已确认并实施；2026-08-10 现场验收修订为同窗官方 iframe
 - Plane：LISTENUP-7
 - 前置调研：[Desktop 内嵌 YouTube 与字幕通信 — 技术调研](../plans/2026-08-10-desktop-embedded-youtube-research.md)
 
@@ -24,7 +24,10 @@ watch 链接后，直接在 Desktop 内播放视频，并在同一复合窗口�
 | 主题 | 决定 |
 |---|---|
 | 总体方案 | 采用双来源架构 A：保留 BrowserSource，新增 EmbeddedSource，由 Desktop 统一仲裁 |
-| 播放界面 | Desktop 自播时使用“上方完整 YouTube 播放器、下方字幕列表”的复合窗口 |
+| 播放界面 | 当前主窗口原地切换为“上方官方 YouTube iframe、下方字幕列表”，不得新开窗口 |
+| 视觉继承 | 保留原 Desktop layout、标题栏、按钮、字幕组件、底栏和 design token，只增加视频行 |
+| 播放容器 | 使用 `/embed/<videoId>` + IFrame Player API，不加载完整 watch 页面 |
+| 字幕通道 | 与 iframe 解耦，由 Desktop 受限后端 transport 获取，youtube-core 选轨与解析 |
 | 空状态入口 | 浏览器自动连接为主入口；分隔线“或者”下面提供 YouTube 链接输入 |
 | 浏览器抢占 | 一旦进入 Desktop 自播，浏览器事件不接管、不提示、不弹选择器 |
 | 进入自播 | 若浏览器正在播放，先请求暂停；失败仍进入自播并显示非阻断警告 |
@@ -79,7 +82,7 @@ watch 链接后，直接在 Desktop 内播放视频，并在同一复合窗口�
 
 ### 3. EmbeddedSource 活跃
 
-Desktop 打开一个普通、可聚焦的 Player 窗口：
+现有 Desktop 主窗口原地扩展为播放器布局：
 
 - 上方是未经覆盖的完整 YouTube 播放器，保留播放、音量、倍速、字幕和 Quality 等原生控件。
 - 下方是 ListenUp 字幕区，复用原语、译文、双语、当前句、自动滚动和字幕点击 seek。
@@ -87,9 +90,9 @@ Desktop 打开一个普通、可聚焦的 Player 窗口：
 - 载入新有效链接会结束旧 Embedded session，并在同一窗口创建新的 Embedded session。
 - 视频无字幕时播放器继续工作，字幕区显示“该视频没有可用字幕”。
 
-Player 窗口是独立的普通窗口，不把远程 YouTube WebView 放入现有 non-activating `main` NSPanel。
-进入自播后隐藏现有字幕面板，退出后关闭 Player 并恢复字幕面板的空状态；用户原有的
-desktop/menubar 和 list/cinema 偏好保持不变。
+进入自播后保留同一个 `main` WebView 和窗口，只切换 React 布局且不改变用户当前窗口尺寸；上方 iframe 使用
+官方 IFrame Player API，下方复用现有字幕组件。退出后销毁 iframe、恢复双入口空态和原来的
+desktop/menubar、list/cinema 偏好。
 
 ### 4. 退出后的等待状态
 
@@ -115,22 +118,20 @@ desktop/menubar 和 list/cinema 偏好保持不变。
 
 ## 窗口与信任边界
 
-Desktop 自播使用两个不同信任等级的 WebView：
+Desktop 自播使用本地可信页面与浏览器标准跨源 iframe 边界：
 
 ```text
-Player NSWindow
-├─ player-ui（本地受信任页面）
-│  ├─ 标题、状态、字幕列表、换链接、退出和 Cookie 设置入口
-│  └─ 只调用 Player 专用的本地 Tauri commands
-└─ youtube（远程、不受信任的 child WebView）
-   ├─ 只允许 YouTube watch 播放上下文
-   ├─ document-start 注入受限采集脚本
-   └─ 只能向原生层发送固定 schema 的 EmbeddedSource 事件
+main NSPanel / 本地可信 React
+├─ YouTube iframe（/embed/<videoId>，标准跨源边界）
+│  └─ IFrame API：ready/state/error/time/play/pause/seek
+├─ ListenUp 字幕与设置 UI
+└─ 受限 Rust transport
+   ├─ watch player response（只读，videoId 绑定）
+   └─ api/timedtext（YouTube host/path/videoId 白名单）
 ```
 
-现有 `main` NSPanel 继续承载 BrowserSource 字幕面板、影院和菜单栏体验。`player` 与 `youtube`
-使用独立 label 和独立 capability；不能仅按 window 名授权后让远程 child WebView 合并取得本地
-页面权限。
+iframe 不拥有 Tauri capability，也无法访问 Keychain；只有本地 `main` 能调用精确授权的字幕
+transport 和 Cookie commands。原始 Cookie 不进入 React、iframe、snapshot、SQLite 或 Extension。
 
 ## 双来源架构
 

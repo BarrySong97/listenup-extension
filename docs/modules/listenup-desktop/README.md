@@ -7,9 +7,9 @@ macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标�
 两种形态间切换。同时将原字幕保存到 SQLite，并显示用户通过 CLI 导入的 AI 译文。
 Tauri v2，Rust 后端 + React 前端。
 
-边界：**管** 窗口渲染、Native Messaging Host、受限 Embedded YouTube WebView、字幕持久化、
+边界：**管** 窗口渲染、Native Messaging Host、同窗官方 YouTube iframe、字幕持久化、
 安全 CLI、双形态生命周期和当前 session 的播放 / 暂停及字幕块起点 seek；浏览器页面字幕抓取仍
-由扩展负责，EmbeddedSource 只在用户显式提交链接后采集其隔离 WebView。不内置翻译模型，也不
+由扩展负责；Desktop 自播字幕由受限 Rust transport 独立获取。不内置翻译模型，也不
 提供任意进度条、音量、倍速等更宽的播放器遥控。
 
 跨模块的协议与联调流程写在 [Native Messaging 专题](../../topics/native-messaging.md)，本文只讲这个 app 自身。
@@ -17,12 +17,11 @@ Tauri v2，Rust 后端 + React 前端。
 ## 文件清单与关系
 
 ```
-src/App.tsx        主窗口 UI：浏览器/链接双入口、播放控制、appMode、列表 / 影院、多视频选择
-player.html / src/player-main.tsx / src/PlayerShell.tsx  本地可信 Player UI、视频槽 bounds 上报
-src/useViewerSession.ts / src/SubtitleViewer.tsx  主窗口与 Player 共用的快照订阅和字幕展示层
+src/App.tsx        唯一 Desktop layout：浏览器/链接双入口、同窗视频行、播放控制与字幕列表
+src/EmbeddedVideoPanel.tsx / src/useYoutubeIframePlayer.ts  官方 iframe 视频行与播放事件适配
+src/useViewerSession.ts / src/SubtitleViewer.tsx  主窗口快照订阅和唯一字幕展示层
 src/EmbeddedSourceEntry.tsx / src/embeddedPlayback.ts  双入口和本地 YouTube URL 安全门
-src/embedded/bridge.ts  document-start YouTube 适配器；只调用 Rust 注入的固定 bridge API
-vite.embedded.config.ts  把适配器与 youtube-core 打成 Cargo OUT_DIR 单文件 IIFE
+src/CookieSettings.tsx / src-tauri/src/cookie_vault.rs  手动 Cookie UI、解析与 Keychain 保存
 src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，HeroUI 行点击发送块起点
 src/subtitleCursor.ts  live 原语索引直用、译文 / fallback 时间映射的纯 selector
 src/components/ui/ HeroUI 3 primitives；DesktopRowButton 是虚拟字幕热路径的无 hover state 例外
@@ -39,7 +38,8 @@ src-tauri/src/lib.rs   Tauri 入口、双向 socket、SQLite composition、NSPan
 src-tauri/src/browser_source.rs  浏览器字幕影子状态、多视频仲裁与 bridgeId 控制目标
 src-tauri/src/source_coordinator.rs  双来源权威、Embedded 锁与 playbackEpoch 退出屏障
 src-tauri/src/embedded_source.rs  Embedded schema、大小/频率/身份校验与单会话状态
-src-tauri/src/embedded_player.rs  Player 双 WebView 容器、导航门、IPC、bounds、watchdog 与退出
+src-tauri/src/embedded_player.rs  Embedded 生命周期、身份绑定、控制命令与退出屏障
+src-tauri/src/youtube_subtitles.rs  watch/caption 受限 HTTP transport 与 host/path/videoId 安全门
 src-tauri/src/app_mode.rs  版本化偏好、activation policy、窗口属性与事务切换
 src-tauri/src/positioning.rs  tray 下方定位、多显示器 work area clamp 与坐标缩放
 src-tauri/src/database/ SQLite repository、WAL 连接、原语 revision 与译文事务
@@ -51,7 +51,7 @@ src-tauri/src/main.rs  薄入口，调 lib::run()
 src-tauri/build.rs     把 LISTENUP_ENV 透传给 Rust（socket 路径按 bundle id 区分）
 src-tauri/tauri.conf.json / tauri.dev.conf.json / tauri.cli.conf.json   环境与 CLI sidecar 配置
 src-tauri/Info.plist   深链接 scheme（由 gen-info-plist.mjs 生成，不要手改）
-src-tauri/capabilities/default.json / player-ui.json / youtube-embedded.json  按 WebView label 分权
+src-tauri/capabilities/default.json  可信 main 的精确授权；跨源 iframe 没有 Tauri capability
 src-tauri/permissions/embedded-player.toml  Embedded 自定义命令的精确 allow-list
 scripts/gen-info-plist.mjs      按 LISTENUP_ENV 生成 Info.plist，构建前自动跑
 scripts/prepare-cli.mjs         构建 listenup sidecar 并放入 .app
@@ -97,32 +97,70 @@ SQLx migration 一经发布不可修改，`check-environment-identifiers.mjs` �
 SHA-384。早期开发数据库存在一条已知旧 checksum；连接层仅在该 checksum 命中且所有预期
 schema 对象完整时原子修复 migration 元数据，未知不匹配仍拒绝打开。
 
-## 受限 Embedded Player 容器
+## 同窗 Embedded Player
 
-Desktop 自播使用一个普通 `player` 原生窗口承载两个 child WebView：本地 `player-ui` 只渲染
-可信控制/字幕壳并通过 `ResizeObserver` 上报视频槽，远程 `youtube-*` 只显示规范化后的
-`https://www.youtube.com/watch?v=<videoId>`。两者不共享 capability；远程 WebView 只有
-`allow-embedded-source-event` 一个 app command 权限，没有 `core:default`、clipboard、updater、
-process、shell、文件系统或通用窗口权限。
+Desktop 自播不创建第二窗口、child WebView 或另一套页面 shell。用户提交合法链接后，现有
+`main` 窗口保持用户当前尺寸，并在原标题栏与原 `SubtitleViewer` 之间增加一个 16:9
+`EmbeddedVideoPanel`。标题、字幕模式、译文选择、播放按钮、seek、底栏、颜色和间距继续使用
+原 Desktop 组件与 token；输入链接、换链接和退出都不得改变用户当前窗口尺寸、vibrancy、透明度、
+shadow 或首页 340×420 的最小尺寸。换链接、reload、Cookie 与退出也使用同一套
+`DesktopIconButton`。
 
-Rust 在 document-start、仅主 frame 注入固定 bridge 与打包后的 YouTube 适配器。适配器复用
-`@listenup/youtube-core` 的 player response 归一化、原语选轨、JSON3、身份校验、字幕解析和
-playbackEpoch；其 bundle 不引用 Tauri invoke。固定 bridge 自动附加 source/session/video 身份，
-原生入口再验证 WebView label、协议版本和四元身份。
+视频只走 `https://www.youtube.com/embed/<videoId>` 与官方 IFrame Player API。macOS 打包页面的
+`tauri://` scheme 不产生 YouTube 要求的 HTTP Referer，单独传 `origin` 仍会报 153。因此 Rust 只在
+`127.0.0.1` 随机端口和随机路径托管一个最小播放包装页，由它以真实 HTTP origin 加载官方 iframe；
+未知 method/path 均拒绝且响应禁止缓存。包装页没有 Tauri capability、Cookie 或字幕通道，只经
+`postMessage` 交换 ready/cursor/error/control；main 同时校验当前 iframe window 与精确 loopback
+origin，不读取 YouTube iframe DOM 或内部 player response。
 
-安全预算为 session 最大 4 MiB、cursor/control result 最大 8 KiB、cursor 10Hz（20 burst）、
-session 2Hz。连续五次非法消息会隔离 child 并进入 `EmbeddedRecovering`；五秒无消息 watchdog
-同样进入恢复态但继续持有 Embedded 锁。顶层导航仅允许当前规范化 watch URL，popup、新窗口、
-下载、首页/频道/账户及其他 videoId 均拒绝。Player 关闭或显式退出时先销毁远程 child，再建立
-浏览器 playbackEpoch 重接屏障。
+字幕与 iframe 解耦：可信 main 请求 Rust `youtube_subtitles` transport。普通 watch response
+可能给出返回 `200 + 空正文` 的 `exp=xpe` timedtext URL，因此 watch 只提供当次公开 API key、
+visitorData 与 signature timestamp；字幕轨从 `TVHTML5_SIMPLY` player response 发现。Rust 只允许
+`www.youtube.com/watch?v=<同一 videoId>`、`www.youtube.com/youtubei/v1/player` 和
+`www.youtube.com/api/timedtext`，限制响应大小并拒绝空正文；player response 归一化、选轨、JSON3、
+身份验证和解析继续复用 `@listenup/youtube-core`。watch、TV response 与它签出的 timedtext 必须
+保持同一 Cookie 身份：未保存时三段全匿名，已保存时三段都带同一手动 Cookie；字幕请求继续使用
+TV User-Agent。完整边界见
+[ADR-0015](../../decisions/0015-desktop-same-window-youtube-transports.md)。Embedded
+消息仍受 4 MiB session、8 KiB cursor/control result、10Hz cursor（20 burst）与 source/session/
+video 身份门保护。iframe 失败进入 `EmbeddedRecovering` 但继续持有 Embedded 锁，只有显式退出
+才建立浏览器 playbackEpoch 重接屏障。
+
+Finder / LaunchServices 启动的 macOS GUI app 不一定继承用户登录 shell 的 `http_proxy` /
+`https_proxy`，也可能保留陈旧的进程值。字幕 transport 在 macOS 优先仅通过 `/bin/zsh` 或
+`/bin/bash` 的固定只读命令解析登录 shell 代理，解析不到再退回进程环境；只接受有 host、长度
+受限的 HTTP(S) URL。代理地址和可能包含的凭据不进入错误、日志、SQLite 或前端状态。
+watch、TV player 与 timedtext 对 connect/timeout 做最多三次、150ms 间隔的有界重试；HTTP 只对
+429/5xx 做 750ms、1500ms 短退避，其他 4xx、身份不一致、空正文和解析错误不重试。进程内复用
+同一个 reqwest client/代理连接池，Cookie 仍按每个请求从 Keychain 注入，不进入 client cookie
+jar；避免连续换视频重复代理/TLS 握手。
 
 主窗口只有在 coordinator 无权威来源时才显示双入口：浏览器扩展可继续自动接入，用户也可粘贴
 单个 HTTPS watch/youtu.be 链接启动 Desktop 播放。链接先在本地纯函数校验，再由 Rust 独立复验；
-无效输入不会暂停浏览器或建立 Embedded 锁。Player 使用“上视频、下字幕”布局，复用同一
+无效输入不会暂停浏览器或建立 Embedded 锁。同窗 layout 使用“上视频、下字幕”布局，复用同一
 `SubtitleViewer`、原语/译文/双语偏好、播放/暂停和字幕 seek，并提供换链接、reload 与显式退出。
 浏览器自动暂停失败只显示警告，不释放 Embedded 锁；watchdog/隔离失败进入恢复态后仍可重新加载、
 换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到浏览器
 出现下一次手动播放、换视频或自动连播。
+
+## 手动 YouTube Cookie
+
+Cookie 不是播放主路径，也不会从 Chrome、Safari 或 Extension 读取。用户只能在可信 `main`
+的设置页手动粘贴完整 `name=value; name2=value2` 串；多行输入使用 text-security 隐藏明文，关闭
+自动完成和拼写检查，成功保存后立即清空且只显示 `missing`、`saved` 或 `failed`。
+解析以第一个 `=` 分隔并保留值中后续等号，忽略空段，重复 key 后值覆盖；非法 token、控制字符、
+Domain/Path/Expires 等属性、超过 64 KiB 或 180 段都会整次拒绝，旧值保持不变。
+
+规范化后的整串值只保存在 macOS Keychain。service 由构建时 `LISTENUP_BUNDLE_ID` 加
+`.youtube-cookie-vault` 派生，因此 production 与 DEV 永不共用；account 固定为版本化的 YouTube
+手动 Cookie 标识。原始值只在 Rust 的受限 watch/player/caption HTTP 请求中按需读取，不回传 React，
+不注入官方 iframe、浏览器或 Extension。替换是 Keychain 单项原子更新，清除只删除该 Keychain
+项；保存、替换或清除后当前字幕 transport 会重新加载。Keychain/请求失败不阻塞无 Cookie 的
+公开视频主路径，也不会自动删除一次疑似失效的已保存值。
+
+Cookie 原值、键名和数量不进入错误、Debug、日志、SQLite、viewer snapshot 或 Native Messaging；
+跨源 iframe 没有任何 app command，三个 Cookie commands 只授权本地 `main`；环境 sensor 同时
+锁定 Extension production/DEV manifest 永不申请 `cookies` 权限。
 
 ## 原语 / 译文 / 双语与刷新
 
@@ -345,6 +383,6 @@ Rust 单测覆盖帧解析、0/1/2+ 播放 session、锁定、暂停、pending�
 - `src-tauri/target/`、`src-tauri/gen/`、`dist/` 都是生成物
 - `Info.plist` 由脚本生成；production CI 与本地 DEV 构建都会按目标环境重新生成，不能依赖工作树里上一次生成的 scheme（见 `.github/workflows/release-desktop.yml`）
 - 窗口 UI 改了记得看一眼 [`@listenup/mock-ui`](../mock-ui/README.md)——官网首屏那张产品图是它的静态复刻，不会自动跟着变
-- 当前版本不内嵌 YouTube，播放来源仍是 Chrome Extension。WKWebView 公共视频、字幕抓取、
-  Google 登录和远程 capability 边界的可行性结论见
+- 当前版本同时支持 Chrome Extension 与 Desktop 同窗内嵌 YouTube。前置的 WKWebView 公共视频、
+  字幕抓取、Google 登录和远程 capability 边界可行性结论见
   [Desktop 内嵌 YouTube 技术调研](../../plans/2026-08-10-desktop-embedded-youtube-research.md)。

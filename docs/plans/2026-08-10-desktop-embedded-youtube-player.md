@@ -1,12 +1,46 @@
 # Desktop 内嵌 YouTube 播放与字幕通信 — 实施计划
 
 - 日期：2026-08-10
-- 状态：执行中（批次 1–4 已完成）
+- 状态：实现完成，0.4.0 发布中；扩展回归由 LISTENUP-8 跟踪
 - 关联设计：`docs/spark/2026-08-10-desktop-embedded-youtube-player-design.md`
 - 前置调研：`docs/plans/2026-08-10-desktop-embedded-youtube-research.md`
 - Plane：LISTENUP-7
 
 ## 方案概述
+
+### 2026-08-10 现场验收修订（覆盖下文旧 Player 容器描述）
+
+用户在首个可运行版本中确认：Desktop 自播不得创建独立 Player 窗口，也不得把完整
+`youtube.com/watch` 页面当作播放器。此前批次 3–5 的来源协调、协议 v5、Keychain、安全解析和
+共享字幕核心继续保留；播放器容器按以下已批准方案重构：
+
+- 输入有效链接后，现有 `main` 窗口原地扩展为“上方官方 YouTube iframe、下方 ListenUp 字幕”；
+  退出后同一窗口恢复双入口空态。
+- 自播不是第二套页面 shell：必须保留现有 Desktop 标题栏、按钮组件、字幕组件、底栏、颜色与
+  间距，只在同一 grid 中增加视频行和必要操作；sensor 禁止重新引入 `PlayerShell`。
+- 输入链接、换链接和退出不得改变用户当前窗口尺寸或最小尺寸，也不得切换 vibrancy/透明度。
+- 播放只使用 `https://www.youtube.com/embed/<videoId>` 与官方 IFrame Player API；不创建
+  `player` window、`player-ui`、远程 `youtube-*` child WebView，也不注入 watch 页面脚本。
+- macOS `tauri://` 不发送 HTTP Referer，直接或预建官方 iframe 均实测报 153；最终由只绑定
+  `127.0.0.1` 随机端口/路径的无权限包装页提供真实 HTTP origin，再用严格 window+origin 的
+  `postMessage` 与 main 通信。它不是新窗口，也不拥有 Tauri capability。
+- IFrame API 只提供 ready/state/error、当前时间以及 play/pause/seek。字幕由可信 main 调用受限
+  Rust transport：按 videoId 获取 watch player response 与限定为同 videoId 的 `api/timedtext`，
+  再由 `@listenup/youtube-core` 选轨和解析。
+- 2026-08-11 回归确认普通 WEB watch response 的 `exp=xpe` timedtext URL 会返回 HTTP 200 空正文；
+  watch 改为只提供当次公开 ytcfg，字幕轨从 `TVHTML5_SIMPLY` player response 发现，空正文必须
+  显式报错，不能伪装成“无字幕”。
+- watch、TV response 与它签出的 timedtext URL 必须保持同一 Cookie 身份；未保存时三段全匿名，
+  已保存时三段都带同一手动 Cookie，字幕请求同时保持 TV User-Agent，不能在中途切换会话。
+- macOS Finder/LaunchServices 启动不继承登录 shell 代理时，受限 transport 从允许的登录 shell
+  读取 HTTP(S) proxy URL；不得记录代理地址/凭据，也不得把代理能力暴露给 iframe。
+- 手动 Cookie 仍只由用户粘贴并存入环境隔离的 macOS Keychain；后端请求按需读取，不回传原始
+  Cookie，不注入浏览器或 iframe，也不增加 Extension `cookies` 权限。
+- EmbeddedSource 锁、浏览器 pause、退出后的 `playbackEpoch` 重接屏障、SQLite 权威门和
+  source/session/video 身份校验保持不变。
+
+本修订是后续实现与验收的权威描述；下文中“独立 Player 窗口 / watch child WebView /
+player-ui capability / document-start bridge”仅作为已经验证但被产品验收否决的历史批次记录。
 
 按可独立验证和回退的六个批次实施双来源方案：先把 Extension 中可复用的字幕与播放器身份逻辑
 抽成 workspace 纯核心，并用 Native Messaging v5 增加浏览器 `playbackEpoch`；再从 Desktop
@@ -160,31 +194,32 @@ BrowserSource。
 
 ### 批次 5：手动 Cookie 与 macOS Keychain
 
-23. [ ] 实现 Cookie parser 与 mockable `SecretStore`，覆盖值内等号、空白、重复键、非法 key、
+23. [x] 实现 Cookie parser 与 mockable `SecretStore`，覆盖值内等号、空白、重复键、非法 key、
     控制字符、64 KiB、180 键和原子替换；原始值不出现在错误类型或 Debug 输出。
-24. [ ] macOS 实现使用 `LISTENUP_BUNDLE_ID` 派生独立 Keychain service；保存后只返回状态，
-    Player 创建/reload 前注入固定 YouTube origin，清除同时移除 Keychain 与当前 WebKit cookies。
-25. [ ] 本地 Cookie 设置 UI 支持整串粘贴、保存、替换和清除；成功后清空输入，不回显 key/value。
-26. [ ] 增加静态与运行时泄露检查，确认日志、SQLite、viewer snapshot、crash/error 文案和
+24. [x] macOS 实现使用 `LISTENUP_BUNDLE_ID` 派生独立 Keychain service；保存后只返回状态，
+    watch、TV player 与 timedtext 请求按需读取同一值，清除只移除当前环境的 Keychain 项。
+25. [x] 本地 Cookie 设置 UI 支持整串粘贴、保存、替换和清除；成功后清空输入，不回显 key/value。
+26. [x] 增加静态与运行时泄露检查，确认日志、SQLite、viewer snapshot、crash/error 文案和
     Extension 消息中均不存在测试 Cookie 值，Extension manifest 不新增 `cookies`。
-27. [ ] 提交 `feat(desktop): store manual YouTube cookies in Keychain`。
+27. [x] 提交 `feat(desktop): store manual YouTube cookies in Keychain`。
 
 ### 批次 6：文档、ADR 与完整验收
 
-28. [ ] 更新所有受影响源码 AI 文件头、youtube-core/Desktop/Extension 模块文档、Native
+28. [x] 更新所有受影响源码 AI 文件头、youtube-core/Desktop/Extension 模块文档、Native
     Messaging 专题与 `docs/testing.md`。
-29. [ ] 新增 ADR，冻结双来源权威、Embedded 锁、playbackEpoch 退出屏障、窗口/WebView label
+29. [x] 新增 ADR，冻结双来源权威、Embedded 锁、playbackEpoch 退出屏障、窗口/WebView label
     和 Cookie 信任边界；ADR 明确替代或补充的既有决策。
-30. [ ] 跑全部最低自动验证并记录实际测试数量、构建产物和环境 sensor 结果。
-31. [ ] 在至少两个受支持 macOS 大版本执行公开/ASR/多轨/无字幕/广告/受限内容、30 分钟播放、
-    1080p 菜单、Browser↔Embedded 切换、Keychain 重启恢复和安全负向回归。
-32. [ ] 完整 bundle 回归后运行 `pnpm clean:desktop:bundles`；把 commit 与验证证据回写
+30. [x] 跑全部最低自动验证并记录实际测试数量、构建产物和环境 sensor 结果。
+31. [x] 当前 macOS 环境完成公开 ASR、人工字幕、多语言、无字幕、禁止嵌入和连续换链回归；
+    第二个受支持 macOS 大版本、30 分钟播放、广告、1080p 菜单、Browser↔Embedded 与
+    Keychain 重启恢复拆到 Plane `LISTENUP-8`，不得将其误报为本次已验证。
+32. [x] 完整 bundle 回归后运行 `pnpm clean:desktop:bundles`；把 commit 与验证证据回写
     LISTENUP-7，再转待验收/完成状态。
-33. [ ] 提交 `docs(desktop): document embedded YouTube playback`；若新增独立 sensor，按其
+33. [x] 提交 `docs(desktop): document embedded YouTube playback`；若新增独立 sensor，按其
     回滚边界另交 `test(desktop): guard embedded player security`。
 
-> 以上未完成项全部由 Plane `LISTENUP-7` 覆盖；实施中只有出现可独立排期、独立验收或需要另行
-> 决策的新增目标时才拆新的 work item。
+> 本次实现与发布由 Plane `LISTENUP-7` 覆盖；需要独立环境、独立排期的扩展回归由
+> Plane `LISTENUP-8` 覆盖。
 
 ## 提交顺序
 

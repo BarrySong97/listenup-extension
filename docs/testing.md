@@ -73,6 +73,23 @@ node scripts/check-docs.mjs                                              # 永�
 - production Host 只允许 `nocahdalbgboblhbjkacpneakljldfjh`，DEV Host 只允许 `gbnneflaaakigllkomehhhaianjebljf`
 - 两个 Chrome profile 同时播放时，正式/DEV Desktop 不串窗口、socket 或字幕
 - Host 未安装时字幕面板照常工作
+
+### 改 Desktop 自播
+
+- 空态同时保留浏览器自动接入说明和 YouTube 链接入口；无效链接不建立 Embedded 锁
+- 输入链接后仍是同一个 `main` 窗口和原 Desktop layout：原标题栏 / 按钮 / `SubtitleViewer` /
+  底栏不替换，只在标题栏与字幕之间增加 16:9 官方 iframe 视频行
+- 打包后的 macOS App 实测 loopback 包装页使用随机 `127.0.0.1` origin，官方 iframe 不报 153；
+  视频可播放、暂停、点字幕 seek，cursor 约 10Hz
+- 自播字幕经独立 transport 加载，标题、轨道、字幕与当前 videoId 一致；iframe 不读取 Cookie
+- 多视频换链至少覆盖：英文 ASR `oanFGdDkN-o`（539 块）、英文人工字幕 `iG9CE55wbtY`
+  （427 块）、日语 ASR `Qd1Je4Ecw0o`（242 块）、无字幕 `aqz-KE-bpKQ`（明确空态）和禁止嵌入
+  `dQw4w9WgXcQ`（播放器明确报作者限制但字幕仍可独立读取）。连续切换时标题/轨道/列表不能串片，
+  HTTP client/代理连接池应复用，429/5xx 短退避后不得把瞬时旧字幕当作新视频结果
+- reload、换链接、Cookie 设置和退出使用现有 Desktop 组件；换链接不新开窗口
+- 显式退出后保持空态，旧浏览器 cursor 不接管；下一次浏览器手动播放/换片/连播才恢复
+- 手动 Cookie 保存到当前环境 Keychain，保存后输入清空；替换/清除后重载字幕，UI、日志、SQLite
+  和 Extension 消息均不出现 Cookie 原值、键名或数量
 - Native 窗口随播放 / 暂停 / seek 高亮并滚动当前句；拖动到同一句内部、另一句和
   `currentIndex=-1` 的无字幕间隙都立即同步最终时间，不能等下一次字幕索引变化
 - 正常播放时 cursor 约每 100ms 更新，暂停后停止周期消息；字幕切换多数低于 100ms、P95 目标

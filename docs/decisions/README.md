@@ -33,3 +33,5 @@
 | [0011](0011-menubar-preserves-desktop-window-size.md) | 菜单栏形态保留 Desktop 窗口尺寸 | 已采纳 | 2026-08-07 |
 | [0012](0012-desktop-heroui-ui-primitives.md) | Desktop 业务交互统一经过 HeroUI 3 primitives | 已采纳 | 2026-08-07 |
 | [0013](0013-desktop-react-compiler-and-cursor-render-boundaries.md) | Desktop 使用 React Compiler 并隔离实时 cursor 渲染边界 | 已采纳 | 2026-08-07 |
+| [0014](0014-desktop-subtitle-row-seek-control.md) | Desktop 字幕行通过既有 Native 控制链路跳转视频 | 已采纳 | 2026-08-07 |
+| [0015](0015-desktop-same-window-youtube-transports.md) | Desktop 同窗 YouTube 的播放与字幕传输边界 | 已采纳 | 2026-08-11 |
