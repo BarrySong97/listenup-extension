@@ -215,6 +215,10 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 
 - 深色毛玻璃靠 `window-vibrancy`（`NSVisualEffectMaterial::HudWindow`），需要 `tauri.conf.json` 的 `app.macOSPrivateApi: true` **和** tauri 的 `macos-private-api` feature，缺一个就构建报错或背景不透明
 - 运行时把 NSWindow **class-swap 成 `NSPanel` + `nonactivatingPanel`**（objc2 直接干）。这是能盖住别的 app 原生全屏 Space 的唯一办法——实测普通 NSWindow 即使配了 `canJoinAllSpaces` + `fullScreenAuxiliary` + 高 level 也进不去（tauri#11488）。副作用正合适：点字幕条不抢视频 app 的焦点。
+- `NSPanel.becomesKeyOnlyIfNeeded` 必须为 `false`。WKWebView 内的 React 输入框不会实现 AppKit
+  的 `needsPanelToBecomeKey`；设为 `true` 时输入框只有视觉 focus，普通字符、删除和 macOS 标准
+  `Cmd+A/C/X/V` 都收不到。`nonactivatingPanel` 仍负责不激活整个 app，这里只允许用户点击后把
+  panel 变成 key window，让 WebView first responder 接收键盘事件。
 - `desktop` 使用 `ActivationPolicy::Regular`：作为运行中的 app 出现在 Dock / Cmd+Tab；
   `menubar` 使用 `Accessory`：不以运行中 app 身份出现在 Dock / Cmd+Tab。用户固定在 Dock 的
   快捷图标仍可能保留，只是不显示运行状态圆点

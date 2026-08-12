@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop hover/更新/CLI 与发布边界不漂移。
+ * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 输入/hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault、website/Tauri/CLI/Query 配置
  * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
@@ -429,6 +429,16 @@ assert.match(
   rustSource,
   /updateTrackingAreas/,
   "NSPanel must recalculate WebView tracking areas after resize/vibrancy changes"
+);
+assert.match(
+  rustSource,
+  /setBecomesKeyOnlyIfNeeded:\s*false/,
+  "NSPanel must let WKWebView text fields become the key responder for typing and Cmd+C/V"
+);
+assert.doesNotMatch(
+  rustSource,
+  /setBecomesKeyOnlyIfNeeded:\s*true/,
+  "WKWebView does not implement needsPanelToBecomeKey; true silently breaks all text input"
 );
 
 const desktopAppSource = await readFile(

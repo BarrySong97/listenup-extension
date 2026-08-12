@@ -1,7 +1,7 @@
 // @purpose 桌面端 Rust 入口：GUI/桥接双模式、来源协调、双向播放/字幕 seek、字幕持久化、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
-// @gotcha  stdout 只写 Native Messaging 长度帧；v5 cursor 必须保留 playbackEpoch；反向控制按 bridgeId+session 路由。
+// @gotcha  stdout 只写 Native Messaging 长度帧；v5 cursor 必须保留 playbackEpoch；NSPanel 必须允许 WKWebView 文本框成为 key responder。
 mod app_mode;
 mod browser_source;
 pub mod cli;
@@ -1163,7 +1163,11 @@ pub fn run() {
                             // nonactivatingPanel(1<<7)：进全屏 Space 的必要条件
                             let style: usize = msg_send![ns_window, styleMask];
                             let _: () = msg_send![ns_window, setStyleMask: style | (1 << 7)];
-                            let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: true];
+                            // WKWebView 不会实现 AppKit 的 needsPanelToBecomeKey。若设为 true，
+                            // React 输入框虽然能显示 focus 外观，却收不到普通按键或 Cmd+C/V。
+                            // nonactivatingPanel 仍保证 app 不被激活；这里只允许 panel 自身在
+                            // 用户点击后成为 key window，把键盘事件交给 WebView first responder。
+                            let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: false];
                             // NSPanel 默认在 app 失活时隐藏，字幕条必须常驻，显式关掉
                             let _: () = msg_send![ns_window, setHidesOnDeactivate: false];
                             let _: () = msg_send![ns_window, setReleasedWhenClosed: false];

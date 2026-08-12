@@ -77,6 +77,9 @@ node scripts/check-docs.mjs                                              # 永�
 ### 改 Desktop 自播
 
 - 空态同时保留浏览器自动接入说明和 YouTube 链接入口；无效链接不建立 Embedded 锁
+- 点击 YouTube 链接输入框后可连续输入普通字符、移动光标和删除；macOS 标准
+  `Cmd+A/C/X/V` 在链接输入框与 Cookie 输入框都正常。不能只用自动化 `setValue` 代替真实按键，
+  它会绕过 NSPanel key-window / WKWebView first-responder 链路
 - 输入链接后仍是同一个 `main` 窗口和原 Desktop layout：原标题栏 / 按钮 / `SubtitleViewer` /
   底栏不替换，只在标题栏与字幕之间增加 16:9 官方 iframe 视频行
 - 打包后的 macOS App 实测 loopback 包装页使用随机 `127.0.0.1` origin，官方 iframe 不报 153；
