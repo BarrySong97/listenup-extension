@@ -385,7 +385,7 @@ Footer 左下角和菜单栏 tray 提供用户主动触发的“检查更新”�
 
 DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.json` 也关闭 updater artifact 生成。首个带 updater 的正式版本仍需用户手工安装一次，从下一版开始才能应用内更新。
 
-当前发布基线为 `v0.4.0`；`v0.3.4 → v0.4.0` 是同窗 YouTube 播放与字幕 transport 的更新回归链路。
+当前发布基线为 `v0.4.1`；`v0.4.0 → v0.4.1` 是浏览器来源切换、HeroUI 底部 Modal、输入焦点与完整 Mask 交互修复的更新回归链路。
 
 ## 验证
 
