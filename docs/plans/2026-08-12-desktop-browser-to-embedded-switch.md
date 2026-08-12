@@ -1,7 +1,7 @@
 # Desktop 浏览器来源切换到自播 — 实施计划
 
 - 日期：2026-08-12
-- 状态：实现完成，待用户验收
+- 状态：验收修订中
 - 关联设计：`docs/spark/2026-08-12-desktop-browser-to-embedded-switch-design.md`
 - Plane：LISTENUP-11
 
@@ -39,6 +39,9 @@
 7. [x] 更新 AI 文件头、Desktop 模块文档、测试手册和确定性 sensors。
 8. [x] 跑 Node / Rust tests、Desktop build、环境 sensor 与 docs sensor，再启动 DEV 做物理键盘回归。
 9. [x] 回写实现 commit 与验证证据到 LISTENUP-11，并提交可独立回退的 Feature 批次。
+10. [x] 将浏览器切换、播放新链接、Cookie 设置和多视频选择统一迁移到 HeroUI v3 Modal。
+11. [x] 复用 HeroUI `data-entering` / `data-exiting` 状态，实现共用的底部滑入 / 滑出动画。
+12. [x] 增加 UI 棘轮、文档与本地渲染回归，再回写验收修订证据。
 
 ## 风险 / 注意
 
@@ -49,6 +52,8 @@
 - 不注册全局 `Command+V`，也不增加 `clipboard-manager:allow-read-text`；事件没有文本时直接忽略。
 - Modal 确认前不能调用 Rust start command；确认后 coordinator 锁是唯一来源权威，React 不乐观
   清空 viewer。
+- HeroUI v3 已移除旧版 `motionProps`；Modal 动画只通过共用 `DesktopModal` 的
+  `data-entering` / `data-exiting` CSS 状态覆盖，业务组件不得再手写全屏遮罩或各自动画。
 - 进入 Embedded 后仍可保留浏览器影子状态做协议安全校验，但任何 browser pause result、断连、
   换视频或播放事件都不能映射成用户提示。
 - `Info.plist` 是环境生成文件。DEV 启动后必须在提交前重新生成 production 版本。
@@ -79,3 +84,8 @@ Cookie 输入框普通 `Command+C/V`、无效剪贴板提示、Modal 取消、�
   command 发出但两秒无响应不产生提示；随后注入另一浏览器视频也不改变 Embedded viewer。
 - 回归中发现并修复 Embedded live session 到达前短暂显示旧 BrowserSource 缓存字幕的问题；查询
   scope 现在立即绑定新的 embedded videoId，并由纯函数测试锁定。
+- 验收修订把 4 个手写遮罩统一迁移到 HeroUI v3 Modal，并由 `DesktopModal` 统一底部滑入 / 滑出；
+  Desktop Node tests 增至 20/20，production frontend build、DEV `.app` bundle、环境 sensor 与 docs
+  sensor 通过。本地真实 DOM 回归确认 4 个弹窗都生成 HeroUI 三层 slot，链接输入自动聚焦，普通
+  Modal 可用 Esc 关闭，多视频选择器不可用 Esc 绕过；原生 DEV bundle 因系统未放行重启，尚未
+  在新 bundle 内肉眼验收动画。

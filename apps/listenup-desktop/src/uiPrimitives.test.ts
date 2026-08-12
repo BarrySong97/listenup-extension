@@ -1,5 +1,5 @@
 /**
- * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定 Tooltip trigger 与字幕行即时 CSS hover。
+ * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定 Tooltip、Modal 与字幕行交互边界。
  * @role    pnpm desktop test 的 UI 架构棘轮，扫描 src 下全部业务 TSX。
  * @deps    node:assert、node:fs、node:path、node:test、node:url
  * @gotcha  components/ui 是唯一允许封装交互 primitives 的目录；虚拟字幕行必须保留无 React Aria hover state 的专用例外。
@@ -48,6 +48,45 @@ test("Desktop icon tooltips use the explicit HeroUI compound trigger", () => {
     source.indexOf("<Tooltip.Trigger>") < source.indexOf("<Tooltip.Content"),
     true
   );
+});
+
+test("Desktop dialogs share the HeroUI modal primitive and bottom animation", () => {
+  const modalPrimitiveSource = readFileSync(
+    path.join(UI_PRIMITIVES_ROOT, "DesktopModal.tsx"),
+    "utf8"
+  );
+  const stylesSource = readFileSync(
+    path.join(SOURCE_ROOT, "styles.css"),
+    "utf8"
+  );
+  const dialogFiles = [
+    "BrowserSourceSwitchModal.tsx",
+    "CookieSettings.tsx",
+    "EmbeddedLinkEditorModal.tsx",
+    "VideoSessionPicker.tsx",
+  ];
+
+  assert.equal(modalPrimitiveSource.includes('from "@heroui/react"'), true);
+  assert.equal(modalPrimitiveSource.includes("<Modal.Backdrop"), true);
+  assert.equal(modalPrimitiveSource.includes("<Modal.Container"), true);
+  assert.equal(modalPrimitiveSource.includes("<Modal.Dialog"), true);
+
+  for (const fileName of dialogFiles) {
+    const source = readFileSync(path.join(SOURCE_ROOT, fileName), "utf8");
+    assert.equal(source.includes("<DesktopModal"), true, fileName);
+    assert.equal(/aria-modal|role=["']dialog|absolute inset-0/.test(source), false, fileName);
+  }
+
+  assert.equal(
+    stylesSource.includes('.desktop-modal-container[data-entering="true"]'),
+    true
+  );
+  assert.equal(
+    stylesSource.includes('.desktop-modal-container[data-exiting="true"]'),
+    true
+  );
+  assert.equal(stylesSource.includes("translate3d(0, 100vh, 0)"), true);
+  assert.equal(stylesSource.includes("prefers-reduced-motion: reduce"), true);
 });
 
 test("subtitle rows use immediate CSS hover without mouse state", () => {

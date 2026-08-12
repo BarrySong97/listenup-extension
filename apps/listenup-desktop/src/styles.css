@@ -36,6 +36,55 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* HeroUI v3 Modal 通过 data-entering / data-exiting 暴露动画状态。
+   Dialog 最终仍保持原位置，只让整层内容像 bottom sheet 一样从窗口底部滑入。 */
+@keyframes desktop-modal-enter-from-bottom {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 100vh, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes desktop-modal-exit-to-bottom {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate3d(0, 100vh, 0);
+  }
+}
+
+.desktop-modal-container[data-entering="true"] {
+  animation: desktop-modal-enter-from-bottom 300ms cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+  will-change: opacity, transform;
+}
+
+.desktop-modal-container[data-exiting="true"] {
+  animation: desktop-modal-exit-to-bottom 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-modal-container[data-entering="true"],
+  .desktop-modal-container[data-exiting="true"] {
+    animation: none;
+  }
+}
+
+[data-reduce-motion="true"] .desktop-modal-container[data-entering="true"],
+[data-reduce-motion="true"] .desktop-modal-container[data-exiting="true"] {
+  animation: none;
+}
+
 /* 滚动条只在滚动时显示：轨道常驻占位，thumb 平时透明。
    ::-webkit-scrollbar 伪元素无法用 utility 表达，保留原生 CSS */
 .subtitle-list::-webkit-scrollbar {

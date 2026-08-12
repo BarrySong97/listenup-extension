@@ -21,13 +21,14 @@ src/App.tsx        唯一 Desktop layout：浏览器/链接双入口、同窗视
 src/EmbeddedVideoPanel.tsx / src/useYoutubeIframePlayer.ts  官方 iframe 视频行与播放事件适配
 src/useViewerSession.ts / src/SubtitleViewer.tsx  主窗口快照订阅和唯一字幕展示层
 src/EmbeddedSourceEntry.tsx / src/embeddedPlayback.ts  双入口和本地 YouTube URL 安全门
-src/CookieSettings.tsx / src-tauri/src/cookie_vault.rs  手动 Cookie UI、解析与 Keychain 保存
+src/CookieSettings.tsx / src-tauri/src/cookie_vault.rs  HeroUI Cookie Modal、解析与 Keychain 保存
+src/EmbeddedLinkEditorModal.tsx / src/components/ui/DesktopModal.tsx  换链接表单与统一 HeroUI Modal
 src/SubtitleList.tsx  memo 化 virtua 列表：只消费 active / played 边界，HeroUI 行点击发送块起点
 src/subtitleCursor.ts  live 原语索引直用、译文 / fallback 时间映射的纯 selector
 src/components/ui/ HeroUI 3 primitives；DesktopRowButton 是虚拟字幕热路径的无 hover state 例外
 src/TranslationMissingState.tsx  列表 / 影院共用的无译文引导与复制反馈
 src/localAiTranslationPrompt.ts  固定 Skill / CLI 版本的本地 AI Markdown 指令模板
-src/VideoSessionPicker.tsx  多视频冲突与主动改选的全遮罩
+src/VideoSessionPicker.tsx  多视频冲突与主动改选的不可关闭 HeroUI Modal
 src/useDesktopUpdater.ts    标题栏 / tray 共用的检查、下载、安装、重启更新流程
 src/useSubtitleView.ts      React Query → Tauri SQLite 只读查询
 src/queryClient.ts          窗口 focus refetch；无轮询 / watcher
@@ -297,6 +298,11 @@ Rust `SourceCoordinator` 是 viewer、SQLite 和播放控制来源的唯一权�
   HeroUI v3 `Tooltip.Trigger`，不能依赖 React Aria `FocusableProvider` 向嵌套 Button 间接注入
   trigger ref / hover props（该写法在 Vite DEV 可工作，但 production bundle 冷启动会失效）。
   带可见文字的按钮及 YouTube 标志、状态点、loading / success 等纯展示图标不重复加 Tooltip
+- 浏览器来源切换、播放新链接、Cookie 设置和多视频来源选择统一使用
+  `src/components/ui/DesktopModal.tsx` 组合 HeroUI v3 `Modal.Backdrop` / `Modal.Container` /
+  `Modal.Dialog`，业务组件不得手写 `aria-modal` 或全屏遮罩。HeroUI v3 已移除旧版
+  `motionProps`；共用 CSS 根据 `data-entering` / `data-exiting` 把 Modal 从窗口底部滑入 / 滑出，
+  并同时尊重系统 `prefers-reduced-motion` 与 HeroUI `data-reduce-motion`。
 - 列表模式**只用 `--color-glass` 一个背景色**，header / 列表 / footer 保持一致，不要给局部单独加深
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限

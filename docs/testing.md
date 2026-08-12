@@ -95,6 +95,10 @@ node scripts/check-docs.mjs                                              # 永�
   `dQw4w9WgXcQ`（播放器明确报作者限制但字幕仍可独立读取）。连续切换时标题/轨道/列表不能串片，
   HTTP client/代理连接池应复用，429/5xx 短退避后不得把瞬时旧字幕当作新视频结果
 - reload、换链接、Cookie 设置和退出使用现有 Desktop 组件；换链接不新开窗口
+- 浏览器切换、换链接、Cookie 设置和多视频选择的 DOM 都包含 HeroUI
+  `data-slot="modal-backdrop"` / `modal-container` / `modal-dialog`；打开时内容从窗口底部滑入，关闭时
+  滑出，最终位置、窗口尺寸和 Desktop 背景不变。前三者焦点被锁在 Modal 内且 `Esc` 可关闭，
+  多视频选择不可用遮罩点击或 `Esc` 跳过；系统“减少动态效果”开启时不播放位移动画
 - 确认切换后浏览器 pause 只后台尽力发送；成功、失败、超时、标签关闭、换视频和 Extension 断连
   都不显示浏览器提示、不延迟 Desktop 切换，也不改变 Embedded viewer / 控制目标
 - 显式退出后保持空态，旧浏览器 cursor 不接管；下一次浏览器手动播放/换片/连播才恢复

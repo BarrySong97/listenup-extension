@@ -1,7 +1,7 @@
 /**
  * @purpose 字幕窗口 UI：在既有 Desktop layout 中组合浏览器同步、主动来源切换或官方 YouTube iframe。
  * @role    桌面端唯一页面；统一标题栏、Footer、paste 手势、播放器与字幕组件。
- * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、BrowserSourceSwitchModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
+ * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
  * @gotcha  paste 只能消费当前用户事件且必须让可编辑元素优先；高频 cursor 不能进入静态字幕子树。
  */
 import { Icon } from "@iconify/react";
@@ -18,8 +18,8 @@ import type { VListHandle } from "virtua";
 import { BrowserSourceSwitchModal } from "./BrowserSourceSwitchModal";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
-import { DesktopTextField } from "./components/ui/DesktopTextField";
 import { CookieSettings } from "./CookieSettings";
+import { EmbeddedLinkEditorModal } from "./EmbeddedLinkEditorModal";
 import { EmbeddedSourceEntry } from "./EmbeddedSourceEntry";
 import { EmbeddedVideoPanel } from "./EmbeddedVideoPanel";
 import {
@@ -1013,15 +1013,14 @@ export default function App() {
             }
           />
         </div>
-        {pickerVisible && (
-          <VideoSessionPicker
-            candidates={viewer.playingCandidates}
-            selectedSessionId={viewer.selectedSessionId}
-            busySessionId={busySessionId}
-            error={pickerError}
-            onSelect={(sessionId) => void selectVideoSession(sessionId)}
-          />
-        )}
+        <VideoSessionPicker
+          isOpen={pickerVisible}
+          candidates={viewer.playingCandidates}
+          selectedSessionId={viewer.selectedSessionId}
+          busySessionId={busySessionId}
+          error={pickerError}
+          onSelect={(sessionId) => void selectVideoSession(sessionId)}
+        />
       </main>
     );
   }
@@ -1304,85 +1303,40 @@ export default function App() {
           {pasteNotice}
         </div>
       )}
-      {pickerVisible && (
-        <VideoSessionPicker
-          candidates={viewer.playingCandidates}
-          selectedSessionId={viewer.selectedSessionId}
-          busySessionId={busySessionId}
-          error={pickerError}
-          onSelect={(sessionId) => void selectVideoSession(sessionId)}
+      <VideoSessionPicker
+        isOpen={pickerVisible}
+        candidates={viewer.playingCandidates}
+        selectedSessionId={viewer.selectedSessionId}
+        busySessionId={busySessionId}
+        error={pickerError}
+        onSelect={(sessionId) => void selectVideoSession(sessionId)}
+      />
+      {embeddedSource && (
+        <EmbeddedLinkEditorModal
+          isOpen={showEmbeddedLinkEditor}
+          url={replacementUrl}
+          error={embeddedActionError}
+          pending={embeddedActionPending !== null}
+          onUrlChange={setReplacementUrl}
+          onClose={() => {
+            setReplacementUrl("");
+            setEmbeddedActionError(null);
+            setShowEmbeddedLinkEditor(false);
+          }}
+          onSubmit={() => void replaceEmbeddedPlayback()}
         />
       )}
-      {showEmbeddedLinkEditor && embeddedSource && (
-        <div className="absolute inset-0 z-20 grid place-items-center bg-glass/95 p-5 backdrop-blur-xl">
-          <div className="w-full max-w-[360px] rounded-xl border border-hairline bg-glass p-4 shadow-2xl">
-            <div className="flex items-center gap-2">
-              <Icon
-                icon="mdi:link-variant"
-                className="h-4 w-4 flex-none text-fg-muted"
-                aria-hidden="true"
-              />
-              <h2 className="m-0 flex-1 text-[13px] font-[650] text-fg">
-                播放新链接
-              </h2>
-              <DesktopIconButton
-                className={iconButtonClassName}
-                onPress={() => {
-                  setReplacementUrl("");
-                  setEmbeddedActionError(null);
-                  setShowEmbeddedLinkEditor(false);
-                }}
-                tooltip="取消"
-                ariaLabel="取消更换链接"
-                icon={
-                  <Icon
-                    icon="mdi:close"
-                    className="h-3.5 w-3.5"
-                    aria-hidden="true"
-                  />
-                }
-              />
-            </div>
-            <p className="mb-3 mt-2 text-[11px] leading-relaxed text-fg-muted">
-              当前窗口会原地切换视频，标题栏、字幕区和所有操作保持不变。
-            </p>
-            <div className="flex gap-2">
-              <DesktopTextField
-                autoFocus
-                aria-label="新的 YouTube 视频链接"
-                placeholder="https://youtu.be/..."
-                value={replacementUrl}
-                onChange={(event) => setReplacementUrl(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void replaceEmbeddedPlayback();
-                }}
-                className="h-9 flex-1 rounded-lg border border-hairline bg-black/25 px-3 text-[11px] text-fg placeholder:text-fg-faint"
-              />
-              <DesktopButton
-                className="h-9 cursor-pointer rounded-lg bg-yt px-3 text-[11px] font-semibold text-white hover:brightness-110 disabled:cursor-wait disabled:opacity-50"
-                isDisabled={embeddedActionPending !== null}
-                onPress={() => void replaceEmbeddedPlayback()}
-              >
-                {embeddedActionPending === "replace" ? "切换中" : "播放"}
-              </DesktopButton>
-            </div>
-            {embeddedActionError && (
-              <p className="mb-0 mt-2 text-[10px] text-red-300">
-                {embeddedActionError}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-      {showCookieSettings && embeddedSource && (
+      {embeddedSource && (
         <CookieSettings
+          isOpen={showCookieSettings}
           onClose={() => setShowCookieSettings(false)}
           onCredentialsChanged={() => void reloadEmbeddedPlayback()}
         />
       )}
-      {browserSwitchRequest && browserSourceActive && (
+      {browserSourceActive && (
         <BrowserSourceSwitchModal
-          initialUrl={browserSwitchRequest.initialUrl}
+          isOpen={browserSwitchRequest !== null}
+          initialUrl={browserSwitchRequest?.initialUrl ?? ""}
           onClose={closeBrowserSourceSwitch}
           onConfirm={confirmBrowserSourceSwitch}
         />
