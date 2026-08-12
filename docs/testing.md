@@ -77,6 +77,10 @@ node scripts/check-docs.mjs                                              # 永�
 ### 改 Desktop 自播
 
 - 空态同时保留浏览器自动接入说明和 YouTube 链接入口；无效链接不建立 Embedded 锁
+- BrowserSource 活跃时 header 原更新位置显示“切换”，Footer 左下角显示“检查更新”；点击切换
+  打开空链接 Modal，在 Desktop 非输入区域物理 `Cmd+V` 有效链接打开同一 Modal 并预填
+- Desktop 只有在用户明确点击后才成为当前键盘 app；仅 hover、置顶、tray 重显或浏览器消息到达
+  时，`Cmd+V` 仍属于原 app。无效文本只短暂提示，不弹 Modal、不建立 Embedded 锁
 - 点击 YouTube 链接输入框后可连续输入普通字符、移动光标和删除；macOS 标准
   `Cmd+A/C/X/V` 在链接输入框与 Cookie 输入框都正常。不能只用自动化 `setValue` 代替真实按键，
   它会绕过 NSPanel key-window / WKWebView first-responder 链路；也不能用按 app 定向注入的
@@ -91,6 +95,8 @@ node scripts/check-docs.mjs                                              # 永�
   `dQw4w9WgXcQ`（播放器明确报作者限制但字幕仍可独立读取）。连续切换时标题/轨道/列表不能串片，
   HTTP client/代理连接池应复用，429/5xx 短退避后不得把瞬时旧字幕当作新视频结果
 - reload、换链接、Cookie 设置和退出使用现有 Desktop 组件；换链接不新开窗口
+- 确认切换后浏览器 pause 只后台尽力发送；成功、失败、超时、标签关闭、换视频和 Extension 断连
+  都不显示浏览器提示、不延迟 Desktop 切换，也不改变 Embedded viewer / 控制目标
 - 显式退出后保持空态，旧浏览器 cursor 不接管；下一次浏览器手动播放/换片/连播才恢复
 - 手动 Cookie 保存到当前环境 Keychain，保存后输入清空；替换/清除后重载字幕，UI、日志、SQLite
   和 Extension 消息均不出现 Cookie 原值、键名或数量
@@ -132,7 +138,7 @@ node scripts/check-docs.mjs                                              # 永�
 - 旧版本正式 Desktop 启动后静默检查并持续显示“发现新版本 / 立即更新”；点击前不下载、不安装、
   不重启，点击后才显示下载进度并完成更新
 - 已是最新版或启动检查网络失败时不弹提示；用户主动检查失败仍显示错误
-- 标题栏和菜单栏“检查更新”都能触发同一流程；重复点击不会并行下载
+- Footer 左下角和菜单栏“检查更新”都能触发同一流程；重复点击不会并行下载
 - 已是最新版、网络失败、下载进度都有明确反馈；有效签名更新能安装并重启，篡改签名必须拒绝
 - DEV app 点击更新只提示不会安装正式版，DEV build 不要求 updater 私钥
 

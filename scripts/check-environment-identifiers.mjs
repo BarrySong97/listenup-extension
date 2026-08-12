@@ -111,6 +111,20 @@ const defaultCapability = await readJson(
 );
 assert.deepEqual(defaultCapability.webviews, ["main"]);
 assert.ok(!Object.hasOwn(defaultCapability, "windows"));
+assert.ok(
+  defaultCapability.permissions.includes("clipboard-manager:allow-write-text"),
+  "trusted main must retain explicit copy support"
+);
+assert.ok(
+  !defaultCapability.permissions.includes("clipboard-manager:allow-read-text"),
+  "source switching must use the user paste event instead of background clipboard reads"
+);
+assert.ok(
+  !defaultCapability.permissions.some((permission) =>
+    permission.includes("global-shortcut")
+  ),
+  "Desktop must never steal Command+V or Ctrl+V with a global shortcut"
+);
 for (const permission of [
   "allow-clear-youtube-cookies",
   "allow-embedded-source-event",
@@ -205,6 +219,16 @@ assert.doesNotMatch(
   embeddedPlayerSource,
   /WindowBuilder|WebviewBuilder|WebviewUrl|initialization_script|add_child/,
   "iframe playback must not recreate a Player window or remote watch child WebView"
+);
+assert.doesNotMatch(
+  embeddedPlayerSource,
+  /pause_warning/,
+  "Browser pause results must never surface after Desktop takes source authority"
+);
+assert.match(
+  embeddedPlayerSource,
+  /tauri::async_runtime::spawn[\s\S]*PlaybackAction::Pause/,
+  "Browser pause must remain fire-and-forget after the Embedded lock is established"
 );
 const youtubeSubtitleSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/src/youtube_subtitles.rs"),
@@ -479,6 +503,21 @@ assert.match(
   desktopAppSource,
   /state\.phase === "available"[\s\S]*<DesktopButton[\s\S]*onPress=\{onInstall\}[\s\S]*>\s*立即更新\s*<\/DesktopButton>/,
   "startup update notice must require an explicit HeroUI user action"
+);
+assert.match(
+  desktopAppSource,
+  /document\.addEventListener\("paste", handlePaste, true\)/,
+  "BrowserSource switching must inspect only a user-generated paste event"
+);
+assert.match(
+  desktopAppSource,
+  /onPointerDownCapture=\{activateDesktopKeyboard\}/,
+  "an explicit Desktop click must activate the app before macOS routes paste"
+);
+assert.doesNotMatch(
+  desktopAppSource,
+  /readText\s*\(/,
+  "Desktop source switching must not proactively read clipboard text"
 );
 
 const desktopUpdaterSource = await readFile(

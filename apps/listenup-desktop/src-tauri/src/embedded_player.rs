@@ -1,7 +1,7 @@
 // @purpose 协调主窗口内 YouTube IFrame Player 与 EmbeddedSource，不创建远程 WebView 或第二窗口。
 // @role    Desktop 自播的来源生命周期、受限事件入口和播放命令确认通道。
 // @deps    embedded_source、SourceCoordinator、Tauri event、SQLite
-// @gotcha  iframe 没有 Tauri capability；只有可信 main 能提交身份绑定事件或接收固定播放命令。
+// @gotcha  进入自播后 browser pause 仅后台尽力发送且结果静默；iframe 仍没有 Tauri capability。
 
 use std::{
     sync::{atomic::AtomicU64, atomic::Ordering, Mutex},
@@ -9,7 +9,7 @@ use std::{
 };
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State, Webview};
+use tauri::{AppHandle, Emitter, Manager, State, Webview};
 
 use super::{
     dispatch_browser_playback_command,
@@ -40,7 +40,6 @@ pub(crate) struct SharedEmbeddedRuntime(Mutex<Option<EmbeddedRuntime>>);
 pub(crate) struct StartEmbeddedResult {
     source: SourceRef,
     normalized_url: String,
-    pause_warning: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -180,8 +179,6 @@ pub(crate) async fn start_embedded_playback(
     app: AppHandle,
     store: State<'_, SharedStore>,
     runtime: State<'_, SharedEmbeddedRuntime>,
-    bridges: State<'_, SharedBridges>,
-    commands: State<'_, SharedPlaybackCommands>,
     url: String,
 ) -> Result<StartEmbeddedResult, String> {
     ensure_main(&webview)?;
@@ -204,42 +201,33 @@ pub(crate) async fn start_embedded_playback(
     }
     emit_snapshot(&app, &store)?;
 
-    let pause_warning = if let Some(target) = enter.pause_target {
-        match dispatch_browser_playback_command(
-            &bridges,
-            &commands,
-            target,
-            PlaybackAction::Pause,
-            None,
-        )
-        .await
-        {
-            Ok(()) => {
-                if let Ok(mut coordinator) = store.0.lock() {
-                    coordinator.record_browser_pause_result(BrowserPauseState::Succeeded);
-                }
-                None
+    if let Some(target) = enter.pause_target {
+        let pause_app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let bridges = pause_app.state::<SharedBridges>();
+            let commands = pause_app.state::<SharedPlaybackCommands>();
+            let result = dispatch_browser_playback_command(
+                &bridges,
+                &commands,
+                target,
+                PlaybackAction::Pause,
+                None,
+            )
+            .await;
+            if let Ok(mut coordinator) = pause_app.state::<SharedStore>().0.lock() {
+                let state = match result {
+                    Ok(()) => BrowserPauseState::Succeeded,
+                    Err(error) if error.contains("超时") => BrowserPauseState::TimedOut,
+                    Err(error) => BrowserPauseState::Failed(error),
+                };
+                coordinator.record_browser_pause_result(state);
             }
-            Err(error) => {
-                if let Ok(mut coordinator) = store.0.lock() {
-                    let state = if error.contains("超时") {
-                        BrowserPauseState::TimedOut
-                    } else {
-                        BrowserPauseState::Failed(error.clone())
-                    };
-                    coordinator.record_browser_pause_result(state);
-                }
-                Some(format!("未能自动暂停浏览器视频：{error}"))
-            }
-        }
-    } else {
-        None
-    };
+        });
+    }
 
     Ok(StartEmbeddedResult {
         source,
         normalized_url,
-        pause_warning,
     })
 }
 
@@ -431,7 +419,6 @@ pub(crate) fn replace_embedded_playback(
     Ok(StartEmbeddedResult {
         source,
         normalized_url,
-        pause_warning: None,
     })
 }
 

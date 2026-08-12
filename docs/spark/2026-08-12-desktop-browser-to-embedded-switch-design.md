@@ -1,7 +1,7 @@
 # Desktop 浏览器来源切换到自播 — 设计
 
 - 日期：2026-08-12
-- 状态：已确认，待实施
+- 状态：已实施，待用户验收
 - Plane：LISTENUP-11
 - 依赖设计：[Desktop 内嵌 YouTube 播放与字幕通信](2026-08-10-desktop-embedded-youtube-player-design.md)
 

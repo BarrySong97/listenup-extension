@@ -1,8 +1,8 @@
 /**
- * @purpose 字幕窗口 UI：在既有 Desktop layout 中组合浏览器同步或官方 YouTube iframe、自播控制与双语字幕。
- * @role    桌面端唯一页面；无论来源如何都复用同一标题栏、按钮、字幕组件、底栏与视觉 token。
- * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、components/ui、EmbeddedVideoPanel、SubtitleList、subtitleCursor、TranslationMissingState、VideoSessionPicker、useSubtitleView、./types
- * @gotcha  高频 cursor 独立于 viewer；列表只接收字幕边界，不能把连续 currentTime 传回列表子树。
+ * @purpose 字幕窗口 UI：在既有 Desktop layout 中组合浏览器同步、主动来源切换或官方 YouTube iframe。
+ * @role    桌面端唯一页面；统一标题栏、Footer、paste 手势、播放器与字幕组件。
+ * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、BrowserSourceSwitchModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
+ * @gotcha  paste 只能消费当前用户事件且必须让可编辑元素优先；高频 cursor 不能进入静态字幕子树。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -15,6 +15,7 @@ import {
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VListHandle } from "virtua";
+import { BrowserSourceSwitchModal } from "./BrowserSourceSwitchModal";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
 import { DesktopTextField } from "./components/ui/DesktopTextField";
@@ -22,7 +23,9 @@ import { CookieSettings } from "./CookieSettings";
 import { EmbeddedSourceEntry } from "./EmbeddedSourceEntry";
 import { EmbeddedVideoPanel } from "./EmbeddedVideoPanel";
 import {
+  decideBrowserSourcePaste,
   normalizeYoutubeWatchUrl,
+  resolveSubtitleQueryVideoId,
   shouldShowSourceEntry,
 } from "./embeddedPlayback";
 import { SubtitleModeControl } from "./components/ui/SubtitleModeControl";
@@ -84,7 +87,14 @@ const DEFAULT_SIZES: Record<ViewMode, WindowSize> = {
 
 const SCROLLBAR_IDLE_DELAY_MS = 700;
 const CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000;
+const INVALID_PASTE_NOTICE_DURATION_MS = 2_000;
 const IS_DEV_BUILD = import.meta.env.VITE_LISTENUP_ENV === "development";
+
+const isEditablePasteTarget = (target: EventTarget | null) =>
+  target instanceof Element &&
+  target.closest(
+    'input, textarea, select, [contenteditable]:not([contenteditable="false"])'
+  ) !== null;
 
 const DevBadge = () =>
   IS_DEV_BUILD ? (
@@ -367,6 +377,10 @@ export default function App() {
   const [showEmbeddedLinkEditor, setShowEmbeddedLinkEditor] = useState(false);
   const [showCookieSettings, setShowCookieSettings] = useState(false);
   const [replacementUrl, setReplacementUrl] = useState("");
+  const [browserSwitchRequest, setBrowserSwitchRequest] = useState<{
+    initialUrl: string;
+  } | null>(null);
+  const [pasteNotice, setPasteNotice] = useState<string | null>(null);
   const modeRef = useRef(mode);
   const desktopModeRef = useRef<ViewMode>(loadStoredMode());
   const vListRef = useRef<VListHandle>(null);
@@ -377,9 +391,15 @@ export default function App() {
   const scrollIdleTimerRef = useRef<number | null>(null);
   const updater = useDesktopUpdater({ enabled: !IS_DEV_BUILD });
   const liveSession = viewer.activeSession;
-  const queryScope = liveSession?.videoId ?? "latest";
+  const embeddedSource =
+    viewer.source?.kind === "embedded" ? viewer.source : null;
+  const queryVideoId = resolveSubtitleQueryVideoId({
+    liveVideoId: liveSession?.videoId ?? null,
+    embeddedVideoId: embeddedSource?.videoId ?? null,
+  });
+  const queryScope = queryVideoId ?? "latest";
   const subtitleQuery = useSubtitleView(
-    liveSession?.videoId ?? null,
+    queryVideoId,
     knownRevision?.scope === queryScope ? knownRevision.revision : null,
     subtitleMode,
     targetLanguage
@@ -438,8 +458,64 @@ export default function App() {
   const session = liveSession;
   const pickerVisible = viewer.selectionRequired;
   const sourceEntryVisible = shouldShowSourceEntry(viewer);
-  const embeddedSource =
-    viewer.source?.kind === "embedded" ? viewer.source : null;
+  const browserSourceActive = viewer.sourceMode === "browserActive";
+
+  const activateDesktopKeyboard = useCallback(() => {
+    void invoke("activate_text_input");
+  }, []);
+
+  const openBrowserSourceSwitch = useCallback((initialUrl = "") => {
+    setPasteNotice(null);
+    setBrowserSwitchRequest({ initialUrl });
+  }, []);
+
+  const closeBrowserSourceSwitch = useCallback(() => {
+    setBrowserSwitchRequest(null);
+  }, []);
+
+  const confirmBrowserSourceSwitch = useCallback(
+    async (normalizedUrl: string) => {
+      await invoke("start_embedded_playback", { url: normalizedUrl });
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (browserSourceActive) return;
+    setBrowserSwitchRequest(null);
+    setPasteNotice(null);
+  }, [browserSourceActive]);
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const decision = decideBrowserSourcePaste({
+        text: event.clipboardData?.getData("text/plain") ?? "",
+        browserSourceActive,
+        editableTarget: isEditablePasteTarget(event.target),
+        modalOpen: browserSwitchRequest !== null,
+      });
+      if (decision.kind === "ignore") return;
+
+      event.preventDefault();
+      if (decision.kind === "invalid") {
+        setPasteNotice("未识别到 YouTube 视频链接");
+        return;
+      }
+      openBrowserSourceSwitch(decision.normalizedUrl);
+    };
+
+    document.addEventListener("paste", handlePaste, true);
+    return () => document.removeEventListener("paste", handlePaste, true);
+  }, [browserSourceActive, browserSwitchRequest, openBrowserSourceSwitch]);
+
+  useEffect(() => {
+    if (!pasteNotice) return;
+    const timer = window.setTimeout(
+      () => setPasteNotice(null),
+      INVALID_PASTE_NOTICE_DURATION_MS
+    );
+    return () => window.clearTimeout(timer);
+  }, [pasteNotice]);
 
   useEffect(() => {
     const revision = subtitleQuery.data?.source.revision;
@@ -834,6 +910,7 @@ export default function App() {
       <main
         className="group relative flex h-full cursor-grab select-none items-center justify-center overflow-hidden rounded-2xl bg-glass-cinema px-5 py-2 active:cursor-grabbing"
         data-tauri-drag-region
+        onPointerDownCapture={activateDesktopKeyboard}
       >
         <UpdateNotice
           state={updater.state}
@@ -956,6 +1033,7 @@ export default function App() {
           ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
           : "grid-rows-[auto_minmax(0,1fr)_auto]"
       }`}
+      onPointerDownCapture={activateDesktopKeyboard}
     >
       <UpdateNotice
         state={updater.state}
@@ -1052,20 +1130,20 @@ export default function App() {
             </>
           ) : (
             <>
-              <DesktopIconButton
-                className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
-                onPress={() => void updater.checkForUpdates()}
-                isDisabled={updater.isBusy}
-                tooltip={updater.state.message ?? "检查更新"}
-                ariaLabel="检查更新"
-                icon={
+              {browserSourceActive && (
+                <DesktopButton
+                  className="flex h-[26px] cursor-pointer items-center gap-1 rounded-[7px] border-none bg-wash px-2 text-[10px] font-semibold text-fg transition-colors hover:bg-wash-active"
+                  onPress={() => openBrowserSourceSwitch()}
+                  aria-label="切换到 Desktop 播放"
+                >
                   <Icon
-                    icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
-                    className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
+                    icon="mdi:swap-horizontal"
+                    className="h-3.5 w-3.5 flex-none"
                     aria-hidden="true"
                   />
-                }
-              />
+                  切换
+                </DesktopButton>
+              )}
               {appMode === "desktop" && (
                 <DesktopIconButton
                   className={iconButtonClassName}
@@ -1201,9 +1279,31 @@ export default function App() {
         )}
       </section>
 
-      <footer className="flex items-center justify-end border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
+      <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
+        <DesktopButton
+          className="flex h-6 cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 text-[10px] text-fg-faint transition-colors hover:bg-wash hover:text-fg disabled:cursor-wait disabled:opacity-45"
+          onPress={() => void updater.checkForUpdates()}
+          isDisabled={updater.isBusy}
+          aria-label="检查更新"
+        >
+          <Icon
+            icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
+            className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
+            aria-hidden="true"
+          />
+          检查更新
+        </DesktopButton>
         <span>{displayBlocks.length} 个语义块</span>
       </footer>
+      {pasteNotice && (
+        <div
+          className="pointer-events-none absolute bottom-10 left-1/2 z-20 max-w-[calc(100%-24px)] -translate-x-1/2 rounded-full border border-hairline bg-black/85 px-3 py-1.5 text-[10px] text-fg shadow-lg backdrop-blur-xl"
+          role="status"
+          aria-live="polite"
+        >
+          {pasteNotice}
+        </div>
+      )}
       {pickerVisible && (
         <VideoSessionPicker
           candidates={viewer.playingCandidates}
@@ -1278,6 +1378,13 @@ export default function App() {
         <CookieSettings
           onClose={() => setShowCookieSettings(false)}
           onCredentialsChanged={() => void reloadEmbeddedPlayback()}
+        />
+      )}
+      {browserSwitchRequest && browserSourceActive && (
+        <BrowserSourceSwitchModal
+          initialUrl={browserSwitchRequest.initialUrl}
+          onClose={closeBrowserSourceSwitch}
+          onConfirm={confirmBrowserSourceSwitch}
         />
       )}
     </main>

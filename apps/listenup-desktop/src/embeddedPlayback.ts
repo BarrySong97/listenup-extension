@@ -1,5 +1,5 @@
 /**
- * @purpose 纯函数校验/规范化 Desktop 播放链接，并决定 main/player 的来源空态动作。
+ * @purpose 纯函数校验/规范化 Desktop 播放链接，并决定来源空态与 paste 切换动作。
  * @role    UI 在调用 start_embedded_playback 前的无副作用安全门。
  * @deps    URL、types
  * @gotcha  只接受 HTTPS watch/youtu.be 单视频链接；最终始终输出 www.youtube.com/watch。
@@ -42,6 +42,40 @@ export const normalizeYoutubeWatchUrl = (input: string) => {
 
 export const shouldShowSourceEntry = (viewer: ViewerSnapshot) =>
   viewer.sourceMode === "empty" && viewer.activeSession === null;
+
+export const resolveSubtitleQueryVideoId = ({
+  liveVideoId,
+  embeddedVideoId,
+}: {
+  liveVideoId: string | null;
+  embeddedVideoId: string | null;
+}) => liveVideoId ?? embeddedVideoId;
+
+export type BrowserSourcePasteDecision =
+  | { kind: "ignore" }
+  | { kind: "invalid" }
+  | { kind: "open"; normalizedUrl: string };
+
+export const decideBrowserSourcePaste = ({
+  text,
+  browserSourceActive,
+  editableTarget,
+  modalOpen,
+}: {
+  text: string;
+  browserSourceActive: boolean;
+  editableTarget: boolean;
+  modalOpen: boolean;
+}): BrowserSourcePasteDecision => {
+  if (!browserSourceActive || editableTarget || modalOpen || !text.trim()) {
+    return { kind: "ignore" };
+  }
+  try {
+    return { kind: "open", normalizedUrl: normalizeYoutubeWatchUrl(text) };
+  } catch {
+    return { kind: "invalid" };
+  }
+};
 
 export const embeddedRecoveryActions = (sourceMode: ViewerSnapshot["sourceMode"]) =>
   sourceMode === "embeddedRecovering"

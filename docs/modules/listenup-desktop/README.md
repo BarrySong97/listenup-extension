@@ -135,13 +135,17 @@ watch、TV player 与 timedtext 对 connect/timeout 做最多三次、150ms 间�
 同一个 reqwest client/代理连接池，Cookie 仍按每个请求从 Keychain 注入，不进入 client cookie
 jar；避免连续换视频重复代理/TLS 握手。
 
-主窗口只有在 coordinator 无权威来源时才显示双入口：浏览器扩展可继续自动接入，用户也可粘贴
-单个 HTTPS watch/youtu.be 链接启动 Desktop 播放。链接先在本地纯函数校验，再由 Rust 独立复验；
-无效输入不会暂停浏览器或建立 Embedded 锁。同窗 layout 使用“上视频、下字幕”布局，复用同一
+主窗口在 coordinator 无权威来源时显示双入口；BrowserSource 活跃时，标题栏原更新位置显示
+“切换”，而“检查更新”移到 Footer 左下角。用户也可以先明确点击 Desktop 激活应用，再在非输入
+区域粘贴单个 HTTPS watch/youtu.be 链接；根级 listener 只读取这次标准 `paste` 事件，输入框、
+Cookie 文本域和 contenteditable 仍走普通粘贴。链接先在本地纯函数校验，再由 Rust 独立复验；
+没有后台 clipboard read、轮询或全局 `Command+V`，无效内容只显示短暂提示，不会暂停浏览器或
+建立 Embedded 锁。同窗 layout 使用“上视频、下字幕”布局，复用同一
 `SubtitleViewer`、原语/译文/双语偏好、播放/暂停和字幕 seek，并提供换链接、reload 与显式退出。
-浏览器自动暂停失败只显示警告，不释放 Embedded 锁；watchdog/隔离失败进入恢复态后仍可重新加载、
-换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到浏览器
-出现下一次手动播放、换视频或自动连播。
+确认切换后立即建立 Embedded 锁，浏览器 pause 只在后台尽力发送，成功、失败、超时或断连都不等待、
+不提示；之后浏览器播放、换视频和断连也不改变 viewer。watchdog/隔离失败进入恢复态后仍可重新
+加载、换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到
+浏览器出现下一次手动播放、换视频或自动连播。
 
 ## 手动 YouTube Cookie
 
@@ -219,10 +223,10 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
   的 `needsPanelToBecomeKey`；设为 `true` 时输入框只有视觉 focus，普通字符、删除和 macOS 标准
   `Cmd+A/C/X/V` 都收不到。`nonactivatingPanel` 仍负责不激活整个 app，这里只允许用户点击后把
   panel 变成 key window，让 WebView first responder 接收键盘事件。
-- nonactivating panel 成为 key window 仍不会激活整个 app，因此普通字符可输入时，系统菜单的
-  `Cmd+A/C/X/V` 仍可能被上一个活跃 app 接走。`DesktopTextField` / `DesktopSecretArea` 在
-  pointer down 与 focus 时调用精确授权的 `activate_text_input`，只为文本编辑激活 ListenUp 并
-  保持当前 panel 为 key window；字幕点击、播放控制和其他普通面板交互继续不激活 app。
+- nonactivating panel 成为 key window 仍不会激活整个 app，因此系统菜单的 `Cmd+A/C/X/V` 可能
+  被上一个活跃 app 接走。只有用户明确 pointer down Desktop 时，根 layout 才调用精确授权的
+  `activate_text_input` 激活 ListenUp 并保持 panel 为 key window；文本 wrapper 的 pointer/focus
+  调用是输入安全兜底。程序化 show、tray 重显、浏览器 session、置顶和 hover 都不能主动激活。
 - `desktop` 使用 `ActivationPolicy::Regular`：作为运行中的 app 出现在 Dock / Cmd+Tab；
   `menubar` 使用 `Accessory`：不以运行中 app 身份出现在 Dock / Cmd+Tab。用户固定在 Dock 的
   快捷图标仍可能保留，只是不显示运行状态圆点
@@ -351,7 +355,7 @@ GUI 启动时会在 `~/Library/Application Support/Google/Chrome/NativeMessaging
 
 正式版启动后由 `useDesktopUpdater` 静默检查一次；没有新版或检查失败时不打扰用户，发现新版
 则持续显示“发现新版本 vX / 立即更新”。启动检查只提示，绝不自动下载、安装或重启。列表
-标题栏和菜单栏 tray 仍提供用户主动触发的“检查更新”：
+Footer 左下角和菜单栏 tray 提供用户主动触发的“检查更新”：
 
 1. 从 GitHub 最新已发布 Release 的 `latest.json` 检查 SemVer；
 2. 启动检查发现新版时等待用户点击“立即更新”；主动检查发现新版时直接进入下载；
