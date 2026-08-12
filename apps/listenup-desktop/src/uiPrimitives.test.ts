@@ -70,6 +70,14 @@ test("Desktop dialogs share the HeroUI modal primitive and bottom animation", ()
   assert.equal(modalPrimitiveSource.includes("<Modal.Backdrop"), true);
   assert.equal(modalPrimitiveSource.includes("<Modal.Container"), true);
   assert.equal(modalPrimitiveSource.includes("<Modal.Dialog"), true);
+  assert.equal(modalPrimitiveSource.includes('placement = "bottom"'), true);
+  assert.equal(modalPrimitiveSource.includes("isDismissable = true"), true);
+
+  const pickerSource = readFileSync(
+    path.join(SOURCE_ROOT, "VideoSessionPicker.tsx"),
+    "utf8"
+  );
+  assert.equal(pickerSource.includes("isDismissable={false}"), true);
 
   for (const fileName of dialogFiles) {
     const source = readFileSync(path.join(SOURCE_ROOT, fileName), "utf8");
@@ -85,6 +93,11 @@ test("Desktop dialogs share the HeroUI modal primitive and bottom animation", ()
     stylesSource.includes('.desktop-modal-container[data-exiting="true"]'),
     true
   );
+  assert.equal(
+    stylesSource.includes('.desktop-modal-backdrop[data-exiting="true"]'),
+    true
+  );
+  assert.equal(stylesSource.includes("desktop-modal-mask-exit 240ms"), true);
   assert.equal(stylesSource.includes("translate3d(0, 100vh, 0)"), true);
   assert.equal(stylesSource.includes("prefers-reduced-motion: reduce"), true);
 });

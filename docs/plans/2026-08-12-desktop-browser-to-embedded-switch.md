@@ -89,3 +89,7 @@ Cookie 输入框普通 `Command+C/V`、无效剪贴板提示、Modal 取消、�
   sensor 通过。本地真实 DOM 回归确认 4 个弹窗都生成 HeroUI 三层 slot，链接输入自动聚焦，普通
   Modal 可用 Esc 关闭，多视频选择器不可用 Esc 绕过；原生 DEV bundle 因系统未放行重启，尚未
   在新 bundle 内肉眼验收动画。
+- 用户首次肉眼验收发现普通 Modal 仍停在中间、Mask 不可关闭，并因 Backdrop 100ms 先于内容
+  200ms 退出而闪烁；二次修订将默认 placement 改为 bottom、普通 Mask 改为可关闭，并用 240ms
+  Backdrop 退出动画覆盖 HeroUI 默认值，确保 React Aria 在内容完全滑出后才卸载 overlay。多视频
+  强制选择继续显式禁用 Mask / Esc 关闭。

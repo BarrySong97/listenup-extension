@@ -32,6 +32,7 @@ export const VideoSessionPicker = ({
     ariaLabelledBy="video-session-picker-title"
     ariaDescribedBy="video-session-picker-description"
     size="full"
+    isDismissable={false}
     isKeyboardDismissDisabled
     backdropClassName="bg-transparent backdrop-blur-none"
     containerClassName="p-0 sm:p-0"

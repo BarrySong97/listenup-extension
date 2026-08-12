@@ -301,8 +301,10 @@ Rust `SourceCoordinator` 是 viewer、SQLite 和播放控制来源的唯一权�
 - 浏览器来源切换、播放新链接、Cookie 设置和多视频来源选择统一使用
   `src/components/ui/DesktopModal.tsx` 组合 HeroUI v3 `Modal.Backdrop` / `Modal.Container` /
   `Modal.Dialog`，业务组件不得手写 `aria-modal` 或全屏遮罩。HeroUI v3 已移除旧版
-  `motionProps`；共用 CSS 根据 `data-entering` / `data-exiting` 把 Modal 从窗口底部滑入 / 滑出，
-  并同时尊重系统 `prefers-reduced-motion` 与 HeroUI `data-reduce-motion`。
+  `motionProps`；共用 CSS 根据 `data-entering` / `data-exiting` 把 Modal 从窗口底部滑入 / 滑出并
+  最终定位在底部，Backdrop 的退出动画必须长于内容下滑，避免 React Aria 提前卸载产生闪烁。
+  普通 Modal 点击 Mask 可关闭，多视频强制选择显式禁用 Mask / Esc 关闭；动画同时尊重系统
+  `prefers-reduced-motion` 与 HeroUI `data-reduce-motion`。
 - 列表模式**只用 `--color-glass` 一个背景色**，header / 列表 / footer 保持一致，不要给局部单独加深
 - 图标统一 `@iconify/react` 的 `mdi:*`，不手写 SVG。注意 iconify 数据是运行时从 API 拉的（有缓存）；footer 那句"不联网"指的是**字幕数据**不出本机
 - 本地 AI 引导只授予 `clipboard-manager:allow-write-text`；不得增加剪贴板读取权限

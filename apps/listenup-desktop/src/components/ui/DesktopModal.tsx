@@ -1,5 +1,5 @@
 /**
- * @purpose 统一 Desktop 的 HeroUI v3 Modal 结构、视觉 token 与底部滑入动画入口。
+ * @purpose 统一 Desktop 的 HeroUI v3 底部 Modal、视觉 token、Mask 关闭与滑入动画入口。
  * @role    业务弹窗只组合内容，不再手写全屏遮罩、焦点锁、Esc 或 aria-modal 语义。
  * @deps    @heroui/react、@tauri-apps/api/core、React
  * @gotcha  HeroUI v3 不再支持 motionProps；动画必须由 styles.css 覆盖 data-entering/data-exiting。
@@ -38,9 +38,9 @@ export const DesktopModal = ({
   ariaLabelledBy,
   ariaDescribedBy,
   size = "sm",
-  placement = "center",
+  placement = "bottom",
   scroll = "inside",
-  isDismissable = false,
+  isDismissable = true,
   isKeyboardDismissDisabled = false,
   backdropClassName,
   containerClassName,
