@@ -219,6 +219,10 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
   的 `needsPanelToBecomeKey`；设为 `true` 时输入框只有视觉 focus，普通字符、删除和 macOS 标准
   `Cmd+A/C/X/V` 都收不到。`nonactivatingPanel` 仍负责不激活整个 app，这里只允许用户点击后把
   panel 变成 key window，让 WebView first responder 接收键盘事件。
+- nonactivating panel 成为 key window 仍不会激活整个 app，因此普通字符可输入时，系统菜单的
+  `Cmd+A/C/X/V` 仍可能被上一个活跃 app 接走。`DesktopTextField` / `DesktopSecretArea` 在
+  pointer down 与 focus 时调用精确授权的 `activate_text_input`，只为文本编辑激活 ListenUp 并
+  保持当前 panel 为 key window；字幕点击、播放控制和其他普通面板交互继续不激活 app。
 - `desktop` 使用 `ActivationPolicy::Regular`：作为运行中的 app 出现在 Dock / Cmd+Tab；
   `menubar` 使用 `Accessory`：不以运行中 app 身份出现在 Dock / Cmd+Tab。用户固定在 Dock 的
   快捷图标仍可能保留，只是不显示运行状态圆点

@@ -891,6 +891,35 @@ fn set_vibrancy(window: tauri::WebviewWindow, enabled: bool) {
     let _ = (window, enabled);
 }
 
+/// nonactivatingPanel 可以把普通按键交给 key responder，但 app 未激活时，
+/// Cmd+A/C/X/V 等 key equivalent 仍会被上一个活跃 app 的菜单处理。
+/// 只在可信 main 的文本输入获得焦点时激活 ListenUp；字幕点击等普通面板交互仍不抢焦点。
+#[tauri::command]
+fn activate_text_input(window: tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    {
+        let target = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            let Ok(ns_window) = target.ns_window() else {
+                return;
+            };
+            use objc2::msg_send;
+            use objc2::runtime::{AnyClass, AnyObject};
+            let ns_window = ns_window as *mut AnyObject;
+            unsafe {
+                let Some(app_class) = AnyClass::get(c"NSApplication") else {
+                    return;
+                };
+                let ns_app: *mut AnyObject = msg_send![app_class, sharedApplication];
+                let _: () = msg_send![ns_app, activateIgnoringOtherApps: true];
+                let _: () = msg_send![ns_window, makeKeyWindow];
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
+}
+
 fn show_main_window(
     app: &AppHandle,
     tray_rect: Option<tauri::Rect>,
@@ -1068,6 +1097,7 @@ pub fn run() {
         .manage(SharedBridges::default())
         .manage(SharedPlaybackCommands::default())
         .invoke_handler(tauri::generate_handler![
+            activate_text_input,
             app_mode::get_app_mode,
             app_mode::set_app_mode,
             control_playback,

@@ -130,6 +130,15 @@ for (const permission of [
     `main must retain ${permission} after custom command ACL is enabled`
   );
 }
+const mainWindowPermissionSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/permissions/embedded-player.toml"),
+  "utf8"
+);
+assert.match(
+  mainWindowPermissionSource,
+  /commands\.allow = \["activate_text_input", "get_app_mode", "set_app_mode", "select_subtitle_session", "set_vibrancy"\]/,
+  "trusted main must retain the explicit text-input activation command"
+);
 const iframePlayerSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src/useYoutubeIframePlayer.ts"),
   "utf8"
@@ -440,6 +449,21 @@ assert.doesNotMatch(
   /setBecomesKeyOnlyIfNeeded:\s*true/,
   "WKWebView does not implement needsPanelToBecomeKey; true silently breaks all text input"
 );
+assert.match(
+  rustSource,
+  /fn activate_text_input[\s\S]*activateIgnoringOtherApps:\s*true[\s\S]*makeKeyWindow/,
+  "focused text input must activate the app so macOS routes Cmd+A/C/X/V to ListenUp's Edit menu"
+);
+
+for (const inputWrapperPath of [
+  "apps/listenup-desktop/src/components/ui/DesktopTextField.tsx",
+  "apps/listenup-desktop/src/components/ui/DesktopSecretArea.tsx",
+]) {
+  const inputWrapperSource = await readFile(resolve(ROOT, inputWrapperPath), "utf8");
+  assert.match(inputWrapperSource, /invoke\("activate_text_input"\)/);
+  assert.match(inputWrapperSource, /onPointerDownCapture/);
+  assert.match(inputWrapperSource, /onFocus/);
+}
 
 const desktopAppSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src/App.tsx"),

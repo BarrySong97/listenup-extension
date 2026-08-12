@@ -60,8 +60,8 @@ commands.allow = ["get_snapshot", "get_subtitle_view"]
 
 [[permission]]
 identifier = "allow-main-window-commands"
-description = "Allows only main to manage app mode, video selection, and its NSPanel vibrancy."
-commands.allow = ["get_app_mode", "set_app_mode", "select_subtitle_session", "set_vibrancy"]
+description = "Allows only main to manage app mode, video selection, NSPanel vibrancy, and explicit text-input activation."
+commands.allow = ["activate_text_input", "get_app_mode", "set_app_mode", "select_subtitle_session", "set_vibrancy"]
 
 [[permission]]
 identifier = "allow-fetch-youtube-player-response"
