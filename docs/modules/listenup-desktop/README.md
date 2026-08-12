@@ -304,12 +304,10 @@ Rust `SourceCoordinator` 是 viewer、SQLite 和播放控制来源的唯一权�
   `motionProps`；共用 CSS 根据 `data-entering` / `data-exiting` 把 Modal 从窗口底部滑入 / 滑出并
   最终定位在底部，Backdrop 的退出动画必须长于内容下滑，避免 React Aria 提前卸载产生闪烁。
   Modal 卡片使用不透明 `--color-modal`，Mask 才使用半透明 glass；HeroUI 内建 outside dismiss
-  固定关闭，普通 Modal 改由共用组件显式忽略 Dialog / drag region、消费其余 Mask click，避免拖窗
-  被误判为关闭；多视频强制选择仍显式禁用 Mask / Esc 关闭。HeroUI 会把 Portal 外的
-  App 设为 inert，因此 `DesktopModal` 的 overlay 高于 App，并在顶部保留 44px 透明区域主动调用
-  Tauri `startDragging()`；Mask 从该区域下方开始，不能只依赖视觉上仍存在的底层 Header。链接输入
-  拖动开始后会短暂忽略 WebView 在原生拖动结束时补发的 Backdrop click，随后 Mask 立即恢复正常
-  关闭。链接输入不使用原生 `autoFocus`，而是在 Portal 布局后一帧用
+  固定关闭，普通 Modal 改由共用组件在 Backdrop pointer capture 阶段显式忽略 Dialog、消费其余
+  Mask 点击（HeroUI 的全屏 Container 会截断普通冒泡 click）；多视频强制选择仍显式
+  禁用 Mask / Esc 关闭。Modal 打开时完整 Mask 覆盖 Header，此时不支持拖窗；用户关闭 Modal 后再
+  通过原 Header 拖动窗口。链接输入不使用原生 `autoFocus`，而是在 Portal 布局后一帧用
   `focus({ preventScroll: true })` 聚焦，避免底部弹窗首帧闪到窗口顶部；动画同时尊重系统
   `prefers-reduced-motion` 与 HeroUI `data-reduce-motion`。
 - 列表模式**只用 `--color-glass` 一个背景色**，header / 列表 / footer 保持一致，不要给局部单独加深

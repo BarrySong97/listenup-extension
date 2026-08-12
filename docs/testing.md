@@ -99,7 +99,7 @@ node scripts/check-docs.mjs                                              # 永�
   `data-slot="modal-backdrop"` / `modal-container` / `modal-dialog`；打开时内容从窗口底部滑入并停在
   底部，关闭时 Mask 保持到内容滑出结束且全程不闪，最终窗口尺寸和 Desktop 背景不变。前三者
   卡片背景为实色、焦点被锁在 Modal 内，链接输入聚焦时没有从顶部落下的首帧残影，物理点击卡片外
-  的 Mask 或按 `Esc` 可关闭；Modal 打开后可从窗口顶部拖动整个 Desktop；
+  的 Mask 或按 `Esc` 可关闭；Mask 覆盖完整窗口（含 Header），Modal 打开期间不支持拖窗；
   多视频选择不可用遮罩点击或 `Esc` 跳过；系统“减少动态效果”开启时不播放位移动画
 - 确认切换后浏览器 pause 只后台尽力发送；成功、失败、超时、标签关闭、换视频和 Extension 断连
   都不显示浏览器提示、不延迟 Desktop 切换，也不改变 Embedded viewer / 控制目标

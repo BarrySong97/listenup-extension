@@ -101,3 +101,6 @@ Cookie 输入框普通 `Command+C/V`、无效剪贴板提示、Modal 取消、�
   drag region 被识别成 Dialog 外点击；原生拖动结束时 WebView 补发的 Backdrop click 也由一次性
   短窗口抑制。新视频和 BrowserSource 切换表单移除原生
   `autoFocus`，改为布局后一帧 `focus({ preventScroll: true })`，避免弹窗先闪到顶部再落到底部。
+- 最终验收取舍取消 Modal 打开期间拖窗：删除 Portal drag region 与 `startDragging()`，恢复覆盖整个
+  窗口（含 Header）的完整 Mask。普通 Modal 在 Backdrop pointer capture 阶段识别 Dialog 外点击并
+  关闭，绕过 HeroUI 全屏 Container 对冒泡 click 的截断；关闭后再通过原 Header 拖动窗口。

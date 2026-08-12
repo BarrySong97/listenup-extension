@@ -75,15 +75,11 @@ test("Desktop dialogs share the HeroUI modal primitive and bottom animation", ()
   assert.equal(modalPrimitiveSource.includes("isDismissable={false}"), true);
   assert.equal(modalPrimitiveSource.includes("bg-modal"), true);
   assert.equal(modalPrimitiveSource.includes("data-slot=\"modal-dialog\""), true);
-  assert.equal(
-    modalPrimitiveSource.includes("data-desktop-modal-drag-region"),
-    true
-  );
-  assert.equal(modalPrimitiveSource.includes("data-tauri-drag-region"), true);
-  assert.equal(modalPrimitiveSource.includes("startDragging()"), true);
-  assert.equal(modalPrimitiveSource.includes("suppressDismissUntilRef"), true);
-  assert.equal(modalPrimitiveSource.includes('top-11 bg-glass/95'), true);
-  assert.equal(modalPrimitiveSource.includes('z-[70]'), true);
+  assert.equal(modalPrimitiveSource.includes("onPointerDownCapture"), true);
+  assert.equal(modalPrimitiveSource.includes("data-tauri-drag-region"), false);
+  assert.equal(modalPrimitiveSource.includes("startDragging()"), false);
+  assert.equal(modalPrimitiveSource.includes("suppressDismissUntilRef"), false);
+  assert.equal(modalPrimitiveSource.includes("bg-glass/95 backdrop-blur-xl"), true);
   assert.equal(modalPrimitiveSource.includes("activate_text_input"), false);
 
   const textFieldSource = readFileSync(
