@@ -2,10 +2,10 @@
  * @purpose 在 BrowserSource 活跃时确认切换到 Desktop 同窗播放。
  * @role    统一承接 header 按钮的空链接入口与非输入区域 paste 的预填入口。
  * @deps    React、Iconify、DesktopModal、Desktop UI primitives、embeddedPlayback
- * @gotcha  只负责表单与确认；确认前不得调用来源迁移，失败时保留链接供用户修正或重试。
+ * @gotcha  只负责表单与确认；输入框要在 Portal 布局后 preventScroll 聚焦，不能用会触发首帧位移的 autoFocus。
  */
 import { Icon } from "@iconify/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
 import { DesktopModal } from "./components/ui/DesktopModal";
@@ -28,6 +28,7 @@ export const BrowserSourceSwitchModal = ({
   onClose,
   onConfirm,
 }: BrowserSourceSwitchModalProps) => {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState(initialUrl);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +37,10 @@ export const BrowserSourceSwitchModal = ({
     if (!isOpen) return;
     setUrl(initialUrl);
     setError(null);
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [initialUrl, isOpen]);
 
   const submit = useCallback(async () => {
@@ -102,7 +107,7 @@ export const BrowserSourceSwitchModal = ({
         确认后，当前窗口会原地切换为播放器；浏览器之后的播放状态不会再影响这里。
       </p>
       <DesktopTextField
-        autoFocus
+        ref={inputRef}
         aria-label="要在 Desktop 播放的 YouTube 视频链接"
         aria-invalid={error ? true : undefined}
         placeholder="https://youtu.be/..."

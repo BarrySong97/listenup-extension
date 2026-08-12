@@ -100,7 +100,7 @@ export const CookieSettings = ({
       scroll="outside"
       isKeyboardDismissDisabled={pending !== null}
       backdropClassName="bg-[#11151c]/98 backdrop-blur"
-      dialogClassName="max-w-xl rounded-2xl border-white/10 bg-white/[0.035] p-5"
+      dialogClassName="max-w-xl rounded-2xl border-white/10 bg-[#171b22] p-5"
     >
       <div className="flex items-start gap-3">
         <div className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-amber-400/10 text-amber-300">

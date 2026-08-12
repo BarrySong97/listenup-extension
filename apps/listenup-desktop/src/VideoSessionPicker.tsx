@@ -36,7 +36,7 @@ export const VideoSessionPicker = ({
     isKeyboardDismissDisabled
     backdropClassName="bg-transparent backdrop-blur-none"
     containerClassName="p-0 sm:p-0"
-    dialogClassName="h-full min-h-full w-full rounded-none border-none bg-[#151517]/95 p-3 shadow-none backdrop-blur-xl"
+    dialogClassName="h-full min-h-full w-full rounded-none border-none bg-[#151517] p-3 shadow-none"
   >
     <div className="mb-2 flex items-start gap-2">
       <div className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-white/10 text-fg">

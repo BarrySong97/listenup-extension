@@ -72,12 +72,48 @@ test("Desktop dialogs share the HeroUI modal primitive and bottom animation", ()
   assert.equal(modalPrimitiveSource.includes("<Modal.Dialog"), true);
   assert.equal(modalPrimitiveSource.includes('placement = "bottom"'), true);
   assert.equal(modalPrimitiveSource.includes("isDismissable = true"), true);
+  assert.equal(modalPrimitiveSource.includes("isDismissable={false}"), true);
+  assert.equal(modalPrimitiveSource.includes("bg-modal"), true);
+  assert.equal(modalPrimitiveSource.includes("data-slot=\"modal-dialog\""), true);
+  assert.equal(
+    modalPrimitiveSource.includes("data-desktop-modal-drag-region"),
+    true
+  );
+  assert.equal(modalPrimitiveSource.includes("data-tauri-drag-region"), true);
+  assert.equal(modalPrimitiveSource.includes("startDragging()"), true);
+  assert.equal(modalPrimitiveSource.includes("suppressDismissUntilRef"), true);
+  assert.equal(modalPrimitiveSource.includes('top-11 bg-glass/95'), true);
+  assert.equal(modalPrimitiveSource.includes('z-[70]'), true);
+  assert.equal(modalPrimitiveSource.includes("activate_text_input"), false);
+
+  const textFieldSource = readFileSync(
+    path.join(UI_PRIMITIVES_ROOT, "DesktopTextField.tsx"),
+    "utf8"
+  );
+  assert.equal(textFieldSource.includes("forwardRef"), true);
+  assert.equal(textFieldSource.includes("ref={ref}"), true);
+
+  for (const fileName of [
+    "BrowserSourceSwitchModal.tsx",
+    "EmbeddedLinkEditorModal.tsx",
+  ]) {
+    const source = readFileSync(path.join(SOURCE_ROOT, fileName), "utf8");
+    assert.equal(/^\s+autoFocus$/m.test(source), false, fileName);
+    assert.equal(source.includes("preventScroll: true"), true, fileName);
+    assert.equal(
+      /<DesktopTextField\s+ref=\{inputRef\}/.test(source),
+      true,
+      fileName
+    );
+  }
 
   const pickerSource = readFileSync(
     path.join(SOURCE_ROOT, "VideoSessionPicker.tsx"),
     "utf8"
   );
   assert.equal(pickerSource.includes("isDismissable={false}"), true);
+  assert.equal(pickerSource.includes('bg-[#151517]'), true);
+  assert.equal(pickerSource.includes('bg-[#151517]/95'), false);
 
   for (const fileName of dialogFiles) {
     const source = readFileSync(path.join(SOURCE_ROOT, fileName), "utf8");
@@ -100,6 +136,7 @@ test("Desktop dialogs share the HeroUI modal primitive and bottom animation", ()
   assert.equal(stylesSource.includes("desktop-modal-mask-exit 240ms"), true);
   assert.equal(stylesSource.includes("translate3d(0, 100vh, 0)"), true);
   assert.equal(stylesSource.includes("prefers-reduced-motion: reduce"), true);
+  assert.equal(stylesSource.includes("--color-modal: #17171b"), true);
 });
 
 test("subtitle rows use immediate CSS hover without mouse state", () => {

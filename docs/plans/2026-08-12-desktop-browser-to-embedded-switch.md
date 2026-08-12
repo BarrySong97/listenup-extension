@@ -93,3 +93,11 @@ Cookie 输入框普通 `Command+C/V`、无效剪贴板提示、Modal 取消、�
   200ms 退出而闪烁；二次修订将默认 placement 改为 bottom、普通 Mask 改为可关闭，并用 240ms
   Backdrop 退出动画覆盖 HeroUI 默认值，确保 React Aria 在内容完全滑出后才卸载 overlay。多视频
   强制选择继续显式禁用 Mask / Esc 关闭。
+- 第二次肉眼验收发现卡片透明、物理 Mask 点击仍未关闭，并且全屏 Portal 覆盖标题栏后无法拖窗；
+  三次修订为 Modal 卡片增加实色 token，移除 Backdrop 上的 `activate_text_input` pointer capture，
+  显式排除 Dialog 后消费其余 Mask click。仅提升底层 header 不足以绕过 HeroUI 的 inert，最终让
+  Portal overlay 位于 App 之上、Mask 从标题栏下方开始，并在顶部 44px 透明区主动调用 Tauri
+  `startDragging()`。HeroUI 内建 outside dismiss 固定关闭，Mask 关闭由共用组件显式实现，避免
+  drag region 被识别成 Dialog 外点击；原生拖动结束时 WebView 补发的 Backdrop click 也由一次性
+  短窗口抑制。新视频和 BrowserSource 切换表单移除原生
+  `autoFocus`，改为布局后一帧 `focus({ preventScroll: true })`，避免弹窗先闪到顶部再落到底部。

@@ -1,12 +1,12 @@
 /**
- * @purpose 统一 Desktop 的 HeroUI v3 底部 Modal、视觉 token、Mask 关闭与滑入动画入口。
+ * @purpose 统一 Desktop 的 HeroUI v3 底部 Modal、视觉 token、Mask 关闭、窗口拖拽与滑入动画入口。
  * @role    业务弹窗只组合内容，不再手写全屏遮罩、焦点锁、Esc 或 aria-modal 语义。
- * @deps    @heroui/react、@tauri-apps/api/core、React
- * @gotcha  HeroUI v3 不再支持 motionProps；动画必须由 styles.css 覆盖 data-entering/data-exiting。
+ * @deps    @heroui/react、@tauri-apps/api/window、React
+ * @gotcha  Modal 会把底层 App 设为 inert；窗口拖拽区必须放在 Portal 内，不能只依赖底层 Header。
  */
 import { Modal } from "@heroui/react";
-import { invoke } from "@tauri-apps/api/core";
-import type { ComponentProps, ReactNode } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useRef, type ComponentProps, type ReactNode } from "react";
 
 type ModalContainerProps = ComponentProps<typeof Modal.Container>;
 
@@ -45,46 +45,80 @@ export const DesktopModal = ({
   backdropClassName,
   containerClassName,
   dialogClassName,
-}: DesktopModalProps) => (
-  <Modal
-    isOpen={isOpen}
-    onOpenChange={(nextOpen) => {
-      if (!nextOpen) onClose();
-    }}
-  >
-    <Modal.Backdrop
-      variant="transparent"
-      isDismissable={isDismissable}
-      isKeyboardDismissDisabled={isKeyboardDismissDisabled}
-      className={classes(
-        "desktop-modal-backdrop overflow-hidden rounded-2xl bg-glass/95 backdrop-blur-xl",
-        backdropClassName
-      )}
-      onPointerDownCapture={() => {
-        void invoke("activate_text_input");
+}: DesktopModalProps) => {
+  const suppressDismissUntilRef = useRef(0);
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
       }}
     >
-      <Modal.Container
-        placement={placement}
-        scroll={scroll}
-        size={size}
+      <Modal.Backdrop
+        variant="transparent"
+        isDismissable={false}
+        isKeyboardDismissDisabled={isKeyboardDismissDisabled}
         className={classes(
-          "desktop-modal-container p-5 sm:p-5",
-          containerClassName
+          "desktop-modal-backdrop z-[70] overflow-hidden rounded-2xl"
         )}
+        onClick={(event) => {
+          if (!isDismissable) return;
+          if (performance.now() < suppressDismissUntilRef.current) return;
+          const target = event.target as HTMLElement;
+          if (
+            target.closest?.(
+              '[data-slot="modal-dialog"], [data-desktop-modal-drag-region]'
+            )
+          ) {
+            return;
+          }
+          onClose();
+        }}
       >
-        <Modal.Dialog
-          aria-label={ariaLabel}
-          aria-labelledby={ariaLabelledBy}
-          aria-describedby={ariaDescribedBy}
+        <div
           className={classes(
-            "rounded-xl border border-hairline bg-glass p-4 shadow-2xl",
-            dialogClassName
+            "absolute inset-x-0 bottom-0 top-11 bg-glass/95 backdrop-blur-xl",
+            backdropClassName
+          )}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-x-0 top-0 z-[80] h-11"
+          data-desktop-modal-drag-region
+          data-tauri-drag-region
+          aria-hidden="true"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            suppressDismissUntilRef.current = performance.now() + 750;
+            event.preventDefault();
+            event.stopPropagation();
+            void getCurrentWindow().startDragging();
+          }}
+          onClick={(event) => event.stopPropagation()}
+        />
+        <Modal.Container
+          placement={placement}
+          scroll={scroll}
+          size={size}
+          className={classes(
+            "desktop-modal-container p-5 sm:p-5",
+            containerClassName
           )}
         >
-          {children}
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
-  </Modal>
-);
+          <Modal.Dialog
+            aria-label={ariaLabel}
+            aria-labelledby={ariaLabelledBy}
+            aria-describedby={ariaDescribedBy}
+            className={classes(
+              "rounded-xl border border-hairline bg-modal p-4 shadow-2xl",
+              dialogClassName
+            )}
+          >
+            {children}
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
+  );
+};
