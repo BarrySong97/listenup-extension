@@ -1,8 +1,8 @@
 /**
- * @purpose 字幕窗口 UI：组合浏览器同步、YouTube iframe 与 Embedded 视频专注模式。
+ * @purpose 字幕窗口 UI：组合浏览器同步、YouTube iframe 与可拖动 Embedded 悬浮字幕。
  * @role    桌面端唯一页面；统一标题栏、Footer、paste 手势、播放器与字幕组件。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
- * @gotcha  视频专注模式只隐藏 Embedded 字幕区；切回时必须恢复用户展开前的窗口尺寸。
+ * @gotcha  悬浮字幕只在 Embedded 生效；关闭或来源退出时必须恢复展开前的窗口尺寸。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -32,6 +32,10 @@ import {
   EMBEDDED_VIDEO_ONLY_MIN_WIDTH,
   embeddedVideoOnlyHeight,
 } from "./embeddedVideoLayout";
+import {
+  parseOverlayPosition,
+  type EmbeddedSubtitleOverlayPosition,
+} from "./embeddedSubtitleOverlayPosition";
 import { SubtitleModeControl } from "./components/ui/SubtitleModeControl";
 import { TargetLanguageSelect } from "./components/ui/TargetLanguageSelect";
 import { buildLocalAiTranslationPrompt } from "./localAiTranslationPrompt";
@@ -73,6 +77,8 @@ interface WindowPosition {
 const MODE_STORAGE_KEY = "listenup-view-mode";
 const SUBTITLE_MODE_STORAGE_KEY = "listenup-subtitle-display-mode";
 const TARGET_LANGUAGE_STORAGE_KEY = "listenup-target-language";
+const EMBEDDED_SUBTITLE_OVERLAY_POSITION_STORAGE_KEY =
+  "listenup-embedded-subtitle-overlay-position-v1";
 const DESKTOP_POSITION_STORAGE_KEY = "listenup-window-position-desktop";
 const SIZE_STORAGE_KEYS: Record<ViewMode, string> = {
   list: "listenup-window-size-list",
@@ -120,6 +126,11 @@ const loadStoredSubtitleMode = (): SubtitleDisplayMode => {
   const stored = localStorage.getItem(SUBTITLE_MODE_STORAGE_KEY);
   return stored === "translation" || stored === "bilingual" ? stored : "source";
 };
+
+const loadStoredOverlayPosition = () =>
+  parseOverlayPosition(
+    localStorage.getItem(EMBEDDED_SUBTITLE_OVERLAY_POSITION_STORAGE_KEY)
+  );
 
 const loadStoredSize = (mode: ViewMode): WindowSize | null => {
   try {
@@ -379,7 +390,10 @@ export default function App() {
     null
   );
   const [showEmbeddedLinkEditor, setShowEmbeddedLinkEditor] = useState(false);
-  const [embeddedSubtitlesHidden, setEmbeddedSubtitlesHidden] = useState(false);
+  const [embeddedSubtitleOverlayEnabled, setEmbeddedSubtitleOverlayEnabled] =
+    useState(false);
+  const [embeddedSubtitleOverlayPosition, setEmbeddedSubtitleOverlayPosition] =
+    useState<EmbeddedSubtitleOverlayPosition>(loadStoredOverlayPosition);
   const [showCookieSettings, setShowCookieSettings] = useState(false);
   const [replacementUrl, setReplacementUrl] = useState("");
   const [browserSwitchRequest, setBrowserSwitchRequest] = useState<{
@@ -732,8 +746,8 @@ export default function App() {
     [runEmbeddedAction]
   );
 
-  const restoreEmbeddedSubtitles = useCallback(async () => {
-    setEmbeddedSubtitlesHidden(false);
+  const restoreEmbeddedSubtitleList = useCallback(async () => {
+    setEmbeddedSubtitleOverlayEnabled(false);
     const appWindow = getCurrentWindow();
     await appWindow.setMinSize(
       new LogicalSize(MIN_SIZES.list.width, MIN_SIZES.list.height)
@@ -750,13 +764,13 @@ export default function App() {
     );
   }, []);
 
-  const toggleEmbeddedSubtitles = useCallback(async () => {
+  const toggleEmbeddedSubtitleOverlay = useCallback(async () => {
     if (!embeddedSource) return;
-    if (embeddedSubtitlesHidden) {
+    if (embeddedSubtitleOverlayEnabled) {
       try {
-        await restoreEmbeddedSubtitles();
+        await restoreEmbeddedSubtitleList();
       } catch (error) {
-        console.error("failed to restore embedded subtitle layout", error);
+        console.error("failed to restore embedded subtitle list", error);
       }
       return;
     }
@@ -779,7 +793,7 @@ export default function App() {
         headerHeight
       );
       const targetHeight = embeddedVideoOnlyHeight(currentSize.width, headerHeight);
-      setEmbeddedSubtitlesHidden(true);
+      setEmbeddedSubtitleOverlayEnabled(true);
       await appWindow.setMinSize(
         new LogicalSize(EMBEDDED_VIDEO_ONLY_MIN_WIDTH, minHeight)
       );
@@ -790,16 +804,35 @@ export default function App() {
         )
       );
     } catch (error) {
-      console.error("failed to enable embedded video-only layout", error);
+      console.error("failed to enable embedded subtitle overlay", error);
     }
-  }, [embeddedSource, embeddedSubtitlesHidden, restoreEmbeddedSubtitles]);
+  }, [
+    embeddedSource,
+    embeddedSubtitleOverlayEnabled,
+    restoreEmbeddedSubtitleList,
+  ]);
 
   useEffect(() => {
-    if (embeddedSource || !embeddedSubtitlesHidden) return;
-    void restoreEmbeddedSubtitles().catch((error) => {
-      console.error("failed to reset embedded subtitle layout", error);
+    if (embeddedSource || !embeddedSubtitleOverlayEnabled) return;
+    void restoreEmbeddedSubtitleList().catch((error) => {
+      console.error("failed to reset embedded subtitle overlay", error);
     });
-  }, [embeddedSource, embeddedSubtitlesHidden, restoreEmbeddedSubtitles]);
+  }, [
+    embeddedSource,
+    embeddedSubtitleOverlayEnabled,
+    restoreEmbeddedSubtitleList,
+  ]);
+
+  const persistEmbeddedSubtitleOverlayPosition = useCallback(
+    (position: EmbeddedSubtitleOverlayPosition) => {
+      setEmbeddedSubtitleOverlayPosition(position);
+      localStorage.setItem(
+        EMBEDDED_SUBTITLE_OVERLAY_POSITION_STORAGE_KEY,
+        JSON.stringify(position)
+      );
+    },
+    []
+  );
 
   const handleListScroll = useCallback(() => {
     setIsListScrolling(true);
@@ -1099,7 +1132,7 @@ export default function App() {
   return (
     <main
       className={`${shellClassName} relative grid ${
-        embeddedSource && embeddedSubtitlesHidden
+        embeddedSource && embeddedSubtitleOverlayEnabled
           ? "grid-rows-[auto_minmax(0,1fr)]"
           : embeddedSource
             ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
@@ -1135,31 +1168,6 @@ export default function App() {
           <DevBadge />
           {embeddedSource ? (
             <>
-              <DesktopIconButton
-                className={iconButtonClassName}
-                onPress={() => void toggleEmbeddedSubtitles()}
-                tooltip={
-                  embeddedSubtitlesHidden
-                    ? "显示字幕"
-                    : "隐藏字幕，只保留视频"
-                }
-                ariaLabel={
-                  embeddedSubtitlesHidden
-                    ? "显示字幕"
-                    : "隐藏字幕，只保留视频"
-                }
-                icon={
-                  <Icon
-                    icon={
-                      embeddedSubtitlesHidden
-                        ? "mdi:eye-outline"
-                        : "mdi:eye-off-outline"
-                    }
-                    className="h-3.5 w-3.5 flex-none"
-                    aria-hidden="true"
-                  />
-                }
-              />
               <DesktopIconButton
                 className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
                 onPress={() => void reloadEmbeddedPlayback()}
@@ -1323,6 +1331,35 @@ export default function App() {
               onChange={selectTargetLanguage}
             />
           )}
+          {embeddedSource && (
+            <DesktopIconButton
+              className={`${iconButtonClassName} ${
+                embeddedSubtitleOverlayEnabled ? "bg-wash text-fg" : ""
+              }`}
+              onPress={() => void toggleEmbeddedSubtitleOverlay()}
+              tooltip={
+                embeddedSubtitleOverlayEnabled
+                  ? "关闭视频悬浮字幕"
+                  : "开启视频悬浮字幕"
+              }
+              ariaLabel={
+                embeddedSubtitleOverlayEnabled
+                  ? "关闭视频悬浮字幕"
+                  : "开启视频悬浮字幕"
+              }
+              icon={
+                <Icon
+                  icon={
+                    embeddedSubtitleOverlayEnabled
+                      ? "mdi:subtitles"
+                      : "mdi:subtitles-outline"
+                  }
+                  className="h-3.5 w-3.5 flex-none"
+                  aria-hidden="true"
+                />
+              }
+            />
+          )}
           <PlaybackButton
             isPaused={cursor?.isPaused ?? null}
             disabled={playbackDisabled}
@@ -1334,20 +1371,31 @@ export default function App() {
       </header>
 
       {embeddedSource && (
-        <div className={embeddedSubtitlesHidden ? "min-h-0 overflow-hidden" : ""}>
+        <div
+          className={
+            embeddedSubtitleOverlayEnabled ? "min-h-0 overflow-hidden" : ""
+          }
+        >
           <EmbeddedVideoPanel
-            fillAvailableSpace={embeddedSubtitlesHidden}
+            copyStatus={translationCopyStatus}
+            fillAvailableSpace={embeddedSubtitleOverlayEnabled}
+            onCopyTranslationPrompt={copyLocalAiTranslationPrompt}
+            onOverlayPositionChange={persistEmbeddedSubtitleOverlayPosition}
+            overlayBlock={currentSubtitle}
+            overlayEnabled={embeddedSubtitleOverlayEnabled}
+            overlayPosition={embeddedSubtitleOverlayPosition}
             source={embeddedSource}
             subtitles={
               session?.sessionId === embeddedSource.sessionId
                 ? session.subtitles
                 : []
             }
+            translationMissing={requestedTranslationMissing}
           />
         </div>
       )}
 
-      {!embeddedSubtitlesHidden && (
+      {!embeddedSubtitleOverlayEnabled && (
         <section className="relative min-h-0 overflow-hidden" aria-live="polite">
           {sourceEntryVisible ? (
             <EmbeddedSourceEntry
@@ -1375,7 +1423,7 @@ export default function App() {
         </section>
       )}
 
-      {!embeddedSubtitlesHidden && (
+      {!embeddedSubtitleOverlayEnabled && (
         <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
           <DesktopButton
             className="flex h-6 cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 text-[10px] text-fg-faint transition-colors hover:bg-wash hover:text-fg disabled:cursor-wait disabled:opacity-45"

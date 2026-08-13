@@ -1,8 +1,8 @@
 /**
- * @purpose 在既有 Desktop layout 中只渲染官方 YouTube iframe，并独立加载当前视频字幕。
- * @role    App.tsx 的单一视频行；不拥有标题栏、字幕组件、按钮样式或第二套页面 shell。
- * @deps    @tauri-apps/api、@listenup/youtube-core、useYoutubeIframePlayer、types
- * @gotcha  iframe 只负责播放；fillAvailableSpace 仅供专注模式填满剩余窗口高度。
+ * @purpose 渲染官方 YouTube iframe、独立加载字幕，并组合可信的同级悬浮字幕层。
+ * @role    App.tsx 的单一视频行；作为 iframe 与 EmbeddedSubtitleOverlay 的定位边界。
+ * @deps    @tauri-apps/api、@listenup/youtube-core、EmbeddedSubtitleOverlay、useYoutubeIframePlayer、types
+ * @gotcha  Overlay 只能是可信 main 的 iframe sibling，不得向 loopback 播放页传字幕正文。
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -15,6 +15,10 @@ import {
   type YouTubePlayerResponse,
 } from "@listenup/youtube-core";
 import { useEffect, useRef, useState } from "react";
+import { EmbeddedSubtitleOverlay } from "./EmbeddedSubtitleOverlay";
+import type { EmbeddedSubtitleOverlayPosition } from "./embeddedSubtitleOverlayPosition";
+import type { DisplayBlock } from "./SubtitleList";
+import type { TranslationCopyStatus } from "./TranslationMissingState";
 import type { SubtitleItem, ViewerSnapshot } from "./types";
 import { useYoutubeIframePlayer } from "./useYoutubeIframePlayer";
 
@@ -93,13 +97,27 @@ const subtitleTransportError = (cause: unknown) => {
 };
 
 export const EmbeddedVideoPanel = ({
+  copyStatus,
   fillAvailableSpace = false,
+  onCopyTranslationPrompt,
+  onOverlayPositionChange,
+  overlayBlock,
+  overlayEnabled = false,
+  overlayPosition,
   source,
   subtitles,
+  translationMissing = false,
 }: {
+  copyStatus: TranslationCopyStatus;
   fillAvailableSpace?: boolean;
+  onCopyTranslationPrompt: () => void;
+  onOverlayPositionChange: (position: EmbeddedSubtitleOverlayPosition) => void;
+  overlayBlock: DisplayBlock | null;
+  overlayEnabled?: boolean;
+  overlayPosition: EmbeddedSubtitleOverlayPosition;
   source: EmbeddedSource;
   subtitles: SubtitleItem[];
+  translationMissing?: boolean;
 }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -188,18 +206,28 @@ export const EmbeddedVideoPanel = ({
       }`}
     >
       <div ref={hostRef} className="h-full w-full" aria-label="YouTube 视频区域" />
+      {overlayEnabled && (
+        <EmbeddedSubtitleOverlay
+          block={overlayBlock}
+          copyStatus={copyStatus}
+          onCopyTranslationPrompt={onCopyTranslationPrompt}
+          onPositionChange={onOverlayPositionChange}
+          position={overlayPosition}
+          translationMissing={translationMissing}
+        />
+      )}
       {!iframePlayer.ready && !iframePlayer.error && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black text-[11px] text-fg-muted">
+        <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-black text-[11px] text-fg-muted">
           正在加载 YouTube 播放器…
         </div>
       )}
       {iframePlayer.error && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/80 px-3 py-2 text-center text-[10px] text-red-200 backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-black/80 px-3 py-2 text-center text-[10px] text-red-200 backdrop-blur">
           {iframePlayer.error}
         </div>
       )}
       {iframePlayer.autoplayBlocked && !iframePlayer.error && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/65 px-3 py-1.5 text-center text-[10px] text-white/65">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-black/65 px-3 py-1.5 text-center text-[10px] text-white/65">
           点击播放器即可开始播放
         </div>
       )}

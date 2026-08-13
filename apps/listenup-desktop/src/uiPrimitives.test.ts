@@ -1,5 +1,5 @@
 /**
- * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定 Tooltip、Modal 与字幕行交互边界。
+ * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定 Tooltip、Modal、字幕行与视频字幕层交互边界。
  * @role    pnpm desktop test 的 UI 架构棘轮，扫描 src 下全部业务 TSX。
  * @deps    node:assert、node:fs、node:path、node:test、node:url
  * @gotcha  components/ui 是唯一允许封装交互 primitives 的目录；虚拟字幕行必须保留无 React Aria hover state 的专用例外。
@@ -51,11 +51,39 @@ test("Desktop icon tooltips use the explicit HeroUI compound trigger", () => {
 });
 
 test("embedded subtitle toggle uses verified Iconify icons", () => {
-  const source = readFileSync(path.join(SOURCE_ROOT, "App.tsx"), "utf8");
+  const appSource = readFileSync(path.join(SOURCE_ROOT, "App.tsx"), "utf8");
+  const overlaySource = readFileSync(
+    path.join(SOURCE_ROOT, "EmbeddedSubtitleOverlay.tsx"),
+    "utf8"
+  );
 
-  assert.equal(source.includes('"mdi:eye-outline"'), true);
-  assert.equal(source.includes('"mdi:eye-off-outline"'), true);
-  assert.equal(source.includes('"mdi:subtitles-off-outline"'), false);
+  assert.equal(appSource.includes('"mdi:subtitles"'), true);
+  assert.equal(appSource.includes('"mdi:subtitles-outline"'), true);
+  assert.equal(appSource.includes('"mdi:subtitles-off-outline"'), false);
+  assert.equal(overlaySource.includes('"mdi:drag-vertical"'), true);
+  const toggleIndex = appSource.indexOf('ariaLabel={\n                embeddedSubtitleOverlayEnabled');
+  assert.notEqual(toggleIndex, -1);
+  assert.equal(appSource.indexOf("<PlaybackButton", toggleIndex) > toggleIndex, true);
+});
+
+test("embedded subtitle overlay keeps iframe and selection interaction boundaries", () => {
+  const panelSource = readFileSync(
+    path.join(SOURCE_ROOT, "EmbeddedVideoPanel.tsx"),
+    "utf8"
+  );
+  const overlaySource = readFileSync(
+    path.join(SOURCE_ROOT, "EmbeddedSubtitleOverlay.tsx"),
+    "utf8"
+  );
+
+  assert.equal(panelSource.includes("<EmbeddedSubtitleOverlay"), true);
+  assert.equal(panelSource.includes("postMessage"), false);
+  assert.equal(overlaySource.includes("pointer-events-none"), true);
+  assert.equal(overlaySource.includes("pointer-events-auto"), true);
+  assert.equal(overlaySource.includes("select-text"), true);
+  assert.equal(overlaySource.includes("setPointerCapture"), true);
+  assert.equal(overlaySource.includes("requestAnimationFrame"), true);
+  assert.equal(overlaySource.includes("currentTime"), false);
 });
 
 test("Desktop dialogs share the HeroUI modal primitive and bottom animation", () => {
