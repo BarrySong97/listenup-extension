@@ -106,3 +106,5 @@ cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
   保持在视频边界内。
 - Plane：LISTENUP-15 已上传“Embedded-悬浮字幕”和“Embedded-恢复完整列表”两张真实 App 截图，
   并回写实现、验证与提交证据。
+- 用户验收后追加视觉调整：字幕卡复用影院模式 `bg-glass-cinema` 的约 32% 淡黑染色，移除额外
+  backdrop blur，并弱化边框、阴影和手柄底色，让视频画面更清晰透过。

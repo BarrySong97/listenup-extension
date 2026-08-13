@@ -212,14 +212,14 @@ export const EmbeddedSubtitleOverlay = memo(function EmbeddedSubtitleOverlay({
     <div ref={containerRef} className="pointer-events-none absolute inset-0 z-20">
       <div
         ref={cardRef}
-        className={`pointer-events-auto absolute left-0 top-0 flex max-w-[calc(100%-24px)] items-center gap-2 rounded-[10px] border border-white/15 bg-black/75 py-2 pl-1.5 pr-3 text-white shadow-[0_4px_18px_rgba(0,0,0,0.55)] backdrop-blur-md ${
+        className={`pointer-events-auto absolute left-0 top-0 flex max-w-[calc(100%-24px)] items-center gap-2 rounded-[10px] border border-white/[0.08] bg-glass-cinema py-2 pl-1.5 pr-3 text-white shadow-[0_2px_12px_rgba(0,0,0,0.28)] ${
           bounds ? "opacity-100" : "opacity-0"
         }`}
         style={{ transform: `translate3d(${pixels.x}px, ${pixels.y}px, 0)` }}
       >
         <DesktopIconButton
-          className={`flex h-7 w-7 touch-none cursor-grab items-center justify-center rounded-md border-none bg-white/[0.06] text-white/60 hover:bg-white/15 hover:text-white active:cursor-grabbing ${
-            isDragging ? "cursor-grabbing bg-white/15 text-white" : ""
+          className={`flex h-7 w-7 touch-none cursor-grab items-center justify-center rounded-md border-none bg-black/15 text-white/55 hover:bg-black/30 hover:text-white active:cursor-grabbing ${
+            isDragging ? "cursor-grabbing bg-black/35 text-white" : ""
           }`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -240,7 +240,7 @@ export const EmbeddedSubtitleOverlay = memo(function EmbeddedSubtitleOverlay({
             />
           }
         />
-        <div className="min-w-0 select-text text-center [text-shadow:0_1px_5px_rgba(0,0,0,0.75)]">
+        <div className="min-w-0 select-text text-center [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">
           {translationMissing ? (
             <TranslationMissingState
               compact

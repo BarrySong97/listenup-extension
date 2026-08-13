@@ -84,6 +84,9 @@ test("embedded subtitle overlay keeps iframe and selection interaction boundarie
   assert.equal(overlaySource.includes("setPointerCapture"), true);
   assert.equal(overlaySource.includes("requestAnimationFrame"), true);
   assert.equal(overlaySource.includes("currentTime"), false);
+  assert.equal(overlaySource.includes("bg-glass-cinema"), true);
+  assert.equal(overlaySource.includes("bg-black/75"), false);
+  assert.equal(overlaySource.includes("backdrop-blur-md"), false);
 });
 
 test("Desktop dialogs share the HeroUI modal primitive and bottom animation", () => {
