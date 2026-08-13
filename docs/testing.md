@@ -95,6 +95,12 @@ node scripts/check-docs.mjs                                              # 永�
   `dQw4w9WgXcQ`（播放器明确报作者限制但字幕仍可独立读取）。连续切换时标题/轨道/列表不能串片，
   HTTP client/代理连接池应复用，429/5xx 短退避后不得把瞬时旧字幕当作新视频结果
 - reload、换链接、Cookie 设置和退出使用现有 Desktop 组件；换链接不新开窗口
+- EmbeddedSource 的视频悬浮字幕开关只出现在 ListenUp 播放按钮旁；开启后隐藏列表与 Footer、
+  当前字幕覆盖视频，关闭后恢复进入前的尺寸和完整列表，显式退出后 BrowserSource 不继承该模式
+- 悬浮字幕跟随原语 / 译文 / 双语；字幕间隙隐藏，缺译文显示紧凑复制入口。独立手柄可拖到视频
+  四边但不越界，正文仍可选择；卡片外的 YouTube 播放、进度条、音量、设置与全屏均可操作
+- 拖动结束、窗口缩放、换链接和重启 DEV `.app` 后相对位置保持；损坏或未知版本偏好回退到下部
+  居中。React Profiler 中连续 10Hz cursor 只在 active block 变化时提交悬浮字幕
 - 浏览器切换、换链接、Cookie 设置和多视频选择的 DOM 都包含 HeroUI
   `data-slot="modal-backdrop"` / `modal-container` / `modal-dialog`；打开时内容从窗口底部滑入并停在
   底部，关闭时 Mask 保持到内容滑出结束且全程不闪，最终窗口尺寸和 Desktop 背景不变。前三者

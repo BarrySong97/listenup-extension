@@ -1,7 +1,7 @@
 # Desktop Embedded 视频可拖动悬浮字幕 — 实施计划
 
 - 日期：2026-08-13
-- 状态：待批准
+- 状态：已完成
 - 关联设计：`docs/spark/2026-08-13-desktop-embedded-subtitle-overlay-design.md`
 - Plane：LISTENUP-15
 
@@ -25,21 +25,21 @@
 
 ## 任务拆解
 
-1. [ ] 提取悬浮字幕位置纯函数，定义 v1 存储格式、默认位置、坐标往返与 clamp，并先补 Node tests。
-2. [ ] 新增 `EmbeddedSubtitleOverlay`：原语 / 译文 / 双语卡片、独立手柄、Pointer Capture、键盘移动、
+1. [x] 提取悬浮字幕位置纯函数，定义 v1 存储格式、默认位置、坐标往返与 clamp，并先补 Node tests。
+2. [x] 新增 `EmbeddedSubtitleOverlay`：原语 / 译文 / 双语卡片、独立手柄、Pointer Capture、键盘移动、
    ResizeObserver 和 pointer end 单次持久化回调。
-3. [ ] 改造 `EmbeddedVideoPanel` 为 Overlay 的相对定位边界，保持 iframe、loading/error 与 YouTube
+3. [x] 改造 `EmbeddedVideoPanel` 为 Overlay 的相对定位边界，保持 iframe、loading/error 与 YouTube
    控件路径不变，Overlay 根层只让字幕卡接收 pointer。
-4. [ ] 在 `App.tsx` 将现有隐藏字幕入口移到 `PlaybackButton` 旁并升级为悬浮字幕开关；复用当前
+4. [x] 在 `App.tsx` 将现有隐藏字幕入口移到 `PlaybackButton` 旁并升级为悬浮字幕开关；复用当前
    `displayBlocks` / cursor presentation，开启后隐藏列表与 Footer，关闭 / 退出时恢复尺寸。
-5. [ ] 处理字幕间隙、loading/empty/error、缺译文引导、换链接保持开启和来源退出关闭等状态。
-6. [ ] 增加 UI / 性能 / 安全棘轮，锁定有效 Iconify 图标、入口位置、无字幕 postMessage、无新增权限
+5. [x] 处理字幕间隙、loading/empty/error、缺译文引导、换链接保持开启和来源退出关闭等状态。
+6. [x] 增加 UI / 性能 / 安全棘轮，锁定有效 Iconify 图标、入口位置、无字幕 postMessage、无新增权限
    与 Overlay 不订阅连续 `currentTime`。
-7. [ ] 新增 ADR，并同步 Desktop 模块文档、测试手册与相关文件头。
-8. [ ] 跑 Desktop tests/build、环境 sensor、docs sensor 与 diff 检查，清零失败。
-9. [ ] 构建并启动真实 DEV `.app`，回归拖动四边、文字选择、YouTube 控件、三种字幕模式、窗口缩放、
+7. [x] 新增 ADR，并同步 Desktop 模块文档、测试手册与相关文件头。
+8. [x] 跑 Desktop tests/build、环境 sensor、docs sensor 与 diff 检查，清零失败。
+9. [x] 构建并启动真实 DEV `.app`，回归拖动四边、文字选择、YouTube 控件、三种字幕模式、窗口缩放、
    换链接 / 重启位置记忆、关闭与退出恢复；保存截图上传 LISTENUP-15。
-10. [ ] 提交实现与文档，回写 commit 和验证证据，并按真实验收结果更新 Plane 状态。
+10. [x] 提交实现与文档，回写 commit 和验证证据，并按真实验收结果更新 Plane 状态。
 
 ## 实施顺序与提交边界
 
@@ -94,3 +94,15 @@ cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
 
 完成后在 LISTENUP-15 评论中记录实现 commit、自动命令结果、真实 DEV 测试链接与截图。只有全部
 验收通过才转 `Done`；若真实应用仍有回归缺口，保持 `In Progress` 并写清剩余项。
+
+## 执行记录
+
+- 实现提交：`fb95ac1`（`feat(desktop): add draggable embedded subtitle overlay`）。
+- 自动验证：Desktop Node tests 29/29；production frontend build、环境标识 sensor、docs sensor 与
+  `git diff --check` 全部通过。
+- 真实 DEV `.app`：用 `iG9CE55wbtY` 验证开关位于播放按钮旁、开启后只保留标题栏和视频、原语
+  Overlay 跟随当前句、字幕间隙隐藏、正文可选择、手柄键盘移动与位置复用、缺译文紧凑入口、
+  YouTube 原生播放控件可点击、关闭后完整列表 / Footer / 展开尺寸恢复。窗口在不同宽高下字幕卡
+  保持在视频边界内。
+- Plane：LISTENUP-15 已上传“Embedded-悬浮字幕”和“Embedded-恢复完整列表”两张真实 App 截图，
+  并回写实现、验证与提交证据。

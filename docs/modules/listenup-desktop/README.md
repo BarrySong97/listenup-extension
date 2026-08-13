@@ -19,6 +19,7 @@ Tauri v2，Rust 后端 + React 前端。
 ```
 src/App.tsx        唯一 Desktop layout：浏览器/链接双入口、同窗视频行、播放控制与字幕列表
 src/EmbeddedVideoPanel.tsx / src/useYoutubeIframePlayer.ts  官方 iframe 视频行与播放事件适配
+src/EmbeddedSubtitleOverlay.tsx / src/embeddedSubtitleOverlayPosition.ts  可拖动可信字幕层与归一化位置
 src/useViewerSession.ts / src/SubtitleViewer.tsx  主窗口快照订阅和唯一字幕展示层
 src/EmbeddedSourceEntry.tsx / src/embeddedPlayback.ts  双入口和本地 YouTube URL 安全门
 src/CookieSettings.tsx / src-tauri/src/cookie_vault.rs  HeroUI Cookie Modal、解析与 Keychain 保存
@@ -143,10 +144,15 @@ Cookie 文本域和 contenteditable 仍走普通粘贴。链接先在本地纯�
 没有后台 clipboard read、轮询或全局 `Command+V`，无效内容只显示短暂提示，不会暂停浏览器或
 建立 Embedded 锁。同窗 layout 使用“上视频、下字幕”布局，复用同一
 `SubtitleViewer`、原语/译文/双语偏好、播放/暂停和字幕 seek，并提供换链接、reload 与显式退出。
-Embedded 标题栏还提供视频专注模式：隐藏字幕时保存展开尺寸，收起字幕区与 Footer，只保留标题栏
-和视频，并按当前宽度缩到完整容纳 16:9 视频的最小高度；再次点击恢复字幕与此前尺寸。离开
-Embedded 来源时自动恢复普通列表最小尺寸，浏览器同步来源不显示此入口。按钮使用 Iconify MDI
-中已发布的 `eye-off-outline` / `eye-outline` 表达隐藏与显示动作，Tooltip 同步说明当前动作。
+Embedded 标题栏的 ListenUp 播放按钮旁还提供“视频悬浮字幕”开关。开启时保存展开尺寸，收起
+字幕列表与 Footer，只保留标题栏和视频，并按当前宽度缩到完整容纳 16:9 视频的高度；当前
+`DisplayBlock` 由可信 `main` 作为 YouTube iframe 同级层显示。字幕跟随原语 / 译文 / 双语偏好，
+间隙隐藏，缺译文显示紧凑引导；独立手柄使用 Pointer Capture 拖动，正文可选择，卡片外指针继续
+交给 YouTube 控件。位置按可移动范围比例保存在 `localStorage`，窗口缩放、换链接和重启后继续
+使用并保持在四边安全距内。再次点击恢复字幕列表与此前尺寸；离开 Embedded 来源时关闭悬浮模式
+并恢复普通列表最小尺寸，浏览器同步来源不显示入口。按钮使用已发布的 Iconify MDI
+`subtitles-outline` / `subtitles`，拖动手柄使用 `drag-vertical`。边界见
+[ADR-0016](../../decisions/0016-desktop-embedded-subtitle-sibling-overlay.md)。
 确认切换后立即建立 Embedded 锁，浏览器 pause 只在后台尽力发送，成功、失败、超时或断连都不等待、
 不提示；之后浏览器播放、换视频和断连也不改变 viewer。watchdog/隔离失败进入恢复态后仍可重新
 加载、换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到

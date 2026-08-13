@@ -1,7 +1,7 @@
 # Desktop Embedded 视频可拖动悬浮字幕 — 设计
 
 - 日期：2026-08-13
-- 状态：设计已确认，待用户审核书面规格
+- 状态：已实施
 - Plane：LISTENUP-15
 - 依赖设计：[Desktop 内嵌 YouTube 播放与字幕通信](2026-08-10-desktop-embedded-youtube-player-design.md)
 - 相关决策：[ADR-0015：Desktop 同窗 YouTube 的播放与字幕传输边界](../decisions/0015-desktop-same-window-youtube-transports.md)

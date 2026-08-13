@@ -35,3 +35,4 @@
 | [0013](0013-desktop-react-compiler-and-cursor-render-boundaries.md) | Desktop 使用 React Compiler 并隔离实时 cursor 渲染边界 | 已采纳 | 2026-08-07 |
 | [0014](0014-desktop-subtitle-row-seek-control.md) | Desktop 字幕行通过既有 Native 控制链路跳转视频 | 已采纳 | 2026-08-07 |
 | [0015](0015-desktop-same-window-youtube-transports.md) | Desktop 同窗 YouTube 的播放与字幕传输边界 | 已采纳 | 2026-08-11 |
+| [0016](0016-desktop-embedded-subtitle-sibling-overlay.md) | Desktop Embedded 字幕使用可信 iframe 同级 Overlay | 已采纳 | 2026-08-13 |
