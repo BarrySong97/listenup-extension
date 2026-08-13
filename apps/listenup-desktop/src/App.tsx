@@ -1,8 +1,8 @@
 /**
- * @purpose 字幕窗口 UI：在既有 Desktop layout 中组合浏览器同步、主动来源切换或官方 YouTube iframe。
+ * @purpose 字幕窗口 UI：组合浏览器同步、YouTube iframe 与 Embedded 视频专注模式。
  * @role    桌面端唯一页面；统一标题栏、Footer、paste 手势、播放器与字幕组件。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
- * @gotcha  paste 只能消费当前用户事件且必须让可编辑元素优先；高频 cursor 不能进入静态字幕子树。
+ * @gotcha  视频专注模式只隐藏 Embedded 字幕区；切回时必须恢复用户展开前的窗口尺寸。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -28,6 +28,10 @@ import {
   resolveSubtitleQueryVideoId,
   shouldShowSourceEntry,
 } from "./embeddedPlayback";
+import {
+  EMBEDDED_VIDEO_ONLY_MIN_WIDTH,
+  embeddedVideoOnlyHeight,
+} from "./embeddedVideoLayout";
 import { SubtitleModeControl } from "./components/ui/SubtitleModeControl";
 import { TargetLanguageSelect } from "./components/ui/TargetLanguageSelect";
 import { buildLocalAiTranslationPrompt } from "./localAiTranslationPrompt";
@@ -375,6 +379,7 @@ export default function App() {
     null
   );
   const [showEmbeddedLinkEditor, setShowEmbeddedLinkEditor] = useState(false);
+  const [embeddedSubtitlesHidden, setEmbeddedSubtitlesHidden] = useState(false);
   const [showCookieSettings, setShowCookieSettings] = useState(false);
   const [replacementUrl, setReplacementUrl] = useState("");
   const [browserSwitchRequest, setBrowserSwitchRequest] = useState<{
@@ -383,6 +388,8 @@ export default function App() {
   const [pasteNotice, setPasteNotice] = useState<string | null>(null);
   const modeRef = useRef(mode);
   const desktopModeRef = useRef<ViewMode>(loadStoredMode());
+  const headerRef = useRef<HTMLElement>(null);
+  const embeddedExpandedSizeRef = useRef<WindowSize | null>(null);
   const vListRef = useRef<VListHandle>(null);
   const lastScrolledViewRef = useRef<{
     sessionId: string | null;
@@ -725,6 +732,75 @@ export default function App() {
     [runEmbeddedAction]
   );
 
+  const restoreEmbeddedSubtitles = useCallback(async () => {
+    setEmbeddedSubtitlesHidden(false);
+    const appWindow = getCurrentWindow();
+    await appWindow.setMinSize(
+      new LogicalSize(MIN_SIZES.list.width, MIN_SIZES.list.height)
+    );
+    const targetSize =
+      embeddedExpandedSizeRef.current ??
+      loadStoredSize("list") ??
+      DEFAULT_SIZES.list;
+    await appWindow.setSize(
+      new LogicalSize(
+        Math.max(targetSize.width, MIN_SIZES.list.width),
+        Math.max(targetSize.height, MIN_SIZES.list.height)
+      )
+    );
+  }, []);
+
+  const toggleEmbeddedSubtitles = useCallback(async () => {
+    if (!embeddedSource) return;
+    if (embeddedSubtitlesHidden) {
+      try {
+        await restoreEmbeddedSubtitles();
+      } catch (error) {
+        console.error("failed to restore embedded subtitle layout", error);
+      }
+      return;
+    }
+
+    try {
+      const appWindow = getCurrentWindow();
+      const [innerSize, scaleFactor] = await Promise.all([
+        appWindow.innerSize(),
+        appWindow.scaleFactor(),
+      ]);
+      if (scaleFactor <= 0) return;
+      const currentSize: WindowSize = {
+        width: Math.round(innerSize.width / scaleFactor),
+        height: Math.round(innerSize.height / scaleFactor),
+      };
+      embeddedExpandedSizeRef.current = currentSize;
+      const headerHeight = headerRef.current?.getBoundingClientRect().height ?? 103;
+      const minHeight = embeddedVideoOnlyHeight(
+        EMBEDDED_VIDEO_ONLY_MIN_WIDTH,
+        headerHeight
+      );
+      const targetHeight = embeddedVideoOnlyHeight(currentSize.width, headerHeight);
+      setEmbeddedSubtitlesHidden(true);
+      await appWindow.setMinSize(
+        new LogicalSize(EMBEDDED_VIDEO_ONLY_MIN_WIDTH, minHeight)
+      );
+      await appWindow.setSize(
+        new LogicalSize(
+          Math.max(currentSize.width, EMBEDDED_VIDEO_ONLY_MIN_WIDTH),
+          targetHeight
+        )
+      );
+    } catch (error) {
+      console.error("failed to enable embedded video-only layout", error);
+    }
+  }, [embeddedSource, embeddedSubtitlesHidden, restoreEmbeddedSubtitles]);
+
+  useEffect(() => {
+    if (embeddedSource || !embeddedSubtitlesHidden) return;
+    void restoreEmbeddedSubtitles().catch((error) => {
+      console.error("failed to reset embedded subtitle layout", error);
+    });
+  }, [embeddedSource, embeddedSubtitlesHidden, restoreEmbeddedSubtitles]);
+
   const handleListScroll = useCallback(() => {
     setIsListScrolling(true);
     if (scrollIdleTimerRef.current !== null) {
@@ -887,11 +963,6 @@ export default function App() {
       : connected
         ? "已连接"
         : "等待扩展连接";
-  const playbackLabel = useMemo(() => {
-    if (!cursor) return "等待播放";
-    if (cursor.isAdPlaying) return "广告播放中";
-    return cursor.isPaused ? "已暂停" : "同步播放中";
-  }, [cursor?.isAdPlaying, cursor?.isPaused]);
   const playbackSecond = Math.floor(cursor?.currentTime ?? 0);
   const playbackDisabledReason = playbackPending
     ? "正在控制 YouTube…"
@@ -990,11 +1061,11 @@ export default function App() {
             pending={playbackPending}
             onPress={controlPlayback}
           />
-          <span
-            className={`text-[11px] ${appModeError || playbackError ? "text-red-300" : "text-fg-faint"}`}
-          >
-            {appModeError ?? playbackError ?? playbackLabel}
-          </span>
+          {(appModeError || playbackError) && (
+            <span className="text-[11px] text-red-300">
+              {appModeError ?? playbackError}
+            </span>
+          )}
           <PlaybackTime
             seconds={playbackSecond}
             className="text-[11px] text-fg-faint"
@@ -1028,8 +1099,10 @@ export default function App() {
   return (
     <main
       className={`${shellClassName} relative grid ${
-        embeddedSource
-          ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
+        embeddedSource && embeddedSubtitlesHidden
+          ? "grid-rows-[auto_minmax(0,1fr)]"
+          : embeddedSource
+            ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
           : "grid-rows-[auto_minmax(0,1fr)_auto]"
       }`}
       onPointerDownCapture={activateDesktopKeyboard}
@@ -1039,6 +1112,7 @@ export default function App() {
         onInstall={() => void updater.installAvailableUpdate()}
       />
       <header
+        ref={headerRef}
         className="min-w-0 border-b border-hairline pb-2.5 pl-3.5 pr-3 pt-3"
         data-tauri-drag-region={appMode === "desktop" ? true : undefined}
       >
@@ -1061,6 +1135,31 @@ export default function App() {
           <DevBadge />
           {embeddedSource ? (
             <>
+              <DesktopIconButton
+                className={iconButtonClassName}
+                onPress={() => void toggleEmbeddedSubtitles()}
+                tooltip={
+                  embeddedSubtitlesHidden
+                    ? "显示字幕"
+                    : "隐藏字幕，只保留视频"
+                }
+                ariaLabel={
+                  embeddedSubtitlesHidden
+                    ? "显示字幕"
+                    : "隐藏字幕，只保留视频"
+                }
+                icon={
+                  <Icon
+                    icon={
+                      embeddedSubtitlesHidden
+                        ? "mdi:subtitles-outline"
+                        : "mdi:subtitles-off-outline"
+                    }
+                    className="h-3.5 w-3.5 flex-none"
+                    aria-hidden="true"
+                  />
+                }
+              />
               <DesktopIconButton
                 className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
                 onPress={() => void reloadEmbeddedPlayback()}
@@ -1204,18 +1303,11 @@ export default function App() {
               "字幕同步 Demo"}
           </span>
           <span className="flex-1" />
-          <span
-            className={
-              appModeError || playbackError || embeddedActionError
-                ? "text-red-300"
-                : undefined
-            }
-          >
-            {appModeError ??
-              playbackError ??
-              embeddedActionError ??
-              playbackLabel}
-          </span>
+          {(appModeError || playbackError || embeddedActionError) && (
+            <span className="text-red-300">
+              {appModeError ?? playbackError ?? embeddedActionError}
+            </span>
+          )}
           <PlaybackTime seconds={playbackSecond} />
         </div>
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
@@ -1242,58 +1334,65 @@ export default function App() {
       </header>
 
       {embeddedSource && (
-        <EmbeddedVideoPanel
-          source={embeddedSource}
-          subtitles={
-            session?.sessionId === embeddedSource.sessionId
-              ? session.subtitles
-              : []
-          }
-        />
+        <div className={embeddedSubtitlesHidden ? "min-h-0 overflow-hidden" : ""}>
+          <EmbeddedVideoPanel
+            fillAvailableSpace={embeddedSubtitlesHidden}
+            source={embeddedSource}
+            subtitles={
+              session?.sessionId === embeddedSource.sessionId
+                ? session.subtitles
+                : []
+            }
+          />
+        </div>
       )}
 
-      <section className="relative min-h-0 overflow-hidden" aria-live="polite">
-        {sourceEntryVisible ? (
-          <EmbeddedSourceEntry
-            awaitingBrowserPlayback={viewer.awaitingBrowserPlayback}
-            browserConnected={connected}
-          />
-        ) : (
-          <SubtitleViewer
-            listRef={vListRef}
-            blocks={displayBlocks}
-            activeIndex={currentIndex}
-            playedThroughIndex={playedThroughIndex}
-            connected={authoritativeConnected}
-            copyStatus={translationCopyStatus}
-            emptyMessage={emptyMessage}
-            isScrolling={isListScrolling}
-            onScroll={handleListScroll}
-            onScrollEnd={handleListScrollEnd}
-            onCopyTranslationPrompt={() => void copyLocalAiTranslationPrompt()}
-            onSeek={(seekTime) => void seekToSubtitle(seekTime)}
-            seekDisabled={playbackDisabled}
-            translationMissing={requestedTranslationMissing}
-          />
-        )}
-      </section>
+      {!embeddedSubtitlesHidden && (
+        <section className="relative min-h-0 overflow-hidden" aria-live="polite">
+          {sourceEntryVisible ? (
+            <EmbeddedSourceEntry
+              awaitingBrowserPlayback={viewer.awaitingBrowserPlayback}
+              browserConnected={connected}
+            />
+          ) : (
+            <SubtitleViewer
+              listRef={vListRef}
+              blocks={displayBlocks}
+              activeIndex={currentIndex}
+              playedThroughIndex={playedThroughIndex}
+              connected={authoritativeConnected}
+              copyStatus={translationCopyStatus}
+              emptyMessage={emptyMessage}
+              isScrolling={isListScrolling}
+              onScroll={handleListScroll}
+              onScrollEnd={handleListScrollEnd}
+              onCopyTranslationPrompt={() => void copyLocalAiTranslationPrompt()}
+              onSeek={(seekTime) => void seekToSubtitle(seekTime)}
+              seekDisabled={playbackDisabled}
+              translationMissing={requestedTranslationMissing}
+            />
+          )}
+        </section>
+      )}
 
-      <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
-        <DesktopButton
-          className="flex h-6 cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 text-[10px] text-fg-faint transition-colors hover:bg-wash hover:text-fg disabled:cursor-wait disabled:opacity-45"
-          onPress={() => void updater.checkForUpdates()}
-          isDisabled={updater.isBusy}
-          aria-label="检查更新"
-        >
-          <Icon
-            icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
-            className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
-            aria-hidden="true"
-          />
-          检查更新
-        </DesktopButton>
-        <span>{displayBlocks.length} 个语义块</span>
-      </footer>
+      {!embeddedSubtitlesHidden && (
+        <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
+          <DesktopButton
+            className="flex h-6 cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 text-[10px] text-fg-faint transition-colors hover:bg-wash hover:text-fg disabled:cursor-wait disabled:opacity-45"
+            onPress={() => void updater.checkForUpdates()}
+            isDisabled={updater.isBusy}
+            aria-label="检查更新"
+          >
+            <Icon
+              icon={updater.isBusy ? "mdi:loading" : "mdi:update"}
+              className={`h-3.5 w-3.5 flex-none ${updater.isBusy ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            检查更新
+          </DesktopButton>
+          <span>{displayBlocks.length} 个语义块</span>
+        </footer>
+      )}
       {pasteNotice && (
         <div
           className="pointer-events-none absolute bottom-10 left-1/2 z-20 max-w-[calc(100%-24px)] -translate-x-1/2 rounded-full border border-hairline bg-black/85 px-3 py-1.5 text-[10px] text-fg shadow-lg backdrop-blur-xl"

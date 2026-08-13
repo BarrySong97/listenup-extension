@@ -2,7 +2,7 @@
  * @purpose 在既有 Desktop layout 中只渲染官方 YouTube iframe，并独立加载当前视频字幕。
  * @role    App.tsx 的单一视频行；不拥有标题栏、字幕组件、按钮样式或第二套页面 shell。
  * @deps    @tauri-apps/api、@listenup/youtube-core、useYoutubeIframePlayer、types
- * @gotcha  iframe 只负责播放；字幕必须经 Rust host/path/videoId 安全门且以 SourceRef 身份提交。
+ * @gotcha  iframe 只负责播放；fillAvailableSpace 仅供专注模式填满剩余窗口高度。
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -93,9 +93,11 @@ const subtitleTransportError = (cause: unknown) => {
 };
 
 export const EmbeddedVideoPanel = ({
+  fillAvailableSpace = false,
   source,
   subtitles,
 }: {
+  fillAvailableSpace?: boolean;
   source: EmbeddedSource;
   subtitles: SubtitleItem[];
 }) => {
@@ -180,7 +182,11 @@ export const EmbeddedVideoPanel = ({
   }, [iframePlayer.error]);
 
   return (
-    <section className="relative aspect-video w-full overflow-hidden border-b border-hairline bg-black">
+    <section
+      className={`relative w-full overflow-hidden border-b border-hairline bg-black ${
+        fillAvailableSpace ? "h-full min-h-0" : "aspect-video"
+      }`}
+    >
       <div ref={hostRef} className="h-full w-full" aria-label="YouTube 视频区域" />
       {!iframePlayer.ready && !iframePlayer.error && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black text-[11px] text-fg-muted">
