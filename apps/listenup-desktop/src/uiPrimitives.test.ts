@@ -50,6 +50,14 @@ test("Desktop icon tooltips use the explicit HeroUI compound trigger", () => {
   );
 });
 
+test("embedded subtitle toggle uses verified Iconify icons", () => {
+  const source = readFileSync(path.join(SOURCE_ROOT, "App.tsx"), "utf8");
+
+  assert.equal(source.includes('"mdi:eye-outline"'), true);
+  assert.equal(source.includes('"mdi:eye-off-outline"'), true);
+  assert.equal(source.includes('"mdi:subtitles-off-outline"'), false);
+});
+
 test("Desktop dialogs share the HeroUI modal primitive and bottom animation", () => {
   const modalPrimitiveSource = readFileSync(
     path.join(UI_PRIMITIVES_ROOT, "DesktopModal.tsx"),

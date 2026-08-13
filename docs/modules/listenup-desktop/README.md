@@ -145,7 +145,8 @@ Cookie 文本域和 contenteditable 仍走普通粘贴。链接先在本地纯�
 `SubtitleViewer`、原语/译文/双语偏好、播放/暂停和字幕 seek，并提供换链接、reload 与显式退出。
 Embedded 标题栏还提供视频专注模式：隐藏字幕时保存展开尺寸，收起字幕区与 Footer，只保留标题栏
 和视频，并按当前宽度缩到完整容纳 16:9 视频的最小高度；再次点击恢复字幕与此前尺寸。离开
-Embedded 来源时自动恢复普通列表最小尺寸，浏览器同步来源不显示此入口。
+Embedded 来源时自动恢复普通列表最小尺寸，浏览器同步来源不显示此入口。按钮使用 Iconify MDI
+中已发布的 `eye-off-outline` / `eye-outline` 表达隐藏与显示动作，Tooltip 同步说明当前动作。
 确认切换后立即建立 Embedded 锁，浏览器 pause 只在后台尽力发送，成功、失败、超时或断连都不等待、
 不提示；之后浏览器播放、换视频和断连也不改变 viewer。watchdog/隔离失败进入恢复态后仍可重新
 加载、换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到

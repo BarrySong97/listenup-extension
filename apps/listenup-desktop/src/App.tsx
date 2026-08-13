@@ -1152,8 +1152,8 @@ export default function App() {
                   <Icon
                     icon={
                       embeddedSubtitlesHidden
-                        ? "mdi:subtitles-outline"
-                        : "mdi:subtitles-off-outline"
+                        ? "mdi:eye-outline"
+                        : "mdi:eye-off-outline"
                     }
                     className="h-3.5 w-3.5 flex-none"
                     aria-hidden="true"
