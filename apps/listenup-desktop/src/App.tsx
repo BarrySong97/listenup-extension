@@ -2,7 +2,7 @@
  * @purpose 字幕窗口 UI：组合浏览器同步、YouTube iframe 与可拖动 Embedded 悬浮字幕。
  * @role    桌面端唯一页面；统一标题栏、Footer、paste 手势、播放器与字幕组件。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
- * @gotcha  悬浮字幕只在 Embedded 生效；关闭或来源退出时必须恢复展开前的窗口尺寸。
+ * @gotcha  Embedded 列表收起与悬浮字幕是独立状态；只有前者能改变窗口尺寸。
  */
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
@@ -390,6 +390,8 @@ export default function App() {
     null
   );
   const [showEmbeddedLinkEditor, setShowEmbeddedLinkEditor] = useState(false);
+  const [embeddedSubtitleListCollapsed, setEmbeddedSubtitleListCollapsed] =
+    useState(false);
   const [embeddedSubtitleOverlayEnabled, setEmbeddedSubtitleOverlayEnabled] =
     useState(false);
   const [embeddedSubtitleOverlayPosition, setEmbeddedSubtitleOverlayPosition] =
@@ -747,7 +749,7 @@ export default function App() {
   );
 
   const restoreEmbeddedSubtitleList = useCallback(async () => {
-    setEmbeddedSubtitleOverlayEnabled(false);
+    setEmbeddedSubtitleListCollapsed(false);
     const appWindow = getCurrentWindow();
     await appWindow.setMinSize(
       new LogicalSize(MIN_SIZES.list.width, MIN_SIZES.list.height)
@@ -764,9 +766,9 @@ export default function App() {
     );
   }, []);
 
-  const toggleEmbeddedSubtitleOverlay = useCallback(async () => {
+  const toggleEmbeddedSubtitleList = useCallback(async () => {
     if (!embeddedSource) return;
-    if (embeddedSubtitleOverlayEnabled) {
+    if (embeddedSubtitleListCollapsed) {
       try {
         await restoreEmbeddedSubtitleList();
       } catch (error) {
@@ -793,7 +795,7 @@ export default function App() {
         headerHeight
       );
       const targetHeight = embeddedVideoOnlyHeight(currentSize.width, headerHeight);
-      setEmbeddedSubtitleOverlayEnabled(true);
+      setEmbeddedSubtitleListCollapsed(true);
       await appWindow.setMinSize(
         new LogicalSize(EMBEDDED_VIDEO_ONLY_MIN_WIDTH, minHeight)
       );
@@ -804,21 +806,27 @@ export default function App() {
         )
       );
     } catch (error) {
-      console.error("failed to enable embedded subtitle overlay", error);
+      console.error("failed to collapse embedded subtitle list", error);
     }
   }, [
     embeddedSource,
-    embeddedSubtitleOverlayEnabled,
+    embeddedSubtitleListCollapsed,
     restoreEmbeddedSubtitleList,
   ]);
 
   useEffect(() => {
-    if (embeddedSource || !embeddedSubtitleOverlayEnabled) return;
-    void restoreEmbeddedSubtitleList().catch((error) => {
-      console.error("failed to reset embedded subtitle overlay", error);
-    });
+    if (embeddedSource) return;
+    if (embeddedSubtitleOverlayEnabled) {
+      setEmbeddedSubtitleOverlayEnabled(false);
+    }
+    if (embeddedSubtitleListCollapsed) {
+      void restoreEmbeddedSubtitleList().catch((error) => {
+        console.error("failed to reset embedded subtitle list", error);
+      });
+    }
   }, [
     embeddedSource,
+    embeddedSubtitleListCollapsed,
     embeddedSubtitleOverlayEnabled,
     restoreEmbeddedSubtitleList,
   ]);
@@ -1132,7 +1140,7 @@ export default function App() {
   return (
     <main
       className={`${shellClassName} relative grid ${
-        embeddedSource && embeddedSubtitleOverlayEnabled
+        embeddedSource && embeddedSubtitleListCollapsed
           ? "grid-rows-[auto_minmax(0,1fr)]"
           : embeddedSource
             ? "grid-rows-[auto_auto_minmax(0,1fr)_auto]"
@@ -1168,6 +1176,31 @@ export default function App() {
           <DevBadge />
           {embeddedSource ? (
             <>
+              <DesktopIconButton
+                className={iconButtonClassName}
+                onPress={() => void toggleEmbeddedSubtitleList()}
+                tooltip={
+                  embeddedSubtitleListCollapsed
+                    ? "展开底部字幕"
+                    : "收起底部字幕"
+                }
+                ariaLabel={
+                  embeddedSubtitleListCollapsed
+                    ? "展开底部字幕"
+                    : "收起底部字幕"
+                }
+                icon={
+                  <Icon
+                    icon={
+                      embeddedSubtitleListCollapsed
+                        ? "mdi:eye-outline"
+                        : "mdi:eye-off-outline"
+                    }
+                    className="h-3.5 w-3.5 flex-none"
+                    aria-hidden="true"
+                  />
+                }
+              />
               <DesktopIconButton
                 className={`${iconButtonClassName} disabled:cursor-wait disabled:opacity-45`}
                 onPress={() => void reloadEmbeddedPlayback()}
@@ -1336,7 +1369,9 @@ export default function App() {
               className={`${iconButtonClassName} ${
                 embeddedSubtitleOverlayEnabled ? "bg-wash text-fg" : ""
               }`}
-              onPress={() => void toggleEmbeddedSubtitleOverlay()}
+              onPress={() =>
+                setEmbeddedSubtitleOverlayEnabled((enabled) => !enabled)
+              }
               tooltip={
                 embeddedSubtitleOverlayEnabled
                   ? "关闭视频悬浮字幕"
@@ -1373,12 +1408,12 @@ export default function App() {
       {embeddedSource && (
         <div
           className={
-            embeddedSubtitleOverlayEnabled ? "min-h-0 overflow-hidden" : ""
+            embeddedSubtitleListCollapsed ? "min-h-0 overflow-hidden" : ""
           }
         >
           <EmbeddedVideoPanel
             copyStatus={translationCopyStatus}
-            fillAvailableSpace={embeddedSubtitleOverlayEnabled}
+            fillAvailableSpace={embeddedSubtitleListCollapsed}
             onCopyTranslationPrompt={copyLocalAiTranslationPrompt}
             onOverlayPositionChange={persistEmbeddedSubtitleOverlayPosition}
             overlayBlock={currentSubtitle}
@@ -1395,7 +1430,7 @@ export default function App() {
         </div>
       )}
 
-      {!embeddedSubtitleOverlayEnabled && (
+      {!embeddedSubtitleListCollapsed && (
         <section className="relative min-h-0 overflow-hidden" aria-live="polite">
           {sourceEntryVisible ? (
             <EmbeddedSourceEntry
@@ -1423,7 +1458,7 @@ export default function App() {
         </section>
       )}
 
-      {!embeddedSubtitleOverlayEnabled && (
+      {!embeddedSubtitleListCollapsed && (
         <footer className="flex items-center justify-between border-t border-hairline px-3.5 py-2 text-[10px] text-fg-faint tabular-nums">
           <DesktopButton
             className="flex h-6 cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 text-[10px] text-fg-faint transition-colors hover:bg-wash hover:text-fg disabled:cursor-wait disabled:opacity-45"

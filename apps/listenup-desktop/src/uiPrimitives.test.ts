@@ -59,11 +59,30 @@ test("embedded subtitle toggle uses verified Iconify icons", () => {
 
   assert.equal(appSource.includes('"mdi:subtitles"'), true);
   assert.equal(appSource.includes('"mdi:subtitles-outline"'), true);
+  assert.equal(appSource.includes('"mdi:eye-outline"'), true);
+  assert.equal(appSource.includes('"mdi:eye-off-outline"'), true);
   assert.equal(appSource.includes('"mdi:subtitles-off-outline"'), false);
   assert.equal(overlaySource.includes('"mdi:drag-vertical"'), true);
   const toggleIndex = appSource.indexOf('ariaLabel={\n                embeddedSubtitleOverlayEnabled');
   assert.notEqual(toggleIndex, -1);
   assert.equal(appSource.indexOf("<PlaybackButton", toggleIndex) > toggleIndex, true);
+});
+
+test("embedded subtitle list collapse and video overlay remain independent", () => {
+  const appSource = readFileSync(path.join(SOURCE_ROOT, "App.tsx"), "utf8");
+
+  assert.equal(appSource.includes("embeddedSubtitleListCollapsed"), true);
+  assert.equal(
+    appSource.includes("fillAvailableSpace={embeddedSubtitleListCollapsed}"),
+    true
+  );
+  assert.equal(
+    appSource.includes("overlayEnabled={embeddedSubtitleOverlayEnabled}"),
+    true
+  );
+  assert.equal(appSource.includes("{!embeddedSubtitleListCollapsed && ("), true);
+  assert.equal(appSource.includes("setEmbeddedSubtitleListCollapsed(false)"), true);
+  assert.equal(appSource.includes("setEmbeddedSubtitleOverlayEnabled(false)"), true);
 });
 
 test("embedded subtitle overlay keeps iframe and selection interaction boundaries", () => {
