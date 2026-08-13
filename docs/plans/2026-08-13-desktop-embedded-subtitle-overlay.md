@@ -9,8 +9,8 @@
 
 在可信 `main` 的 `EmbeddedVideoPanel` 内把 ListenUp 字幕渲染为 YouTube iframe 的同级 Overlay，
 不修改 loopback 包装页、不传输字幕到跨域 iframe。`App.tsx` 继续作为当前显示块与窗口模式事实源，
-新增单一职责 Overlay 组件和纯坐标模块；开关从标题栏移到现有播放 / 暂停按钮旁，开启时复用已实现
-的视频专注窗口尺寸能力，关闭或退出 Embedded 时恢复完整字幕列表与进入前尺寸。
+新增单一职责 Overlay 组件和纯坐标模块；播放 / 暂停按钮旁的 Overlay 开关只控制字幕卡，标题栏
+眼睛按钮独立控制底部列表收起与窗口尺寸，退出 Embedded 时分别复位两种状态。
 
 ## 涉及文件 / 模块
 
@@ -30,8 +30,8 @@
    ResizeObserver 和 pointer end 单次持久化回调。
 3. [x] 改造 `EmbeddedVideoPanel` 为 Overlay 的相对定位边界，保持 iframe、loading/error 与 YouTube
    控件路径不变，Overlay 根层只让字幕卡接收 pointer。
-4. [x] 在 `App.tsx` 将现有隐藏字幕入口移到 `PlaybackButton` 旁并升级为悬浮字幕开关；复用当前
-   `displayBlocks` / cursor presentation，开启后隐藏列表与 Footer，关闭 / 退出时恢复尺寸。
+4. [x] 在 `App.tsx` 把列表收起按钮保留在标题栏、悬浮字幕开关放在 `PlaybackButton` 旁；复用当前
+   `displayBlocks` / cursor presentation，并保证两个状态互不推导。
 5. [x] 处理字幕间隙、loading/empty/error、缺译文引导、换链接保持开启和来源退出关闭等状态。
 6. [x] 增加 UI / 性能 / 安全棘轮，锁定有效 Iconify 图标、入口位置、无字幕 postMessage、无新增权限
    与 Overlay 不订阅连续 `currentTime`。
@@ -82,8 +82,8 @@ cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
 
 使用带人工字幕与译文数据的 YouTube 链接，至少验证：
 
-- 悬浮字幕开关只在 EmbeddedSource 出现且紧邻 ListenUp 播放按钮；
-- 开启后只保留标题栏和视频，当前字幕 Overlay 可见，关闭后恢复完整列表及原尺寸；
+- 列表收起按钮只在 Embedded 标题栏出现，悬浮字幕开关紧邻 ListenUp 播放按钮；
+- 四种状态组合都可用；只有列表按钮隐藏 / 恢复列表、Footer 与窗口尺寸；
 - 原语、译文、双语、字幕间隙与缺译文反馈正确；
 - 手柄可拖到四边且不越界，跨过 iframe 不丢拖动，正文仍可选择；
 - 字幕卡之外的播放、进度条、音量、设置与全屏可用；
@@ -108,3 +108,7 @@ cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml
   并回写实现、验证与提交证据。
 - 用户验收后追加视觉调整：字幕卡复用影院模式 `bg-glass-cinema` 的约 32% 淡黑染色，移除额外
   backdrop blur，并弱化边框、阴影和手柄底色，让视频画面更清晰透过。
+- 用户进一步纠正语义：底部列表收起与 iframe Overlay 必须是两个独立选择。实现增加独立状态与
+  静态棘轮，并以 ADR-0017 部分取代 ADR-0016 的单开关耦合行为。
+- 独立控制修复提交：`e9ef628`。真实 DEV `.app` 验证只收起列表时视频无 Overlay、只开 Overlay
+  时完整列表保留、展开 / 收起列表不改变 Overlay 状态；新增测试后 Desktop tests 30/30。

@@ -5,6 +5,7 @@
 - Plane：LISTENUP-15
 - 依赖设计：[Desktop 内嵌 YouTube 播放与字幕通信](2026-08-10-desktop-embedded-youtube-player-design.md)
 - 相关决策：[ADR-0015：Desktop 同窗 YouTube 的播放与字幕传输边界](../decisions/0015-desktop-same-window-youtube-transports.md)
+- 修正决策：[ADR-0017：列表收起与视频 Overlay 独立](../decisions/0017-desktop-embedded-list-collapse-and-overlay-independent.md)
 
 ## 背景
 
@@ -22,16 +23,17 @@ Desktop 通过 YouTube 链接自播时，当前界面采用“上方官方 ifram
 | 主题 | 决定 |
 |---|---|
 | 架构 | 采用可信 `main` 中 iframe 同级 Overlay，不注入 iframe、不读取 YouTube DOM |
-| 入口 | 悬浮字幕开关只在 Embedded 链接播放时显示，放在 ListenUp 自有播放 / 暂停按钮旁 |
-| 关闭状态 | 保持“视频 + 下方完整字幕列表 + Footer” |
-| 开启状态 | 隐藏下方字幕列表和 Footer，窗口缩成“标题栏 + 视频”，视频上显示当前 ListenUp 字幕 |
+| 入口 | 标题栏眼睛按钮控制列表收起；播放 / 暂停按钮旁字幕按钮控制视频 Overlay |
+| 列表状态 | 展开时保留完整列表与 Footer；收起时窗口缩成“标题栏 + 视频” |
+| Overlay 状态 | 关闭时视频无 ListenUp 覆盖字幕；开启时显示当前 ListenUp 字幕，不改变列表状态 |
+| 状态组合 | 列表展开 / 收起 × Overlay 关闭 / 开启四种组合均可用 |
 | 拖动 | 采用独立拖动手柄；只有手柄启动拖动，字幕文字保持可选择 |
 | 拖动范围 | 字幕卡和手柄必须完整留在视频区域内 |
 | 位置记忆 | 所有 Embedded 视频共用一份相对位置；换视频、缩放窗口和重启 Desktop 后继续使用 |
 | 字幕内容 | 直接跟随现有原语 / 译文 / 双语选择；双语上下两层显示 |
 | 空白间隙 | 当前没有字幕时隐藏悬浮卡，不保留上一句 |
 | 缺少译文 | 不偷偷回退原文，复用紧凑型本地 AI 翻译引导 |
-| 恢复 | 再次点击开关后恢复完整字幕列表及进入悬浮模式前的窗口尺寸 |
+| 恢复 | 再次点击眼睛按钮恢复列表与进入前尺寸；字幕按钮只关闭 Overlay |
 
 ## 目标
 
@@ -74,24 +76,31 @@ Desktop 通过 YouTube 链接自播时，当前界面采用“上方官方 ifram
 
 ## 用户体验
 
-### 1. 开关位置和默认状态
+### 1. 两个入口和默认状态
 
 EmbeddedSource 活跃时，在原语 / 译文 / 双语控制行最右侧的 ListenUp 播放 / 暂停按钮旁显示
 “视频悬浮字幕”图标按钮。按钮使用现有 `DesktopIconButton`，必须提供 Tooltip、`aria-label`、
 hover 和 keyboard focus 状态。BrowserSource、空态和影院模式不显示该入口。
 
+Embedded 标题栏同时显示眼睛按钮，用于收起 / 展开底部字幕列表和 Footer。它与视频悬浮字幕按钮
+分别维护状态，点击任一个都不能改变另一个。
+
 首次使用默认关闭。关闭 Desktop 或退出 EmbeddedSource 后，悬浮模式本身回到关闭状态；只持久化
-用户拖好的位置。这样再次进入自播不会在用户未选择时自动收起完整字幕列表。
+用户拖好的位置。这样再次进入自播不会自动收起完整字幕列表，也不会自动显示 Overlay。
 
-### 2. 开启悬浮字幕
+### 2. 独立动作
 
-用户点击开关后：
+用户点击视频悬浮字幕按钮后：
 
-1. 保存当前展开窗口尺寸；
-2. 隐藏下方 `SubtitleViewer` 和 Footer；
-3. 按现有视频专注布局把窗口缩成标题栏与完整视频区域；
-4. 在视频上显示当前 ListenUp 字幕卡；
-5. 图标、Tooltip 与 `aria-label` 切换成“关闭视频悬浮字幕”。
+1. 在视频上显示或隐藏当前 ListenUp 字幕卡；
+2. 不改变 `SubtitleViewer`、Footer 或窗口尺寸；
+3. 图标、Tooltip 与 `aria-label` 同步切换开启 / 关闭动作。
+
+用户点击标题栏眼睛按钮后：
+
+1. 收起时保存当前展开窗口尺寸，隐藏 `SubtitleViewer` 与 Footer，并缩成标题栏与完整视频区域；
+2. 展开时恢复普通列表最小尺寸、进入前宽高、完整列表与 Footer；
+3. 不改变 Overlay 显隐状态。
 
 标题栏、视频标题、轨道、时间、原语 / 译文 / 双语选择和播放按钮都保留。因此用户可以在悬浮模式
 中切换字幕内容或控制播放，不必先恢复完整列表。
@@ -140,24 +149,19 @@ interface EmbeddedSubtitleOverlayPositionV1 {
 
 ### 6. 关闭和来源退出
 
-再次点击开关后：
+再次点击字幕按钮只卸载 Overlay。再次点击眼睛按钮恢复普通列表最小尺寸、进入收起模式前保存的
+窗口宽高、完整列表与 Footer；当前句继续由现有列表居中逻辑收敛。
 
-1. 卸载 Overlay；
-2. 恢复普通列表最小尺寸；
-3. 恢复进入悬浮模式前保存的窗口宽高；
-4. 重新显示完整字幕列表和 Footer；
-5. 当前句继续由现有列表居中逻辑收敛。
-
-如果用户在悬浮模式中换链接，Overlay 保持开启并使用保存的位置；如果显式退出 EmbeddedSource，
-必须自动关闭悬浮模式并恢复普通布局，防止 BrowserSource 或空态继承视频专注高度。
+如果用户换链接，两个显式状态分别保持；如果显式退出 EmbeddedSource，必须关闭 Overlay，并在
+列表已收起时恢复普通布局，防止 BrowserSource 或空态继承 Embedded 状态。
 
 ## 组件边界
 
 ### `App.tsx`
 
-- 拥有 `embeddedSubtitleOverlayEnabled` UI 状态；
-- 把开关放在 `PlaybackButton` 旁；
-- 复用现有窗口尺寸保存、专注高度计算和退出恢复能力；
+- 独立拥有 `embeddedSubtitleListCollapsed` 与 `embeddedSubtitleOverlayEnabled` UI 状态；
+- 把列表按钮放在 Embedded 标题栏、Overlay 按钮放在 `PlaybackButton` 旁；
+- 只有列表状态复用窗口尺寸保存、专注高度计算和退出恢复能力；
 - 从现有 `displayBlocks` 与 cursor presentation 取得当前语义块；
 - 把当前显示内容传给视频面板，不复制字幕索引算法。
 
@@ -257,14 +261,14 @@ YouTube iframe cursor
 
 ### 真实 DEV `.app` 回归
 
-1. 用 YouTube 链接进入 Embedded 播放，确认开关紧邻 ListenUp 播放按钮，BrowserSource 不显示。
-2. 开启后列表和 Footer 消失，窗口缩到标题栏与完整视频，当前字幕叠在视频上。
+1. 用 YouTube 链接进入 Embedded 播放，确认标题栏有列表按钮、播放按钮旁有 Overlay 按钮。
+2. 分别验证只收起列表、只开 Overlay、两者都开和两者都关，任一动作不改变另一个状态。
 3. 原语、译文、双语切换后，Overlay 内容和高度立即正确变化。
 4. 从手柄拖到四个角和边缘，指针经过 iframe 仍连续，卡片不能越界。
 5. 字幕正文可选择；点击卡片外的视频、YouTube 进度条、音量、设置和全屏仍正常。
 6. 播放进入字幕间隙时卡片消失，下一句在原位置出现，不闪上一句。
 7. 调整窗口宽高后位置按比例保持；换链接、退出并重进 Embedded、重启 Desktop 后位置仍保留。
-8. 关闭开关恢复进入前尺寸、完整字幕列表、Footer 和当前句居中。
+8. 展开列表恢复进入前尺寸、完整字幕列表、Footer 和当前句居中；关闭 Overlay 不 resize。
 9. 在悬浮模式中显式退出 Embedded，空态恢复普通最小高度；后续 BrowserSource 不继承 Overlay。
 10. 无字幕、字幕加载失败、iframe 失败和缺译文引导均不被悬浮层遮挡或伪装。
 11. React Profiler 确认 100ms cursor 不让 Overlay 静态文本和工具栏持续 commit。

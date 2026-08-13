@@ -144,16 +144,19 @@ Cookie 文本域和 contenteditable 仍走普通粘贴。链接先在本地纯�
 没有后台 clipboard read、轮询或全局 `Command+V`，无效内容只显示短暂提示，不会暂停浏览器或
 建立 Embedded 锁。同窗 layout 使用“上视频、下字幕”布局，复用同一
 `SubtitleViewer`、原语/译文/双语偏好、播放/暂停和字幕 seek，并提供换链接、reload 与显式退出。
-Embedded 标题栏的 ListenUp 播放按钮旁还提供“视频悬浮字幕”开关。开启时保存展开尺寸，收起
-字幕列表与 Footer，只保留标题栏和视频，并按当前宽度缩到完整容纳 16:9 视频的高度；当前
-`DisplayBlock` 由可信 `main` 作为 YouTube iframe 同级层显示。字幕跟随原语 / 译文 / 双语偏好，
+Embedded 有两个互不推导的控制：标题栏眼睛按钮只负责收起 / 展开底部字幕列表与 Footer，并在
+收起时按当前宽度缩到“标题栏 + 16:9 视频”、展开时恢复进入前尺寸；ListenUp 播放按钮旁的字幕
+按钮只负责显示 / 隐藏视频 Overlay，不触发 resize。列表展开 / 收起与 Overlay 关闭 / 开启四种
+组合都可用。当前 `DisplayBlock` 由可信 `main` 作为 YouTube iframe 同级层显示，字幕跟随原语 /
+译文 / 双语偏好，
 间隙隐藏，缺译文显示紧凑引导；独立手柄使用 Pointer Capture 拖动，正文可选择，卡片外指针继续
 交给 YouTube 控件。字幕卡复用影院模式的 `bg-glass-cinema` 高透明染色，只保留弱边框与轻阴影，
 不额外模糊视频画面。位置按可移动范围比例保存在 `localStorage`，窗口缩放、换链接和重启后继续
-使用并保持在四边安全距内。再次点击恢复字幕列表与此前尺寸；离开 Embedded 来源时关闭悬浮模式
-并恢复普通列表最小尺寸，浏览器同步来源不显示入口。按钮使用已发布的 Iconify MDI
-`subtitles-outline` / `subtitles`，拖动手柄使用 `drag-vertical`。边界见
-[ADR-0016](../../decisions/0016-desktop-embedded-subtitle-sibling-overlay.md)。
+使用并保持在四边安全距内。离开 Embedded 来源时关闭 Overlay，并在列表已收起时恢复普通列表
+最小尺寸；浏览器同步来源不显示两个入口。按钮使用已发布的 Iconify MDI `eye-outline` /
+`eye-off-outline`、`subtitles-outline` / `subtitles`，拖动手柄使用 `drag-vertical`。边界见
+[ADR-0016](../../decisions/0016-desktop-embedded-subtitle-sibling-overlay.md) 与
+[ADR-0017](../../decisions/0017-desktop-embedded-list-collapse-and-overlay-independent.md)。
 确认切换后立即建立 Embedded 锁，浏览器 pause 只在后台尽力发送，成功、失败、超时或断连都不等待、
 不提示；之后浏览器播放、换视频和断连也不改变 viewer。watchdog/隔离失败进入恢复态后仍可重新
 加载、换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到

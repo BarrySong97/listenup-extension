@@ -36,3 +36,4 @@
 | [0014](0014-desktop-subtitle-row-seek-control.md) | Desktop 字幕行通过既有 Native 控制链路跳转视频 | 已采纳 | 2026-08-07 |
 | [0015](0015-desktop-same-window-youtube-transports.md) | Desktop 同窗 YouTube 的播放与字幕传输边界 | 已采纳 | 2026-08-11 |
 | [0016](0016-desktop-embedded-subtitle-sibling-overlay.md) | Desktop Embedded 字幕使用可信 iframe 同级 Overlay | 已采纳 | 2026-08-13 |
+| [0017](0017-desktop-embedded-list-collapse-and-overlay-independent.md) | Desktop Embedded 列表收起与视频 Overlay 独立 | 已采纳 | 2026-08-13 |
