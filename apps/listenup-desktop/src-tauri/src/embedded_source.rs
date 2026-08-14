@@ -11,6 +11,7 @@ use super::{
     database::{SourceSnapshot, SourceSnapshotSegment},
     source_coordinator::{BrowserPauseState, SourceMode, SourceRef},
     CursorState, SessionState, SubtitleItem, SubtitleTrack, UiUpdate, ViewerSnapshot,
+    PROTOCOL_VERSION,
 };
 
 pub(crate) const EMBEDDED_PROTOCOL_VERSION: u8 = 1;
@@ -324,6 +325,7 @@ impl EmbeddedSourceStore {
                     track,
                     subtitles,
                     cursor,
+                    protocol_version: PROTOCOL_VERSION,
                     bridge_id: 0,
                     updated_order: self.updated_order,
                 });

@@ -28,7 +28,7 @@
 | [0006](0006-adopt-ai-doc-system.md) | 采用 AI-Doc-System，文档收敛到根 docs/ | 已采纳 | 2026-07-25 |
 | [0007](0007-desktop-owned-video-session-selection.md) | Desktop 统一仲裁多视频字幕会话，字幕轨做 videoId 三重校验 | 已采纳 | 2026-07-31 |
 | [0008](0008-desktop-sqlite-bilingual-subtitles-and-safe-cli.md) | Desktop SQLite 原语/译文与安全 AI CLI | 已采纳 | 2026-08-01 |
-| [0009](0009-native-messaging-bidirectional-playback-control.md) | Native Messaging 按 bridge/session 精确路由的双向播放控制 | 已采纳 | 2026-08-07 |
+| [0009](0009-native-messaging-bidirectional-playback-control.md) | Native Messaging 按 bridge/session 精确路由的双向播放控制 | 部分被 0018 取代 | 2026-08-07 |
 | [0010](0010-desktop-and-menubar-app-modes.md) | 同一 NSPanel 支持自由 Desktop 与菜单栏 App 双形态 | 部分被 0011 取代 | 2026-08-07 |
 | [0011](0011-menubar-preserves-desktop-window-size.md) | 菜单栏形态保留 Desktop 窗口尺寸 | 已采纳 | 2026-08-07 |
 | [0012](0012-desktop-heroui-ui-primitives.md) | Desktop 业务交互统一经过 HeroUI 3 primitives | 已采纳 | 2026-08-07 |
@@ -37,3 +37,4 @@
 | [0015](0015-desktop-same-window-youtube-transports.md) | Desktop 同窗 YouTube 的播放与字幕传输边界 | 已采纳 | 2026-08-11 |
 | [0016](0016-desktop-embedded-subtitle-sibling-overlay.md) | Desktop Embedded 字幕使用可信 iframe 同级 Overlay | 已采纳 | 2026-08-13 |
 | [0017](0017-desktop-embedded-list-collapse-and-overlay-independent.md) | Desktop Embedded 列表收起与视频 Overlay 独立 | 已采纳 | 2026-08-13 |
+| [0018](0018-desktop-backward-compatible-native-protocol.md) | Desktop 对商店上一版 Native Messaging 协议保持向后兼容 | 已采纳 | 2026-08-14 |

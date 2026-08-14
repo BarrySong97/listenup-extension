@@ -1,6 +1,6 @@
 # 0009. Native Messaging 升级为按 bridge/session 精确路由的双向播放控制
 
-- 状态：已采纳
+- 状态：部分被 [ADR-0018](0018-desktop-backward-compatible-native-protocol.md) 取代
 - 日期：2026-08-07
 
 ## 背景
@@ -34,7 +34,8 @@ Profile 可能产生相同 tabId。若 GUI 广播播放命令或只按 tabId 路
 
 ## 后果
 
-- Extension 与 Desktop 必须配套升级到 v4；旧版消息因版本不匹配被拒绝。
+- Extension 与 Desktop 的精确路由字段必须对齐；发布渠道间的版本窗口由 Desktop 按
+  [ADR-0018](0018-desktop-backward-compatible-native-protocol.md) 兼容当前线上商店协议。
 - 每条 GUI socket 需要保留可写句柄，Rust 需要 pending command 表与超时/断开清理。
 - GUI 未运行时仍不会弹窗，也没有反向命令；Host 故障不能影响扩展内字幕功能。
 - 自动化棘轮由 `nativeSubtitleProtocol.test.ts`、Rust bridge 路由/result 身份测试和环境

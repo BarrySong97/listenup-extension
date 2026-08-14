@@ -40,6 +40,11 @@ Desktop 把高频 cursor 与低频 viewer/session 状态分开：实时原语列
 
 ## 消息与身份状态
 
+当前权威协议为 v5。由于 Chrome 商店 Extension 与 GitHub Desktop 独立发布，Desktop 同时兼容
+商店 1.5.2 使用的 v4：v4 session 正常显示和持久化，缺少 `playbackEpoch` 的 cursor 由 Desktop
+按同一来源的暂停→播放边界合成，反向命令继续使用来源版本。未知版本仍拒绝；兼容不能绕过
+bridge/tab/session/video 身份校验或 Embedded 退出屏障。见 [ADR-0018](../decisions/0018-desktop-backward-compatible-native-protocol.md)。
+
 - **session** —— 一次字幕快照（videoId + 标题 + 身份状态 + 全量字幕）。协议 v5 的
   `identityStatus` 为 `pending | verified | failed`；只有 verified session 可以携带
   ready / empty 结果和字幕。ready track 还带 `languageCode`、`displayName`、`kind`、
@@ -51,6 +56,7 @@ Desktop 把高频 cursor 与低频 viewer/session 状态分开：实时原语列
   最终 `seeked` 立即发。`currentIndex=-1` 也必须发送，保证拖进字幕间隙后 Desktop 清掉旧高亮。
   v5 还携带每个 session 单调递增的 `playbackEpoch`：首次播放及暂停→播放时递增，普通 cursor、
   seek 和广告区间不递增，供 Desktop 区分旧播放流与退出 EmbeddedSource 后的新播放事件。
+  商店 v4 cursor 没有该字段，Desktop 只对明确的 v4 消息合成等价 epoch；v5 字段必须原样保留。
 - **playbackCommand** —— GUI 生成唯一 commandId，携带完整 session/video/tab 身份和
   `play | pause | seek`；seek 额外要求有限、非负的 `seekTime`。Rust 只向该 session 的 bridge
   写命令，background 只向该 tab 发消息，content 再校验当前 session/video/ad 状态后操作真实

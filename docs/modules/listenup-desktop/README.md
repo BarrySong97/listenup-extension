@@ -76,6 +76,10 @@ GUI 没开时，桥接进程缓存最新的 session 快照、丢弃 cursor；GUI
 并补发缓存的 session。GUI 为每条 socket 分配 bridgeId，播放命令只能写回产生当前 session 的
 bridge；Desktop 等待真实 command result 和后续 cursor，不乐观改状态。
 
+Desktop 当前以 Native v5 为权威，同时兼容 Chrome 商店 1.5.2 仍发送的 v4。v4 cursor 缺少的
+`playbackEpoch` 由 Rust 按真实播放边界合成，session 保留来源版本以回发可被该 Extension 接受的
+播放命令；未知版本继续拒绝。详见 [ADR-0018](../../decisions/0018-desktop-backward-compatible-native-protocol.md)。
+
 🚨 桥接模式下 **stdout 被 Native Messaging 协议独占**，任何诊断只能写 stderr。见 [ADR-0003](../../decisions/0003-native-messaging-single-binary.md)。
 
 ## SQLite 字幕库

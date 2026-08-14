@@ -1,6 +1,6 @@
 // @purpose 统一仲裁浏览器与 Desktop 内置 YouTube 播放来源，并实现显式 Embedded 锁和退出重接屏障。
 // @role    所有来源消息、viewer emit、SQLite 写入和播放控制在产生副作用前都必须经过本模块授权。
-// @deps    BrowserSourceStore、Native Messaging v5 playbackEpoch、桌面端 viewer snapshot
+// @deps    BrowserSourceStore、Native Messaging v4/v5 playbackEpoch 适配、桌面端 viewer snapshot
 // @gotcha  Embedded 故障或旧浏览器消息都不能隐式释放锁；退出后只接受未被隔离的新 session 或播放世代。
 
 use std::collections::HashSet;
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     browser_source::{BrowserSourceStore, PlaybackTarget},
     embedded_source::{EmbeddedMessage, EmbeddedSourceStore},
-    NativeMessage, UiUpdate, ViewerSnapshot, PROTOCOL_VERSION,
+    is_supported_protocol_version, NativeMessage, UiUpdate, ViewerSnapshot, PROTOCOL_VERSION,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
@@ -97,7 +97,7 @@ impl BrowserSessionIdentity {
         else {
             return None;
         };
-        (*version == PROTOCOL_VERSION).then(|| Self {
+        is_supported_protocol_version(*version).then(|| Self {
             bridge_id,
             session_id: session_id.clone(),
             video_id: video_id.clone(),
@@ -119,7 +119,7 @@ impl BrowserPlaybackEpoch {
         else {
             return None;
         };
-        (*version == PROTOCOL_VERSION && !*is_paused && !*is_ad_playing).then(|| Self {
+        (is_supported_protocol_version(*version) && !*is_paused && !*is_ad_playing).then(|| Self {
             bridge_id,
             session_id: session_id.clone(),
             video_id: video_id.clone(),
@@ -238,14 +238,16 @@ impl SourceCoordinator {
 
     pub(crate) fn apply_browser_message(
         &mut self,
-        message: NativeMessage,
+        mut message: NativeMessage,
         bridge_id: u64,
     ) -> BrowserMessageOutcome {
+        self.browser
+            .normalize_legacy_cursor(&mut message, bridge_id);
         let session_identity = BrowserSessionIdentity::from_message(&message, bridge_id);
         let epoch = BrowserPlaybackEpoch::from_message(&message, bridge_id);
         let is_source_snapshot = matches!(
             &message,
-            NativeMessage::Session { version, .. } if *version == PROTOCOL_VERSION
+            NativeMessage::Session { version, .. } if is_supported_protocol_version(*version)
         );
         let shadow_update = self.browser.apply_from_bridge(message, bridge_id);
         let accepted_epoch = epoch.filter(|epoch| self.browser_contains_epoch(epoch));
@@ -467,6 +469,7 @@ impl SourceCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::LEGACY_PROTOCOL_VERSION;
 
     fn embedded_source() -> SourceRef {
         SourceRef::embedded(
@@ -477,8 +480,12 @@ mod tests {
     }
 
     fn session(session_id: &str, video_id: &str) -> NativeMessage {
+        session_with_version(PROTOCOL_VERSION, session_id, video_id)
+    }
+
+    fn session_with_version(version: u8, session_id: &str, video_id: &str) -> NativeMessage {
         NativeMessage::Session {
-            version: PROTOCOL_VERSION,
+            version,
             tab_id: 7,
             session_id: session_id.to_string(),
             video_id: video_id.to_string(),
@@ -497,8 +504,24 @@ mod tests {
         playback_epoch: u64,
         is_paused: bool,
     ) -> NativeMessage {
+        cursor_with_version(
+            PROTOCOL_VERSION,
+            session_id,
+            video_id,
+            playback_epoch,
+            is_paused,
+        )
+    }
+
+    fn cursor_with_version(
+        version: u8,
+        session_id: &str,
+        video_id: &str,
+        playback_epoch: u64,
+        is_paused: bool,
+    ) -> NativeMessage {
         NativeMessage::Cursor {
-            version: PROTOCOL_VERSION,
+            version,
             tab_id: 7,
             session_id: session_id.to_string(),
             video_id: video_id.to_string(),
@@ -657,5 +680,74 @@ mod tests {
 
         assert!(outcome.update.is_none());
         assert_eq!(coordinator.mode, SourceMode::Empty);
+    }
+
+    #[test]
+    fn store_v4_session_displays_subtitles_and_synthesizes_playback_epochs() {
+        let mut coordinator = SourceCoordinator::default();
+        let session_id = "store-session";
+        let video_id = "video-1";
+
+        let session_outcome = coordinator.apply_browser_message(
+            session_with_version(LEGACY_PROTOCOL_VERSION, session_id, video_id),
+            11,
+        );
+        assert!(matches!(
+            session_outcome.update,
+            Some(UiUpdate::Snapshot(_))
+        ));
+        assert_eq!(
+            coordinator.snapshot().active_session.unwrap().session_id,
+            session_id
+        );
+
+        coordinator.apply_browser_message(
+            cursor_with_version(LEGACY_PROTOCOL_VERSION, session_id, video_id, 0, false),
+            11,
+        );
+        assert_eq!(
+            coordinator.browser.sessions[session_id]
+                .cursor
+                .as_ref()
+                .unwrap()
+                .playback_epoch,
+            1
+        );
+        assert_eq!(
+            coordinator
+                .browser_playback_target()
+                .unwrap()
+                .protocol_version,
+            LEGACY_PROTOCOL_VERSION
+        );
+
+        coordinator.apply_browser_message(
+            cursor_with_version(LEGACY_PROTOCOL_VERSION, session_id, video_id, 0, false),
+            11,
+        );
+        assert_eq!(
+            coordinator.browser.sessions[session_id]
+                .cursor
+                .as_ref()
+                .unwrap()
+                .playback_epoch,
+            1
+        );
+        coordinator.apply_browser_message(
+            cursor_with_version(LEGACY_PROTOCOL_VERSION, session_id, video_id, 0, true),
+            11,
+        );
+        coordinator.apply_browser_message(
+            cursor_with_version(LEGACY_PROTOCOL_VERSION, session_id, video_id, 0, false),
+            11,
+        );
+        assert_eq!(
+            coordinator.browser.sessions[session_id]
+                .cursor
+                .as_ref()
+                .unwrap()
+                .playback_epoch,
+            2
+        );
     }
 }

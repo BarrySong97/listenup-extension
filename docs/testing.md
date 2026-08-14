@@ -73,6 +73,9 @@ node scripts/check-docs.mjs                                              # 永�
 - production Host 只允许 `nocahdalbgboblhbjkacpneakljldfjh`，DEV Host 只允许 `gbnneflaaakigllkomehhhaianjebljf`
 - 两个 Chrome profile 同时播放时，正式/DEV Desktop 不串窗口、socket 或字幕
 - Host 未安装时字幕面板照常工作
+- 发布 Desktop 前读取 Chrome 商店当前安装版 manifest / bundle 的真实 Native 协议；商店仍为
+  1.5.2/v4 时，用缺 `playbackEpoch` 的真实 v4 cursor 和 v4 ready session 验证字幕显示、SQLite、
+  epoch 合成与 v4 播放命令，不能只测仓库 HEAD 的 v5 两端
 
 ### 改 Desktop 自播
 

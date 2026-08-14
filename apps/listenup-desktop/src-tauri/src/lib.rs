@@ -1,7 +1,7 @@
 // @purpose 桌面端 Rust 入口：GUI/桥接双模式、来源协调、双向播放/字幕 seek、字幕持久化、NSPanel 与 tray。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
-// @gotcha  stdout 只写 Native Messaging 长度帧；v5 cursor 必须保留 playbackEpoch；NSPanel 必须允许 WKWebView 文本框成为 key responder。
+// @gotcha  stdout 只写 Native Messaging 长度帧；商店 v4 cursor 需合成 playbackEpoch，v5 必须原样保留；NSPanel 必须允许 WKWebView 文本框成为 key responder。
 mod app_mode;
 mod browser_source;
 pub mod cli;
@@ -38,6 +38,8 @@ use std::{
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const PROTOCOL_VERSION: u8 = 5;
+const LEGACY_PROTOCOL_VERSION: u8 = 4;
+const MISSING_PLAYBACK_EPOCH: u64 = u64::MAX;
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
@@ -45,6 +47,14 @@ const CHECK_UPDATE_EVENT: &str = "desktop-check-for-update";
 const EXTENSION_ID: &str = env!("LISTENUP_EXTENSION_ID");
 const NATIVE_HOST_NAME: &str = env!("LISTENUP_NATIVE_HOST_NAME");
 const PRODUCT_NAME: &str = env!("LISTENUP_PRODUCT_NAME");
+
+fn is_supported_protocol_version(version: u8) -> bool {
+    matches!(version, LEGACY_PROTOCOL_VERSION | PROTOCOL_VERSION)
+}
+
+fn missing_playback_epoch() -> u64 {
+    MISSING_PLAYBACK_EPOCH
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +102,8 @@ pub struct SessionState {
     subtitles: Vec<SubtitleItem>,
     cursor: Option<CursorState>,
     #[serde(skip)]
+    protocol_version: u8,
+    #[serde(skip)]
     bridge_id: u64,
     #[serde(skip)]
     updated_order: u64,
@@ -130,6 +142,24 @@ fn validate_playback_request(action: PlaybackAction, seek_time: Option<f64>) -> 
     }
 }
 
+fn playback_command_for_target(
+    target: &PlaybackTarget,
+    command_id: String,
+    action: PlaybackAction,
+    seek_time: Option<f64>,
+) -> PlaybackCommand {
+    PlaybackCommand {
+        kind: "playbackCommand".to_string(),
+        version: target.protocol_version,
+        command_id,
+        tab_id: target.tab_id,
+        session_id: target.session_id.clone(),
+        video_id: target.video_id.clone(),
+        action,
+        seek_time,
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(
     tag = "kind",
@@ -154,6 +184,7 @@ enum NativeMessage {
         tab_id: i64,
         session_id: String,
         video_id: String,
+        #[serde(default = "missing_playback_epoch")]
         playback_epoch: u64,
         current_time: f64,
         current_index: i64,
@@ -522,7 +553,7 @@ fn forward_gui_commands(stream: std::os::unix::net::UnixStream) {
         let command = match serde_json::from_str::<PlaybackCommand>(&line) {
             Ok(command)
                 if command.kind == "playbackCommand"
-                    && command.version == PROTOCOL_VERSION
+                    && is_supported_protocol_version(command.version)
                     && validate_playback_request(command.action, command.seek_time).is_ok() =>
             {
                 command
@@ -662,7 +693,7 @@ fn handle_bridge_connection(app: AppHandle, stream: std::os::unix::net::UnixStre
             error,
         } = &message
         {
-            if *version == PROTOCOL_VERSION {
+            if is_supported_protocol_version(*version) {
                 let result = if *ok {
                     Ok(())
                 } else {
@@ -728,7 +759,7 @@ fn source_snapshot_from_message(message: &NativeMessage) -> Option<SourceSnapsho
     else {
         return None;
     };
-    if *version != PROTOCOL_VERSION
+    if !is_supported_protocol_version(*version)
         || identity_status != "verified"
         || status != "ready"
         || subtitles.is_empty()
@@ -1042,16 +1073,7 @@ pub(crate) async fn dispatch_browser_playback_command(
         .lock()
         .map_err(|_| "播放命令状态暂时不可用".to_string())?
         .register(target.bridge_id, &target.session_id, &target.video_id);
-    let command = PlaybackCommand {
-        kind: "playbackCommand".to_string(),
-        version: PROTOCOL_VERSION,
-        command_id: command_id.clone(),
-        tab_id: target.tab_id,
-        session_id: target.session_id,
-        video_id: target.video_id,
-        action,
-        seek_time,
-    };
+    let command = playback_command_for_target(&target, command_id.clone(), action, seek_time);
 
     let send_result = bridges
         .0
@@ -1470,12 +1492,67 @@ mod tests {
     }
 
     #[test]
+    fn playback_command_uses_the_source_protocol_version() {
+        let target = PlaybackTarget {
+            protocol_version: LEGACY_PROTOCOL_VERSION,
+            bridge_id: 11,
+            tab_id: 7,
+            session_id: "store-session".to_string(),
+            video_id: "video-1".to_string(),
+        };
+        let command = playback_command_for_target(
+            &target,
+            "command-1".to_string(),
+            PlaybackAction::Pause,
+            None,
+        );
+
+        assert_eq!(command.version, LEGACY_PROTOCOL_VERSION);
+    }
+
+    #[test]
     fn native_message_roundtrips_through_bridge_line() {
         let message = session_message("one", 1);
         let line = serde_json::to_string(&message).unwrap();
         assert!(!line.contains('\n'));
         let parsed: NativeMessage = serde_json::from_str(&line).unwrap();
         assert_eq!(parsed, message);
+    }
+
+    #[test]
+    fn parses_store_v4_cursor_without_playback_epoch() {
+        let json = r#"{"kind":"cursor","version":4,"tabId":7,"sessionId":"store-session","videoId":"video-1","currentTime":12.5,"currentIndex":3,"isPaused":false,"isAdPlaying":false,"sentAt":42}"#;
+        let parsed: NativeMessage = serde_json::from_str(json).unwrap();
+
+        assert!(matches!(
+            parsed,
+            NativeMessage::Cursor {
+                version: LEGACY_PROTOCOL_VERSION,
+                playback_epoch: MISSING_PLAYBACK_EPOCH,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn current_v5_cursor_still_requires_playback_epoch() {
+        let mut store = BrowserSourceStore::default();
+        store.apply(session_message("one", 7));
+        let json = r#"{"kind":"cursor","version":5,"tabId":7,"sessionId":"one","videoId":"video-one","currentTime":12.5,"currentIndex":3,"isPaused":false,"isAdPlaying":false,"sentAt":42}"#;
+        let parsed: NativeMessage = serde_json::from_str(json).unwrap();
+
+        assert!(store.apply(parsed).is_none());
+        assert!(store.sessions["one"].cursor.is_none());
+    }
+
+    #[test]
+    fn accepts_store_v4_ready_session_for_persistence() {
+        let json = r#"{"kind":"session","version":4,"tabId":7,"sessionId":"store-session","videoId":"video-1","title":"Video 1","identityStatus":"verified","status":"ready","error":null,"track":{"languageCode":"en","displayName":"English","kind":"manual","vssId":".en","isDefault":true},"subtitles":[{"id":1,"startTime":0.0,"endTime":1.0,"text":"Hello"}]}"#;
+        let message: NativeMessage = serde_json::from_str(json).unwrap();
+        let snapshot = source_snapshot_from_message(&message).unwrap();
+
+        assert_eq!(snapshot.video_id, "video-1");
+        assert_eq!(snapshot.segments.len(), 1);
     }
 
     #[test]
@@ -1633,6 +1710,7 @@ mod tests {
         assert_eq!(
             store.playback_target().unwrap(),
             PlaybackTarget {
+                protocol_version: PROTOCOL_VERSION,
                 bridge_id: 11,
                 tab_id: 7,
                 session_id: "one".to_string(),

@@ -1,14 +1,15 @@
 // @purpose 封装由浏览器扩展提供的字幕会话、播放候选仲裁与反向控制目标解析。
 // @role    作为桌面端浏览器来源的影子状态；上层 SourceCoordinator 决定它何时可影响 UI/持久化。
-// @deps    Native Messaging v5 消息与桌面端共享字幕类型
-// @gotcha  候选顺序必须稳定；bridgeId 是控制路由的一部分；同一 bridge + tab 的新 session 必须替换旧 session。
+// @deps    Native Messaging v4/v5 消息与桌面端共享字幕类型
+// @gotcha  商店 v4 cursor 缺 playbackEpoch，必须先按真实暂停→播放边界合成；同一 bridge + tab 的新 session 替换旧 session。
 
 use std::collections::HashMap;
 
 use super::{
+    is_supported_protocol_version,
     source_coordinator::{BrowserPauseState, SourceMode},
     CursorState, NativeMessage, PlayingCandidate, SessionState, UiUpdate, ViewerSnapshot,
-    PROTOCOL_VERSION,
+    LEGACY_PROTOCOL_VERSION, MISSING_PLAYBACK_EPOCH, PROTOCOL_VERSION,
 };
 
 #[derive(Default)]
@@ -23,6 +24,7 @@ pub(crate) struct BrowserSourceStore {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PlaybackTarget {
+    pub(crate) protocol_version: u8,
     pub(crate) bridge_id: u64,
     pub(crate) tab_id: i64,
     pub(crate) session_id: String,
@@ -172,6 +174,7 @@ impl BrowserSourceStore {
             return Err("正在确认播放会话".to_string());
         }
         Ok(PlaybackTarget {
+            protocol_version: session.protocol_version,
             bridge_id: session.bridge_id,
             tab_id: session.tab_id,
             session_id: session.session_id.clone(),
@@ -202,7 +205,7 @@ impl BrowserSourceStore {
                 track,
                 subtitles,
             } => {
-                if version != PROTOCOL_VERSION {
+                if !is_supported_protocol_version(version) {
                     return None;
                 }
 
@@ -222,6 +225,7 @@ impl BrowserSourceStore {
                     track,
                     subtitles,
                     cursor: previous.and_then(|value| value.cursor),
+                    protocol_version: version,
                     bridge_id,
                     updated_order: order,
                 };
@@ -241,7 +245,9 @@ impl BrowserSourceStore {
                 is_ad_playing,
                 sent_at,
             } => {
-                if version != PROTOCOL_VERSION {
+                if !is_supported_protocol_version(version)
+                    || (version == PROTOCOL_VERSION && playback_epoch == MISSING_PLAYBACK_EPOCH)
+                {
                     return None;
                 }
 
@@ -291,7 +297,7 @@ impl BrowserSourceStore {
                 session_id,
                 video_id,
             } => {
-                if version != PROTOCOL_VERSION {
+                if !is_supported_protocol_version(version) {
                     return None;
                 }
                 let should_remove = self.sessions.get(&session_id).is_some_and(|session| {
@@ -309,6 +315,39 @@ impl BrowserSourceStore {
             }
             NativeMessage::PlaybackCommandResult { .. } => None,
         }
+    }
+
+    pub(crate) fn normalize_legacy_cursor(&self, message: &mut NativeMessage, bridge_id: u64) {
+        let NativeMessage::Cursor {
+            version,
+            tab_id,
+            session_id,
+            video_id,
+            playback_epoch,
+            is_paused,
+            is_ad_playing,
+            ..
+        } = message
+        else {
+            return;
+        };
+        if *version != LEGACY_PROTOCOL_VERSION {
+            return;
+        }
+
+        let previous = self.sessions.get(session_id).filter(|session| {
+            session.bridge_id == bridge_id
+                && session.tab_id == *tab_id
+                && session.video_id == *video_id
+        });
+        let previous_epoch = previous
+            .and_then(|session| session.cursor.as_ref())
+            .map_or(0, |cursor| cursor.playback_epoch);
+        let was_playing = previous
+            .and_then(|session| session.cursor.as_ref())
+            .is_some_and(|cursor| !cursor.is_paused && !cursor.is_ad_playing);
+        let is_playing = !*is_paused && !*is_ad_playing;
+        *playback_epoch = previous_epoch + u64::from(is_playing && !was_playing);
     }
 
     pub(crate) fn select_session(&mut self, session_id: &str) -> Result<ViewerSnapshot, String> {
