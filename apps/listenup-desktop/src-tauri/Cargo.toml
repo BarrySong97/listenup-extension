@@ -1,6 +1,6 @@
 [package]
 name = "listenup-desktop"
-version = "0.5.1"
+version = "0.5.2"
 description = "ListenUp Desktop subtitle viewer"
 authors = ["ListenUp"]
 edition = "2021"

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     browser_source::{BrowserSourceStore, PlaybackTarget},
     embedded_source::{EmbeddedMessage, EmbeddedSourceStore},
-    is_supported_protocol_version, NativeMessage, UiUpdate, ViewerSnapshot, PROTOCOL_VERSION,
+    is_supported_protocol_version, NativeMessage, UiUpdate, ViewerSnapshot,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
@@ -469,7 +469,7 @@ impl SourceCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::LEGACY_PROTOCOL_VERSION;
+    use crate::{LEGACY_PROTOCOL_VERSION, PROTOCOL_VERSION};
 
     fn embedded_source() -> SourceRef {
         SourceRef::embedded(
