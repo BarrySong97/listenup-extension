@@ -1,7 +1,7 @@
 // @purpose 统一仲裁浏览器与 Desktop 内置 YouTube 播放来源，并实现显式 Embedded 锁和退出重接屏障。
 // @role    所有来源消息、viewer emit、SQLite 写入和播放控制在产生副作用前都必须经过本模块授权。
 // @deps    BrowserSourceStore、Native Messaging v5 playbackEpoch、桌面端 viewer snapshot
-// @gotcha  Embedded 故障或浏览器新 cursor 都不能隐式释放锁；退出后只接受未被隔离的新播放世代。
+// @gotcha  Embedded 故障或旧浏览器消息都不能隐式释放锁；退出后只接受未被隔离的新 session 或播放世代。
 
 use std::collections::HashSet;
 
@@ -79,6 +79,32 @@ struct BrowserPlaybackEpoch {
     playback_epoch: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct BrowserSessionIdentity {
+    bridge_id: u64,
+    session_id: String,
+    video_id: String,
+}
+
+impl BrowserSessionIdentity {
+    fn from_message(message: &NativeMessage, bridge_id: u64) -> Option<Self> {
+        let NativeMessage::Session {
+            version,
+            session_id,
+            video_id,
+            ..
+        } = message
+        else {
+            return None;
+        };
+        (*version == PROTOCOL_VERSION).then(|| Self {
+            bridge_id,
+            session_id: session_id.clone(),
+            video_id: video_id.clone(),
+        })
+    }
+}
+
 impl BrowserPlaybackEpoch {
     fn from_message(message: &NativeMessage, bridge_id: u64) -> Option<Self> {
         let NativeMessage::Cursor {
@@ -128,6 +154,7 @@ pub(crate) struct SourceCoordinator {
     embedded_store: Option<EmbeddedSourceStore>,
     browser_pause_state: BrowserPauseState,
     browser_reconnect_barrier: bool,
+    quarantined_browser_sessions: HashSet<BrowserSessionIdentity>,
     quarantined_browser_epochs: HashSet<BrowserPlaybackEpoch>,
 }
 
@@ -140,6 +167,7 @@ impl Default for SourceCoordinator {
             embedded_store: None,
             browser_pause_state: BrowserPauseState::NotNeeded,
             browser_reconnect_barrier: false,
+            quarantined_browser_sessions: HashSet::new(),
             quarantined_browser_epochs: HashSet::new(),
         }
     }
@@ -213,6 +241,7 @@ impl SourceCoordinator {
         message: NativeMessage,
         bridge_id: u64,
     ) -> BrowserMessageOutcome {
+        let session_identity = BrowserSessionIdentity::from_message(&message, bridge_id);
         let epoch = BrowserPlaybackEpoch::from_message(&message, bridge_id);
         let is_source_snapshot = matches!(
             &message,
@@ -222,6 +251,9 @@ impl SourceCoordinator {
         let accepted_epoch = epoch.filter(|epoch| self.browser_contains_epoch(epoch));
 
         if self.is_embedded_locked() {
+            if let Some(identity) = session_identity {
+                self.quarantined_browser_sessions.insert(identity);
+            }
             if let Some(epoch) = accepted_epoch {
                 self.quarantined_browser_epochs.insert(epoch);
             }
@@ -232,9 +264,13 @@ impl SourceCoordinator {
         }
 
         if self.browser_reconnect_barrier {
-            let should_reconnect = accepted_epoch
+            let has_new_session = session_identity
+                .as_ref()
+                .is_some_and(|identity| !self.quarantined_browser_sessions.contains(identity));
+            let has_new_playback_epoch = accepted_epoch
                 .as_ref()
                 .is_some_and(|epoch| !self.quarantined_browser_epochs.contains(epoch));
+            let should_reconnect = has_new_session || has_new_playback_epoch;
             if should_reconnect {
                 self.browser_reconnect_barrier = false;
                 self.mode = SourceMode::BrowserActive;
@@ -389,6 +425,17 @@ impl SourceCoordinator {
     }
 
     fn quarantine_observed_browser_epochs(&mut self) {
+        self.quarantined_browser_sessions
+            .extend(
+                self.browser
+                    .sessions
+                    .values()
+                    .map(|session| BrowserSessionIdentity {
+                        bridge_id: session.bridge_id,
+                        session_id: session.session_id.clone(),
+                        video_id: session.video_id.clone(),
+                    }),
+            );
         self.quarantined_browser_epochs
             .extend(self.browser.sessions.values().filter_map(|session| {
                 let cursor = session.cursor.as_ref()?;
@@ -576,6 +623,39 @@ mod tests {
         let periodic =
             coordinator.apply_browser_message(cursor("browser-1", "video-1", 1, false), 11);
         assert!(periodic.update.is_none());
+        assert_eq!(coordinator.mode, SourceMode::Empty);
+    }
+
+    #[test]
+    fn exit_accepts_a_new_browser_session_without_waiting_for_playback() {
+        let mut coordinator = SourceCoordinator::default();
+        establish_browser_playback(&mut coordinator);
+        let source = embedded_source();
+        coordinator.enter_embedded(source.clone()).unwrap();
+        coordinator.exit_embedded(&source).unwrap();
+
+        let outcome = coordinator.apply_browser_message(session("browser-refresh", "video-1"), 11);
+
+        assert!(matches!(outcome.update, Some(UiUpdate::Snapshot(_))));
+        assert_eq!(coordinator.mode, SourceMode::BrowserActive);
+        assert_eq!(
+            coordinator.snapshot().active_session.unwrap().session_id,
+            "browser-refresh"
+        );
+    }
+
+    #[test]
+    fn exit_rejects_a_session_first_seen_while_embedded() {
+        let mut coordinator = SourceCoordinator::default();
+        establish_browser_playback(&mut coordinator);
+        let source = embedded_source();
+        coordinator.enter_embedded(source.clone()).unwrap();
+        coordinator.apply_browser_message(session("browser-locked", "video-2"), 11);
+        coordinator.exit_embedded(&source).unwrap();
+
+        let outcome = coordinator.apply_browser_message(session("browser-locked", "video-2"), 11);
+
+        assert!(outcome.update.is_none());
         assert_eq!(coordinator.mode, SourceMode::Empty);
     }
 }

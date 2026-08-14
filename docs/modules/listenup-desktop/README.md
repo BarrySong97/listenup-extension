@@ -159,8 +159,9 @@ Embedded 有两个互不推导的控制：标题栏眼睛按钮只负责收起 /
 [ADR-0017](../../decisions/0017-desktop-embedded-list-collapse-and-overlay-independent.md)。
 确认切换后立即建立 Embedded 锁，浏览器 pause 只在后台尽力发送，成功、失败、超时或断连都不等待、
 不提示；之后浏览器播放、换视频和断连也不改变 viewer。watchdog/隔离失败进入恢复态后仍可重新
-加载、换链接或退出。退出后 main 保持空态，旧浏览器 cursor 不能越过 playbackEpoch 屏障，直到
-浏览器出现下一次手动播放、换视频或自动连播。
+加载、换链接或退出。退出后 main 保持空态，旧浏览器 session / cursor 不能越过重接屏障，直到
+浏览器出现下一次手动播放、换视频、自动连播，或页面刷新产生自播期间未观察过的全新 session；
+新 session 即使仍处于暂停态也会恢复浏览器字幕快照。
 
 ## 手动 YouTube Cookie
 

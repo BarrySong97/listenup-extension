@@ -1,7 +1,7 @@
 // @purpose 封装由浏览器扩展提供的字幕会话、播放候选仲裁与反向控制目标解析。
 // @role    作为桌面端浏览器来源的影子状态；上层 SourceCoordinator 决定它何时可影响 UI/持久化。
 // @deps    Native Messaging v5 消息与桌面端共享字幕类型
-// @gotcha  候选顺序必须稳定；bridgeId 是控制路由的一部分，不能仅按 tabId/sessionId 匹配。
+// @gotcha  候选顺序必须稳定；bridgeId 是控制路由的一部分；同一 bridge + tab 的新 session 必须替换旧 session。
 
 use std::collections::HashMap;
 
@@ -208,6 +208,9 @@ impl BrowserSourceStore {
 
                 let order = self.next_sequence();
                 let previous = self.sessions.remove(&session_id);
+                self.sessions.retain(|_, existing| {
+                    existing.bridge_id != bridge_id || existing.tab_id != tab_id
+                });
                 let session = SessionState {
                     tab_id,
                     session_id: session_id.clone(),

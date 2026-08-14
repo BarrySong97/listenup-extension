@@ -61,6 +61,8 @@ Desktop 把高频 cursor 与低频 viewer/session 状态分开：实时原语列
 background 为向上的每条消息补 `tabId`，并且**只在 session 到达时才懒连接**当前构建对应的
 Host——所以没有字幕的页面不会白白拉起进程。命令超时为 2 秒；断开的 bridge 会立即令对应
 pending command 失败，不会改投其他标签页。
+同一 bridge + tab 新建 session 时，Desktop 会替换该 tab 的旧 session；页面卸载时的异步 end
+即使没有送达，刷新也不会留下一个仍被误判为播放中的幽灵候选。
 
 ## 正式 / DEV 隔离
 
@@ -86,6 +88,9 @@ Chrome profile 能隔离两套扩展安装，但 Native Host manifest 是同一 
   cursor 不写。CLI 改译文后不走这条 socket，也不发事件；Desktop 重新聚焦时自行查询。
 - **广告、无 cursor、连接断开或选择冲突** → 播放按钮禁用；命令校验失败或超时只在 Desktop
   显示可恢复错误，不伪造播放状态，也不影响扩展字幕面板。
+- **退出 Desktop 自播** → 先保持空态并隔离自播期间已经观察到的浏览器 session / 播放世代；
+  之后手动播放、换视频、自动连播，或刷新页面产生一个全新 session 时恢复浏览器字幕来源。
+  刷新后的页面即使尚未播放，也应先恢复字幕快照，播放按钮继续按真实 cursor 状态决定是否可用。
 
 ## Host 自动注册
 
