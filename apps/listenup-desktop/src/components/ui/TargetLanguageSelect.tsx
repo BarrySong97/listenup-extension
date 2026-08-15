@@ -2,7 +2,7 @@
  * @purpose 用 HeroUI Select 渲染当前原文 revision 可用的目标译文语言。
  * @role    App 列表 header 中受控的目标语言选择器。
  * @deps    @heroui/react、react-i18next
- * @gotcha  空选项时只显示禁用 placeholder；选择值仍由 App 的 localStorage 偏好控制。
+ * @gotcha  HeroUI 默认会给 Trigger / Value 注入 36px 高度与较大字号，必须由共享 toolbar class 显式重置。
  */
 import { ListBox, Select } from "@heroui/react";
 import { useTranslation } from "react-i18next";
@@ -37,9 +37,9 @@ export const TargetLanguageSelect = ({
       isDisabled={isDisabled}
       className="max-w-[132px]"
     >
-      <Select.Trigger className="flex h-6 max-w-[132px] cursor-pointer items-center gap-1 rounded-md border border-white/10 bg-black/30 px-1.5 text-[10px] text-fg outline-none disabled:cursor-not-allowed disabled:opacity-50">
+      <Select.Trigger className="desktop-subtitle-toolbar-control flex max-w-[132px] cursor-pointer items-center gap-1 border border-white/10 bg-black/30 text-fg outline-none disabled:cursor-not-allowed disabled:opacity-50">
         <Select.Value className="min-w-0 flex-1 truncate text-left" />
-        <Select.Indicator className="h-3 w-3 flex-none text-fg-faint" />
+        <Select.Indicator className="flex-none text-fg-faint" />
       </Select.Trigger>
       <Select.Popover className="z-[100] min-w-[132px] rounded-lg border border-white/10 bg-[#242427] p-1 text-fg shadow-xl">
         <ListBox items={options} className="max-h-56 overflow-y-auto outline-none">

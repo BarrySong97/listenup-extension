@@ -2,7 +2,7 @@
  * @purpose 用 HeroUI ToggleButtonGroup 渲染原语、译文、双语三选一控件。
  * @role    列表 header 与影院 hover 工具条共享同一受控字幕模式交互。
  * @deps    @heroui/react、react-i18next、../../types
- * @gotcha  单选组禁止清空；影院 compact 只改变像素样式，不建立第二份模式状态。
+ * @gotcha  单选组禁止清空；普通态与目标语言 Select 共用 desktop-subtitle-toolbar-control 尺寸契约。
  */
 import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { useTranslation } from "react-i18next";
@@ -56,7 +56,7 @@ export const SubtitleModeControl = ({
                   ? "border-white/15 bg-white/15 text-fg"
                   : "border-transparent bg-transparent text-fg-faint hover:bg-white/10 hover:text-fg"
               }`
-            : `m-0 h-6 min-w-0 cursor-pointer rounded-md border px-2 text-[10px] outline-none transition-colors ${
+            : `desktop-subtitle-toolbar-control m-0 min-w-0 cursor-pointer border outline-none transition-colors ${
                 isSelected
                   ? "border-white/20 bg-white/15 text-fg"
                   : "border-transparent bg-transparent text-fg-faint hover:bg-wash hover:text-fg"

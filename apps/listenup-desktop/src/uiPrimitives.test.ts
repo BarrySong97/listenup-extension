@@ -1,5 +1,5 @@
 /**
- * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定 Tooltip、Modal、字幕行与视频字幕层交互边界。
+ * @purpose 防止 Desktop 业务 JSX 绕过 UI primitives，并锁定 Tooltip、Modal、字幕工具行与视频字幕层交互边界。
  * @role    pnpm desktop test 的 UI 架构棘轮，扫描 src 下全部业务 TSX。
  * @deps    node:assert、node:fs、node:path、node:test、node:url
  * @gotcha  components/ui 是唯一允许封装交互 primitives 的目录；虚拟字幕行必须保留无 React Aria hover state 的专用例外。
@@ -46,6 +46,35 @@ test("Desktop icon tooltips use the explicit HeroUI compound trigger", () => {
   assert.equal(source.includes("</Tooltip.Trigger>"), true);
   assert.equal(
     source.indexOf("<Tooltip.Trigger>") < source.indexOf("<Tooltip.Content"),
+    true
+  );
+});
+
+test("subtitle mode tabs and target language select share compact metrics", () => {
+  const modeSource = readFileSync(
+    path.join(UI_PRIMITIVES_ROOT, "SubtitleModeControl.tsx"),
+    "utf8"
+  );
+  const languageSource = readFileSync(
+    path.join(UI_PRIMITIVES_ROOT, "TargetLanguageSelect.tsx"),
+    "utf8"
+  );
+  const stylesSource = readFileSync(
+    path.join(SOURCE_ROOT, "styles.css"),
+    "utf8"
+  );
+
+  assert.equal(modeSource.includes("desktop-subtitle-toolbar-control"), true);
+  assert.equal(languageSource.includes("desktop-subtitle-toolbar-control"), true);
+  assert.equal(
+    stylesSource.includes(".desktop-subtitle-toolbar-control {"),
+    true
+  );
+  assert.equal(stylesSource.includes("height: 1.5rem;"), true);
+  assert.equal(stylesSource.includes("min-height: 0;"), true);
+  assert.equal(stylesSource.includes("font-size: 0.625rem;"), true);
+  assert.equal(
+    stylesSource.includes('[data-slot="select-value"]'),
     true
   );
 });

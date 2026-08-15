@@ -37,6 +37,36 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* 列表字幕工具行的模式 Tab 与目标语言 Select 共用同一尺寸契约。
+   HeroUI Select 默认 min-height / padding / Value 字号会把中文语言值撑大，
+   因此这里同时重置 Trigger 与内部 slot，避免两个相邻控件再次漂移。 */
+.desktop-subtitle-toolbar-control {
+  height: 1.5rem;
+  min-height: 0;
+  border-radius: 0.375rem;
+  padding-block: 0;
+  padding-inline: 0.5rem;
+  font-size: 0.625rem;
+  line-height: 1;
+}
+
+.desktop-subtitle-toolbar-control[data-slot="select-trigger"]:has(
+    [data-slot="select-default-indicator"]
+  ) {
+  padding-inline-end: 1.5rem;
+}
+
+.desktop-subtitle-toolbar-control [data-slot="select-value"] {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.desktop-subtitle-toolbar-control [data-slot="select-default-indicator"] {
+  inset-inline-end: 0.375rem;
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
 /* HeroUI v3 Modal 通过 data-entering / data-exiting 暴露动画状态。
    Dialog 最终仍保持原位置，只让整层内容像 bottom sheet 一样从窗口底部滑入。 */
 @keyframes desktop-modal-enter-from-bottom {
