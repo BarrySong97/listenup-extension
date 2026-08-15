@@ -14,6 +14,7 @@ app/
   provider.tsx      HeroUI v3 Provider
   page.tsx          主页面：nav / hero / 下载 CTA / 右侧产品 mock / footer
   store-shot/page.tsx  Chrome Web Store 截图用的辅助路由（不在导航里，只为出图）
+  store-shot/concepts/ Chrome Web Store 商店图方向草案画布（LISTENUP-23，选型前预览）
   opengraph-image.tsx  动态 OG 图（必须 `export const dynamic = "force-static"`）
   globals.css       Tailwind + @heroui/styles + 明暗基础色
   landing.css       落地页设计 token 与工具类（:root 变量，见 design.md）
