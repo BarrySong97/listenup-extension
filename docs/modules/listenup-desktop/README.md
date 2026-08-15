@@ -413,8 +413,9 @@ Footer 右下角和菜单栏 tray 提供用户主动触发的“检查更新”�
 
 DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.json` 也关闭 updater artifact 生成。首个带 updater 的正式版本仍需用户手工安装一次，从下一版开始才能应用内更新。
 
-当前发布基线为 `v0.5.3`；该版本新增中文 / 英文界面切换并持久化偏好，Footer 左侧提供语言入口，
-右侧显示当前版本与“检查更新”。`v0.5.1 → v0.5.2` 的 Chrome 商店 Extension 1.5.2 / Native v4
+当前发布基线为 `v0.5.4`；该版本将目标语言 Select 与 Source / Translation / Bilingual 模式 Tab
+统一为紧凑工具行尺寸，并用 UI 棘轮锁定 HeroUI 默认样式重置。`v0.5.3` 新增的中英文界面、
+Footer 版本与更新入口保持不变。`v0.5.1 → v0.5.2` 的 Chrome 商店 Extension 1.5.2 / Native v4
 向后兼容链路仍是发布回归基线，必须确认“已连接”后能收到字幕并以来源版本回发控制命令。
 
 ## 验证
