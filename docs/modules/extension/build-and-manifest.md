@@ -49,9 +49,10 @@
 
 `apps/extension/public/manifest.json` 是构建生成的，已在 `.gitignore` 里，不要手改。
 
-当前待发布基线为 `1.5.3`：它把仓库已实现的 Native Messaging v5（含
-`playbackEpoch`）提交到 Chrome Web Store；Desktop `0.5.2` 同时兼容商店旧版 v4 与新版 v5，
-所以扩展审核和手动放量期间不会形成协议切换窗口。
+当前商店审核基线为 `1.5.3`，线上已发布版本仍为 `1.5.2`。`1.5.3` 把仓库已实现的 Native
+Messaging v5（含 `playbackEpoch`）提交到 Chrome Web Store；Desktop `0.5.2` 同时兼容商店
+旧版 v4 与新版 v5，所以扩展审核和手动放量期间不会形成协议切换窗口。审核通过后保持 staged，
+待手动发布。
 
 ## 本地加载
 
