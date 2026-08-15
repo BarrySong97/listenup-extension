@@ -1,7 +1,7 @@
 /**
  * @purpose Explain 解释卡片：词性、音标朗读、AI 讲解、图片参考与错误态。
  * @role    面板内右侧滑出的覆盖层，数据来自 useExplain。
- * @deps    services/ai/explainSchema、services/search/imageSearch、services/tts/speak、framer-motion
+ * @deps    services/ai/explainSchema、services/search/imageSearch、services/tts/speak、framer-motion、react-i18next
  * @gotcha  加载分 skeleton → 原始 JSON 文本 → 正式 UI 三段；缺 key 时错误区要给出打开设置的入口。见 docs/modules/extension/explain-card.md
  */
 import { FC, useEffect } from "react";
@@ -15,6 +15,7 @@ import { buildWebSearchUrl } from "@src/services/search/imageSearch";
 import { AiSettings } from "@src/services/ai/aiSettings";
 import { speak } from "@src/services/tts/speak";
 import { ExplainTarget } from "../hooks/useExplain";
+import { useTranslation } from "react-i18next";
 
 interface ExplainCardProps {
   target: ExplainTarget | null;
@@ -64,6 +65,8 @@ export const ExplainCard: FC<ExplainCardProps> = ({
   onRefresh,
   onOpenSettings,
 }) => {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (!target) return;
     const handler = (event: KeyboardEvent) => {
@@ -109,7 +112,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
                 variant="light"
                 className={headerActionButtonClassName}
                 onPressStart={onOpenSettings}
-                aria-label="AI Settings"
+                aria-label={t("explainCard.aiSettings")}
               >
                 <Icon icon="mdi:cog-outline" className={iconScale.headerAction} />
               </Button>
@@ -119,7 +122,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
                 variant="light"
                 className={headerActionButtonClassName}
                 onPressStart={onRefresh}
-                aria-label="Refresh"
+                aria-label={t("common.refresh")}
                 isDisabled={loading}
               >
                 <Icon icon="mdi:refresh" className={iconScale.headerAction} />
@@ -130,7 +133,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
                 variant="light"
                 className={headerActionButtonClassName}
                 onPressStart={onClose}
-                aria-label="Close"
+                aria-label={t("common.close")}
               >
                 <Icon icon="mdi:close" className={iconScale.headerAction} />
               </Button>
@@ -185,7 +188,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
                     variant="flat"
                     onPressStart={onOpenSettings}
                   >
-                    Open AI Settings
+                    {t("explainCard.openAiSettings")}
                   </Button>
                 </div>
               </div>
@@ -194,7 +197,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
             <div className="mt-4">
               <div className="flex items-center gap-1.5 text-[13px] font-semibold text-amber-700">
                 <Icon icon="mdi:book-open-page-variant-outline" className={iconScale.secondaryAction} />
-                <span>Meaning</span>
+                <span>{t("explainCard.meaning")}</span>
               </div>
               <div className="mt-1 text-[15px] font-semibold text-zinc-900">
                 {showInitialSkeleton ? (
@@ -217,7 +220,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
             <div>
               <div className="flex items-center gap-1.5 text-[13px] font-semibold text-amber-700">
                 <Icon icon="mdi:format-list-bulleted" className={iconScale.secondaryAction} />
-                <span>Details & Usage</span>
+                <span>{t("explainCard.detailsUsage")}</span>
               </div>
               {showInitialSkeleton ? (
                 <div className="mt-2 space-y-2">
@@ -244,7 +247,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 text-[13px] font-semibold text-amber-700">
                   <Icon icon="mdi:image-multiple-outline" className={iconScale.secondaryAction} />
-                  <span>Visual Reference</span>
+                  <span>{t("explainCard.visualReference")}</span>
                 </div>
                 {settings ? (
                   <a
@@ -257,7 +260,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
                     className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] text-zinc-700 transition-colors hover:bg-zinc-200"
                   >
                     <Icon icon="mdi:magnify" className="h-3.5 w-3.5" />
-                    More Images on Internet
+                    {t("explainCard.moreImages")}
                   </a>
                 ) : null}
               </div>
@@ -292,7 +295,7 @@ export const ExplainCard: FC<ExplainCardProps> = ({
                 </div>
               ) : (
                 <div className="mt-2 text-xs text-zinc-500">
-                  No images found.
+                  {t("explainCard.noImages")}
                 </div>
               )}
             </div>

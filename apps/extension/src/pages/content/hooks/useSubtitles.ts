@@ -1,7 +1,7 @@
 /**
  * @purpose 字幕加载 hook：把字幕、轨道与身份状态原子绑定到单个 videoId 快照。
  * @role    UI 与 subtitle-domain 之间的唯一桥梁。
- * @deps    lib/subtitle-domain/SubtitleRepository、AbortController
+ * @deps    react-i18next、lib/subtitle-domain/SubtitleRepository、AbortController
  * @gotcha  React effect 尚未运行时也必须同步返回新 videoId 的空快照，绝不能短暂暴露旧字幕
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import { CaptionTrackDescriptor } from "../lib/captions/types";
 import { subtitleDebug } from "../lib/subtitle-domain/subtitleDebug";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 import type { NativeSubtitleIdentityStatus } from "@src/shared/nativeSubtitleProtocol";
+import { useTranslation } from "react-i18next";
 
 interface UseSubtitlesOptions {
   enabled: boolean;
@@ -38,6 +39,7 @@ const EMPTY_SNAPSHOT: SubtitleSnapshot = {
 };
 
 export const useSubtitles = ({ enabled, videoId }: UseSubtitlesOptions) => {
+  const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<SubtitleSnapshot>(EMPTY_SNAPSHOT);
   const requestIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -155,12 +157,24 @@ export const useSubtitles = ({ enabled, videoId }: UseSubtitlesOptions) => {
         subtitles: [],
         track: null,
         loading: false,
-        error: hidesExpectedEmptyState ? null : result.message,
+        error: hidesExpectedEmptyState
+          ? null
+          : t(
+              {
+                PLAYER_NOT_READY: "subtitleErrors.playerNotReady",
+                VIDEO_ID_MISMATCH: "subtitleErrors.videoMismatch",
+                TRACK_SELECTION_FAILED: "subtitleErrors.trackSelectionFailed",
+                NETWORK_ERROR: "subtitleErrors.networkError",
+                PARSE_ERROR: "subtitleErrors.parseError",
+                BRIDGE_TIMEOUT: "subtitleErrors.bridgeTimeout",
+                UNSUPPORTED_SHAPE: "subtitleErrors.unsupportedShape",
+              }[result.code] ?? "subtitleErrors.loadFailed"
+            ),
         identityStatus:
           result.code === "NO_CAPTION_TRACKS" ? "verified" : "failed",
       });
     }
-  }, [enabled, videoId]);
+  }, [enabled, t, videoId]);
 
   useEffect(() => {
     void load();

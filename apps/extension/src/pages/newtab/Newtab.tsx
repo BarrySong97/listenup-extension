@@ -1,7 +1,7 @@
 /**
  * @purpose 字幕面板实验室：用 mock 数据复现 loaded/loading/empty/error/ad 及 Explain 卡片各态。
  * @role    脱离 YouTube 迭代面板 UI 的预览页，直接复用内容脚本组件。
- * @deps    pages/content/components/*、pages/content/hooks/usePanelToast、services 的类型
+ * @deps    pages/content/components/*、pages/content/hooks/usePanelToast、react-i18next、services 的类型
  * @gotcha  只能验证视觉与局部交互，证明不了字幕抓取/播放器同步/Shadow DOM 行为。见 docs/testing.md
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -19,6 +19,8 @@ import type { SubtitleItem } from "@pages/content/lib/subtitles/subtitleTypes";
 import type { ExplainResult } from "@src/services/ai/explainSchema";
 import type { ImageSearchResult } from "@src/services/search/imageSearch";
 import type { AiSettings } from "@src/services/ai/aiSettings";
+import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "@src/components/ui";
 
 const MOCK_EXPLAIN_DATA: ExplainResult = {
   partOfSpeech: "adjective",
@@ -141,17 +143,18 @@ const mockSubtitles: SubtitleItem[] = [
   },
 ];
 
-const previewStateLabels: Array<{ key: PreviewState; label: string }> = [
-  { key: "loaded", label: "Loaded" },
-  { key: "loading", label: "Loading" },
-  { key: "empty", label: "Empty" },
-  { key: "error", label: "Error" },
-  { key: "ad", label: "Ad" },
+const previewStateLabels: Array<{ key: PreviewState; labelKey: string }> = [
+  { key: "loaded", labelKey: "preview.loaded" },
+  { key: "loading", labelKey: "preview.loading" },
+  { key: "empty", labelKey: "preview.empty" },
+  { key: "error", labelKey: "preview.error" },
+  { key: "ad", labelKey: "preview.ad" },
 ];
 
 type ExplainPreviewState = "hidden" | "loading" | "loaded" | "error";
 
 export default function Newtab() {
+  const { t } = useTranslation();
   const [previewState, setPreviewState] = useState<PreviewState>("loaded");
   const [activeIndex, setActiveIndex] = useState(2);
   const [isOpen, setIsOpen] = useState(true);
@@ -181,13 +184,13 @@ export default function Newtab() {
 
   const errorMessage =
     previewState === "error"
-      ? "Failed to load subtitles. This preview mode is intentionally simulating an error state."
+      ? t("preview.simulatedError")
       : null;
 
   const panelSummary = useMemo(() => {
-    if (previewState !== "loaded") return previewState;
-    return `${subtitles.length} subtitles`;
-  }, [previewState, subtitles.length]);
+    if (previewState !== "loaded") return t(`preview.${previewState}`);
+    return t("preview.subtitleCount", { count: subtitles.length });
+  }, [previewState, subtitles.length, t]);
 
   const handleSubtitleClick = (_subtitle: SubtitleItem, index: number) => {
     setActiveIndex(index);
@@ -281,22 +284,21 @@ export default function Newtab() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  UI Preview
+                  {t("preview.title")}
                 </p>
                 <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
-                  Subtitle Panel Lab
+                  {t("preview.subtitle")}
                 </h1>
               </div>
             </div>
 
             <p className="mt-5 text-sm leading-6 text-zinc-600">
-              Use this page to iterate on the panel without reloading YouTube.
-              State switches below simulate list, empty, error, and ad modes.
+              {t("preview.description")}
             </p>
 
             <div className="mt-6 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
-                Preview State
+                {t("preview.panelState")}
               </p>
               <div className="flex flex-wrap gap-2">
                 {previewStateLabels.map((item) => (
@@ -308,7 +310,7 @@ export default function Newtab() {
                     className="min-w-0"
                     onPressStart={() => setPreviewState(item.key)}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
                   </Button>
                 ))}
               </div>
@@ -316,7 +318,7 @@ export default function Newtab() {
 
             <div className="mt-6 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
-                Quick Toggles
+                {t("preview.interactions")}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -325,7 +327,7 @@ export default function Newtab() {
                   color="default"
                   onPressStart={() => setIsOpen((value) => !value)}
                 >
-                  {isOpen ? "Close Panel" : "Open Panel"}
+                  {isOpen ? t("preview.closePanel") : t("preview.openPanel")}
                 </Button>
                 <Button
                   size="sm"
@@ -333,7 +335,9 @@ export default function Newtab() {
                   color={isSegmentPlaying ? "primary" : "default"}
                   onPressStart={() => setIsSegmentPlaying((value) => !value)}
                 >
-                  {isSegmentPlaying ? "Pause Mock Playback" : "Play Mock Segment"}
+                  {isSegmentPlaying
+                    ? t("preview.pauseMockPlayback")
+                    : t("preview.playMockSegment")}
                 </Button>
                 <Button
                   size="sm"
@@ -341,10 +345,10 @@ export default function Newtab() {
                   color={isLooping ? "primary" : "default"}
                   onPressStart={() => setIsLooping((value) => !value)}
                 >
-                  {isLooping ? "Disable Loop" : "Enable Loop"}
+                  {isLooping ? t("preview.disableLoop") : t("preview.enableLoop")}
                 </Button>
                 <Button size="sm" variant="flat" color="default" onPressStart={resetToLoaded}>
-                  Reset
+                  {t("preview.reset")}
                 </Button>
                 <Button
                   size="sm"
@@ -360,12 +364,12 @@ export default function Newtab() {
                   }
                 >
                   {explainPreview === "hidden"
-                    ? "Show Explain Card"
+                    ? t("preview.showExplain")
                     : explainPreview === "loaded"
-                    ? "Explain: Loading"
+                    ? t("preview.explainLoading")
                     : explainPreview === "loading"
-                    ? "Explain: Error"
-                    : "Hide Explain Card"}
+                    ? t("preview.explainError")
+                    : t("preview.hideExplain")}
                 </Button>
                 <Button
                   size="sm"
@@ -373,24 +377,37 @@ export default function Newtab() {
                   color={isAiSettingsOpen ? "primary" : "default"}
                   onPressStart={() => setIsAiSettingsOpen((current) => !current)}
                 >
-                  {isAiSettingsOpen ? "Hide AI Settings" : "Show AI Settings"}
+                  {isAiSettingsOpen
+                    ? t("preview.hideAiSettings")
+                    : t("preview.showAiSettings")}
                 </Button>
               </div>
+              <LanguageSwitcher className="mt-3" />
             </div>
           </div>
 
           <div className="rounded-3xl border border-white/70 bg-white/85 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.10)] backdrop-blur">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-              Current Setup
+              {t("preview.diagnostics")}
             </p>
             <div className="mt-4 space-y-2 text-sm text-zinc-600">
               <p>
-                Panel: {isOpen ? (isCollapsed ? "Collapsed" : "Expanded") : "Hidden"}
+                {t("preview.panel")}: {isOpen
+                  ? isCollapsed
+                    ? t("preview.collapsed")
+                    : t("preview.expanded")
+                  : t("preview.hidden")}
               </p>
-              <p>State: {panelSummary}</p>
-              <p>Active subtitle: {currentSubtitle ? activeIndex + 1 : "None"}</p>
-              <p>Loop: {isLooping ? "On" : "Off"}</p>
-              <p>Playback: {isSegmentPlaying ? "Playing" : "Paused"}</p>
+              <p>{t("preview.state")}: {panelSummary}</p>
+              <p>
+                {t("preview.activeSubtitle")}: {currentSubtitle ? activeIndex + 1 : t("preview.none")}
+              </p>
+              <p>{t("preview.loop")}: {isLooping ? t("preview.on") : t("preview.off")}</p>
+              <p>
+                {t("preview.playback")}: {isSegmentPlaying
+                  ? t("preview.playing")
+                  : t("preview.paused")}
+              </p>
             </div>
           </div>
         </section>
@@ -402,10 +419,10 @@ export default function Newtab() {
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                  Live Canvas
+                  {t("preview.previewCanvas")}
                 </p>
                 <h2 className="mt-2 text-xl font-semibold tracking-tight text-zinc-950">
-                  Extension Panel Preview
+                  {t("preview.componentUnderTest")}
                 </h2>
               </div>
               <div className="rounded-full border border-white/70 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-500">
@@ -482,13 +499,17 @@ export default function Newtab() {
                     target={
                       explainPreview === "hidden"
                         ? null
-                        : { text: "navigational", context: "I'm on a ship, so it must be a navigational issue." }
+                        : {
+                            text: "navigational",
+                            context: "I'm on a ship, so it must be a navigational issue.",
+                            videoId: null,
+                          }
                     }
                     data={explainPreview === "loaded" ? MOCK_EXPLAIN_DATA : null}
                     loading={explainPreview === "loading"}
                     error={
                       explainPreview === "error"
-                        ? "Mock error: please configure the AI provider in Options."
+                        ? t("preview.mockExplainError")
                         : null
                     }
                     streamText={
@@ -517,7 +538,7 @@ export default function Newtab() {
                   variant="solid"
                   className="h-16 w-16 bg-zinc-900 text-white shadow-[0_14px_30px_rgba(15,23,42,0.22)] transition-colors hover:bg-zinc-800"
                   onPressStart={() => setIsOpen(true)}
-                  aria-label="Open Listen Up panel"
+                  aria-label={t("subtitles.openPanel")}
                 >
                   <Icon
                     icon="mdi:subtitles-outline"

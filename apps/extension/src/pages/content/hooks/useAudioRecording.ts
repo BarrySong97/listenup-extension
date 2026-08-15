@@ -1,10 +1,11 @@
 /**
  * @purpose 麦克风录音：多 take 录制、播放、时长统计与错误处理。
  * @role    SubtitleFooter 的录音控制背后的逻辑。
- * @deps    MediaRecorder、getUserMedia、Blob URL
+ * @deps    MediaRecorder、getUserMedia、Blob URL、react-i18next
  * @gotcha  按支持度依次挑选 mime type；播放优先命中最新一段；Blob URL 要在清理时 revoke
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 interface RecordingClip {
   blob: Blob;
@@ -42,6 +43,7 @@ const sumDurations = (clips: RecordingClip[]) =>
   clips.reduce((total, clip) => total + clip.duration, 0);
 
 export const useAudioRecording = (selectedDeviceId?: string) => {
+  const { t } = useTranslation();
   const [state, setState] = useState<RecordingState>({
     isRecording: false,
     isPlaying: false,
@@ -130,7 +132,7 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
         setState((prev) => ({
           ...prev,
           isPlaying: false,
-          error: "Audio playback failed",
+          error: t("audio.playbackFailed"),
         }));
       };
 
@@ -140,11 +142,11 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
         setState((prev) => ({
           ...prev,
           isPlaying: false,
-          error: "Unable to start playback",
+          error: t("audio.startPlaybackFailed"),
         }));
       });
     },
-    [disposeAudio]
+    [disposeAudio, t]
   );
 
   const startRecording = useCallback(async () => {
@@ -237,7 +239,7 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
           isRecording: false,
           isPlaying: false,
           duration: baseDuration,
-          error: "Recording failed",
+          error: t("audio.recordingFailed"),
         }));
       };
 
@@ -267,7 +269,7 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
       setState((prev) => ({
         ...prev,
         isRecording: false,
-        error: error instanceof Error ? error.message : "Unable to start recording",
+        error: error instanceof Error ? error.message : t("audio.startRecordingFailed"),
       }));
     }
   }, [
@@ -275,6 +277,7 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
     selectedDeviceId,
     state.isRecording,
     stopActiveStream,
+    t,
   ]);
 
   const stopRecording = useCallback(() => {
@@ -295,7 +298,7 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
         setState((prev) => ({
           ...prev,
           isPlaying: false,
-          error: "Unable to resume playback",
+          error: t("audio.resumePlaybackFailed"),
         }));
       });
       return;
@@ -307,7 +310,7 @@ export const useAudioRecording = (selectedDeviceId?: string) => {
     );
     playbackIndexRef.current = nextIndex;
     playClipAtIndex(nextIndex);
-  }, [playClipAtIndex]);
+  }, [playClipAtIndex, t]);
 
   const pauseRecording = useCallback(() => {
     audioRef.current?.pause();

@@ -1,7 +1,7 @@
 /**
  * @purpose popup 页面的 React 挂载入口。
  * @role    manifest 的 action.default_popup 指向的 HTML 加载它。
- * @deps    react-dom/client、@heroui/react、./Popup
+ * @deps    react-dom/client、@heroui/react、src/i18n、./Popup
  * @gotcha  复用了内容脚本的 style.css，改那份样式会连带影响 popup
  */
 import React from "react";
@@ -10,15 +10,18 @@ import { HeroUIProvider } from "@heroui/react";
 import "@pages/popup/index.css";
 import "@pages/content/style.css";
 import Popup from "@pages/popup/Popup";
+import { ExtensionI18nProvider } from "@src/i18n";
 
 function init() {
   const rootContainer = document.querySelector("#__root");
   if (!rootContainer) throw new Error("Can't find Popup root element");
   const root = createRoot(rootContainer);
   root.render(
-    <HeroUIProvider>
-      <Popup />
-    </HeroUIProvider>
+    <ExtensionI18nProvider>
+      <HeroUIProvider>
+        <Popup />
+      </HeroUIProvider>
+    </ExtensionI18nProvider>
   );
 }
 

@@ -1,7 +1,7 @@
 /**
  * @purpose options 页面的 React 挂载入口。
  * @role    manifest 的 options_ui.page 指向的 HTML 加载它。
- * @deps    react-dom/client、@heroui/react、./Options
+ * @deps    react-dom/client、@heroui/react、src/i18n、./Options
  * @gotcha  同样复用内容脚本的 style.css
  */
 import React from "react";
@@ -10,15 +10,18 @@ import { HeroUIProvider } from "@heroui/react";
 import Options from "@pages/options/Options";
 import "@pages/options/index.css";
 import "@pages/content/style.css";
+import { ExtensionI18nProvider } from "@src/i18n";
 
 function init() {
   const rootContainer = document.querySelector("#__root");
   if (!rootContainer) throw new Error("Can't find Options root element");
   const root = createRoot(rootContainer);
   root.render(
-    <HeroUIProvider>
-      <Options />
-    </HeroUIProvider>
+    <ExtensionI18nProvider>
+      <HeroUIProvider>
+        <Options />
+      </HeroUIProvider>
+    </ExtensionI18nProvider>
   );
 }
 

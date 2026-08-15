@@ -1,7 +1,7 @@
 /**
  * @purpose 扩展弹窗：打开 AI 设置页、UI Preview 页与 ListenUp Desktop 深链接。
  * @role    轻量入口，不承载产品能力。
- * @deps    chrome.tabs、utils/extensionPages、shared/nativeSubtitleProtocol 的 DESKTOP_DEEP_LINK
+ * @deps    chrome.tabs、react-i18next、components/ui、utils/extensionPages、shared/nativeSubtitleProtocol
  * @gotcha  深链接按构建环境切 listenup:// 与 listenup-dev://；见 docs/modules/extension/entry-pages.md
  */
 import { Button } from "@heroui/react";
@@ -9,8 +9,11 @@ import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
 import { EXTENSION_PAGE_URLS } from "@src/utils/extensionPages";
 import { DESKTOP_DEEP_LINK } from "@src/shared/nativeSubtitleProtocol";
+import { LanguageSwitcher } from "@src/components/ui";
+import { useTranslation } from "react-i18next";
 
 export default function Popup() {
+  const { t } = useTranslation();
   const openDesktopApp = () => {
     // 通过深链接打开 ListenUp Desktop（dev 构建打开 DEV app）；
     // app 打开后播放视频即自动连接（Native Messaging 只做无窗口桥接）
@@ -40,11 +43,10 @@ export default function Popup() {
               Listen Up
             </p>
             <h1 className="mt-1 text-lg font-semibold tracking-tight text-zinc-950">
-              Quick Access
+              {t("popup.quickAccess")}
             </h1>
             <p className="mt-2 text-sm leading-5 text-zinc-600">
-              Open AI settings for real usage, or open the standalone preview
-              tab to iterate on panel styles without reloading YouTube.
+              {t("popup.description")}
             </p>
           </div>
         </div>
@@ -59,7 +61,7 @@ export default function Popup() {
             }
             onPressStart={openDesktopApp}
           >
-            Open ListenUp Desktop
+            {t("popup.openDesktop")}
           </Button>
           <Button
             color="default"
@@ -70,7 +72,7 @@ export default function Popup() {
             }
             onPressStart={openSettingsPage}
           >
-            Open AI Settings
+            {t("popup.openAiSettings")}
           </Button>
           <Button
             color="default"
@@ -81,15 +83,18 @@ export default function Popup() {
             }
             onPressStart={openPreviewPage}
           >
-            Open UI Preview
+            {t("popup.openPreview")}
           </Button>
         </div>
 
         <div className="mt-3 rounded-xl bg-zinc-50 px-3 py-2 text-xs leading-5 text-zinc-500">
-          Preview:
+          {t("popup.preview")}
           <span className="ml-1 font-mono text-[11px] text-zinc-700">
             src/pages/newtab/index.html
           </span>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <LanguageSwitcher />
         </div>
       </div>
     </main>

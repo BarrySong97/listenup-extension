@@ -1,0 +1,18 @@
+{
+  "extName": {
+    "message": "ListenUp",
+    "description": "扩展名称"
+  },
+  "extDescription": {
+    "message": "YouTube 互动字幕：逐句重播、AI 解释与字幕导出。",
+    "description": "扩展说明"
+  },
+  "extNameDev": {
+    "message": "ListenUp 开发版",
+    "description": "开发版扩展名称"
+  },
+  "extDescriptionDev": {
+    "message": "ListenUp 开发构建 — YouTube 互动字幕工具。",
+    "description": "开发版扩展说明"
+  }
+}

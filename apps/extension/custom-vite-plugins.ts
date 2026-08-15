@@ -2,7 +2,7 @@
  * @purpose 扩展专用的两个 Vite 插件：生产构建剔除 dev icon、可选注入 i18n locale 资源。
  * @role    被 vite.config.base.ts 引用；构建期插件，不进运行时产物。
  * @deps    vite PluginOption、node fs/path、src/locales/
- * @gotcha  production 必须清掉 16/32/48/128 全部 dev icon；crxI18n 当前未启用。见 docs/modules/extension/build-and-manifest.md
+ * @gotcha  production 必须清掉 16/32/48/128 全部 dev icon；crxI18n 负责把 src/locales 原样输出到 _locales。见 docs/modules/extension/build-and-manifest.md
  */
 import fs from 'fs';
 import { resolve } from 'path';

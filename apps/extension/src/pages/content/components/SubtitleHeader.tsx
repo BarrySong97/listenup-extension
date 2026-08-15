@@ -1,7 +1,7 @@
 /**
  * @purpose 面板头部：标题、折叠、整段复制/下载、麦克风选择与设置菜单入口。
  * @role    SubtitlePanelShell 的顶部区域。
- * @deps    components/ui 的 Dropdown、hooks/useAudioInputLevel、lib/subtitle-domain/subtitleDebug
+ * @deps    components/ui 的 Dropdown、react-i18next、src/i18n、hooks/useAudioInputLevel、lib/subtitle-domain/subtitleDebug
  * @gotcha  下拉必须用自建 Dropdown；麦克风电平只在菜单展开时采样。见 docs/modules/extension/faq.md
  */
 import { memo, useMemo, useState } from "react";
@@ -12,6 +12,8 @@ import { Dropdown, type DropdownItem } from "@src/components/ui";
 import { subtitleDebug } from "../lib/subtitle-domain/subtitleDebug";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 import { useAudioInputLevel } from "../hooks/useAudioInputLevel";
+import { useTranslation } from "react-i18next";
+import { changeUiLanguage, normalizeUiLanguage } from "@src/i18n";
 
 interface SubtitleHeaderProps {
   title?: string;
@@ -43,6 +45,8 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   onRefreshAudioInputs,
   onOpenAiSettings,
 }: SubtitleHeaderProps) {
+  const { t, i18n } = useTranslation();
+  const currentLanguage = normalizeUiLanguage(i18n.resolvedLanguage);
   const [copyStatus, setCopyStatus] = useState(false);
   const [exportStatus, setExportStatus] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -193,7 +197,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   const menuDropdownItems: DropdownItem[] = [
     {
       key: "audio-inputs",
-      label: "Microphone",
+      label: t("header.microphone"),
       icon: "mdi:microphone-outline",
       items: audioInputError
         ? [
@@ -205,7 +209,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
             },
             {
               key: "audio-input-refresh",
-              label: "Retry microphone list",
+              label: t("header.retryMicrophones"),
               icon: "mdi:refresh",
               onClick: onRefreshAudioInputs,
             },
@@ -213,7 +217,9 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         : [
         {
           key: "audio-input-default",
-          label: `System default${selectedAudioInputId ? "" : " · Selected"}`,
+          label: `${t("header.systemDefault")}${
+            selectedAudioInputId ? "" : ` · ${t("header.selected")}`
+          }`,
           icon: "mdi:tune-vertical",
           isSelected: !selectedAudioInputId,
           renderEnd: !selectedAudioInputId ? renderAudioLevelMeter : undefined,
@@ -221,8 +227,8 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         },
         ...audioInputDevices.map((device, index) => ({
           key: `audio-input-${device.deviceId}`,
-          label: `${device.label || `Microphone ${index + 1}`}${
-            selectedAudioInputId === device.deviceId ? " · Selected" : ""
+          label: `${device.label || t("header.microphoneNumber", { number: index + 1 })}${
+            selectedAudioInputId === device.deviceId ? ` · ${t("header.selected")}` : ""
           }`,
           icon: "mdi:microphone-outline",
           isSelected: selectedAudioInputId === device.deviceId,
@@ -232,7 +238,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
         })),
         {
           key: "audio-input-refresh",
-          label: `Refresh devices · ${selectedAudioInputLabel}`,
+          label: t("header.refreshDevices", { device: selectedAudioInputLabel }),
           icon: "mdi:refresh",
           onClick: onRefreshAudioInputs,
         },
@@ -240,28 +246,47 @@ export const SubtitleHeader = memo(function SubtitleHeader({
     },
     {
       key: "ai-settings",
-      label: "AI settings",
+      label: t("header.aiSettings"),
       icon: "mdi:robot-outline",
       onClick: onOpenAiSettings,
     },
     {
       key: "export-logs",
-      label: exportStatus ? "Logs exported" : "Export logs",
+      label: exportStatus ? t("header.logsExported") : t("header.exportLogs"),
       icon: exportStatus ? "mdi:check" : "mdi:format-list-bulleted",
       onClick: handleExportLogs,
+    },
+    {
+      key: "language",
+      label: t("common.language"),
+      icon: "mdi:translate",
+      items: [
+        {
+          key: "language-en",
+          label: t("common.english"),
+          isSelected: currentLanguage === "en",
+          onClick: () => void changeUiLanguage("en"),
+        },
+        {
+          key: "language-zh-cn",
+          label: t("common.chinese"),
+          isSelected: currentLanguage === "zh-CN",
+          onClick: () => void changeUiLanguage("zh-CN"),
+        },
+      ],
     },
   ];
 
   const copyDropdownItems: DropdownItem[] = [
     {
       key: "copy-all",
-      label: "Copy all subtitles",
+      label: t("header.copyAll"),
       icon: "mdi:content-copy",
       onClick: handleCopyAllSubtitles,
     },
     {
       key: "copy-llm",
-      label: "Copy for LLM",
+      label: t("header.copyForLlm"),
       icon: "mdi:robot-outline",
       onClick: handleCopyForLLM,
     },
@@ -270,13 +295,13 @@ export const SubtitleHeader = memo(function SubtitleHeader({
   const downloadDropdownItems: DropdownItem[] = [
     {
       key: "download-srt",
-      label: "Download SRT",
+      label: t("header.downloadSrt"),
       icon: "mdi:file-video-outline",
       onClick: handleDownloadSRT,
     },
     {
       key: "download-txt",
-      label: "Download TXT",
+      label: t("header.downloadTxt"),
       icon: "mdi:file-document-outline",
       onClick: handleDownloadTXT,
     },
@@ -308,8 +333,8 @@ export const SubtitleHeader = memo(function SubtitleHeader({
                 size="md"
                 variant="light"
                 className={actionButtonClassName}
-                aria-label="More actions"
-                title="Settings"
+                aria-label={t("header.moreActions")}
+                title={t("header.settings")}
               >
                 <Icon
                   icon="mdi:cog-outline"
@@ -327,8 +352,8 @@ export const SubtitleHeader = memo(function SubtitleHeader({
                 size="md"
                 variant="light"
                 className={actionButtonClassName}
-                aria-label="Download subtitles"
-                title="Download"
+                aria-label={t("header.downloadSubtitles")}
+                title={t("header.download")}
               >
                 <Icon
                   icon="mdi:download-outline"
@@ -348,8 +373,8 @@ export const SubtitleHeader = memo(function SubtitleHeader({
                 className={`${actionButtonClassName} ${
                   copyStatus ? "text-blue-600" : ""
                 }`}
-                aria-label="Copy subtitles"
-                title="Copy"
+                aria-label={t("header.copySubtitles")}
+                title={t("common.copy")}
               >
                 <Icon
                   icon={copyStatus ? "mdi:check" : "mdi:content-copy"}
@@ -364,7 +389,7 @@ export const SubtitleHeader = memo(function SubtitleHeader({
             size="md"
             variant="light"
             className={actionButtonClassName}
-            aria-label={isCollapsed ? "Expand panel" : "Collapse panel"}
+            aria-label={isCollapsed ? t("header.expandPanel") : t("header.collapsePanel")}
             onPressStart={onToggleCollapse}
           >
             <Icon

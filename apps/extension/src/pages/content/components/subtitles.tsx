@@ -1,7 +1,7 @@
 /**
  * @purpose 字幕面板的编排根：启动 youtubeSDK、加载字幕、协调索引/滚动/循环/Explain/Native 同步与 seek 强制刷新。
  * @role    内容脚本的主容器组件，被 app.tsx 渲染；向下装配所有面板组件与 hook。
- * @deps    lib/youtube-sdk、hooks/useSubtitles 等全部面板 hook、SubtitlePanelShell、ExplainCard、AiSettingsCard
+ * @deps    lib/youtube-sdk、hooks/useSubtitles 等全部面板 hook、SubtitlePanelShell、ExplainCard、AiSettingsCard、react-i18next
  * @gotcha  seeking/seeked 必须递增 cursorForceRevision；写入 explainTarget 前会先暂停视频。见 docs/modules/extension/content.md
  */
 import { FC, useCallback, useEffect, useRef, useState } from "react";
@@ -24,6 +24,7 @@ import { ExplainCard } from "./ExplainCard";
 import { ExplainTarget, useExplain } from "../hooks/useExplain";
 import { AiSettingsCard } from "./AiSettingsCard";
 import { useNativeSubtitleBridge } from "../hooks/useNativeSubtitleBridge";
+import { useTranslation } from "react-i18next";
 
 export interface SubtitlesProps {}
 type PanelLayoutMode = "overlay" | "inline";
@@ -105,6 +106,7 @@ const findSidebarAdElements = (root: HTMLElement) => {
 };
 
 const Subtitles: FC<SubtitlesProps> = () => {
+  const { t } = useTranslation();
   const [youtubeTheme, setYoutubeTheme] = useState<YouTubeTheme | null>(null);
   const [isOpen, setIsOpen] = useState(true);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -611,7 +613,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
             variant="solid"
             className="h-12 w-12 bg-zinc-900 text-white shadow-[0_14px_30px_rgba(15,23,42,0.22)] transition-colors hover:bg-zinc-800"
             onPressStart={() => setIsOpen(true)}
-            aria-label="Open Listen Up panel"
+            aria-label={t("subtitles.openPanel")}
           >
             <Icon icon="mdi:subtitles-outline" className={iconScale.launcher} />
           </Button>
@@ -627,7 +629,7 @@ const Subtitles: FC<SubtitlesProps> = () => {
             variant="solid"
             className="h-12 w-12 bg-zinc-900 text-white shadow-[0_14px_30px_rgba(15,23,42,0.22)] transition-colors hover:bg-zinc-800"
             onPressStart={() => setIsOpen(true)}
-            aria-label="Open Listen Up panel"
+            aria-label={t("subtitles.openPanel")}
           >
             <Icon icon="mdi:subtitles-outline" className={iconScale.launcher} />
           </Button>

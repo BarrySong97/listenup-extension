@@ -1,10 +1,11 @@
 /**
  * @purpose 麦克风设备列表与当前选择，持久化在 localStorage。
  * @role    被面板 header 与 footer 共用。
- * @deps    navigator.mediaDevices.enumerateDevices、localStorage
+ * @deps    navigator.mediaDevices.enumerateDevices、localStorage、react-i18next
  * @gotcha  未授权时拿不到设备 label，用 “Microphone N” 兜底
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const STORAGE_KEY = "listenup:selected-audio-input-id";
 
@@ -16,10 +17,8 @@ const getStoredDeviceId = () => {
   return window.localStorage.getItem(STORAGE_KEY) ?? "";
 };
 
-const getDeviceLabel = (device: MediaDeviceInfo, index: number) =>
-  device.label || `Microphone ${index + 1}`;
-
 export const useAudioInputSettings = () => {
+  const { t } = useTranslation();
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceIdState] = useState<string>(
     getStoredDeviceId()
@@ -29,7 +28,7 @@ export const useAudioInputSettings = () => {
   const refreshDevices = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) {
       setDevices([]);
-      setError("Audio input selection is not supported");
+      setError(t("audio.selectionUnsupported"));
       return;
     }
 
@@ -54,10 +53,10 @@ export const useAudioInputSettings = () => {
       setError(
         deviceError instanceof Error
           ? deviceError.message
-          : "Unable to load microphones"
+          : t("audio.loadMicrophonesFailed")
       );
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     refreshDevices();
@@ -86,7 +85,7 @@ export const useAudioInputSettings = () => {
 
   const selectedDeviceLabel = useMemo(() => {
     if (!selectedDeviceId) {
-      return "System default";
+      return t("header.systemDefault");
     }
 
     const selectedDevice = devices.find(
@@ -94,9 +93,10 @@ export const useAudioInputSettings = () => {
     );
 
     return selectedDevice
-      ? getDeviceLabel(selectedDevice, devices.indexOf(selectedDevice))
-      : "System default";
-  }, [devices, selectedDeviceId]);
+      ? selectedDevice.label ||
+          t("header.microphoneNumber", { number: devices.indexOf(selectedDevice) + 1 })
+      : t("header.systemDefault");
+  }, [devices, selectedDeviceId, t]);
 
   return {
     devices,
@@ -105,6 +105,5 @@ export const useAudioInputSettings = () => {
     error,
     refreshDevices,
     setSelectedDeviceId,
-    getDeviceLabel,
   };
 };

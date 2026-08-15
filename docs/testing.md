@@ -45,6 +45,14 @@ node scripts/check-docs.mjs                                              # 永�
 - 麦克风菜单展开时，所选设备的电平会随说话变化
 - 连录多个 take 后，播放优先命中最新那段
 
+### 改 Extension i18n
+
+- 浏览器 UI 为中文且没有 `ui_language` 偏好时，manifest 与 React UI 默认中文；其他语言默认英文
+- 在内容脚本设置菜单、Popup、Options 或 Preview 切换语言后，所有已打开页面即时同步，重开仍保持
+- 中英文下字幕面板、Explain、AI 设置、录音与错误态都无裸露翻译 key，长中文不遮挡按钮或菜单
+- Chrome / Firefox 构建产物都含 `_locales/en/messages.json`、`_locales/zh_CN/messages.json`，
+  manifest 保留 `default_locale: "en"`；DEV 构建名称仍明确带 DEV / 开发版
+
 ### 改字幕加载链路
 
 - SPA 切换时旧字幕立即清空；页面 / playerResponse / track URL videoId 不一致不读写缓存

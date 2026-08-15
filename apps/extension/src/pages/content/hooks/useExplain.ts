@@ -1,7 +1,7 @@
 /**
  * @purpose Explain 数据编排：读设置、查缓存、发 AI 请求、并行拉图片、支持 refresh 绕过缓存。
  * @role    ExplainCard 的数据源；连接 services/ai 与 services/search。
- * @deps    services/ai/{aiSettings,explainClient,explainCache}、services/search/{imageSearch,imageSearchCache}
+ * @deps    react-i18next、services/ai/{aiSettings,explainClient,explainCache}、services/search/{imageSearch,imageSearchCache}
  * @gotcha  缺 API key 抛 MissingApiKeyError（UI 要给设置入口）；explain 缓存 TTL 7 天、图片 1 天。见 docs/modules/extension/explain-card.md
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -29,6 +29,7 @@ import {
   getCachedImages,
   setCachedImages,
 } from "@src/services/search/imageSearchCache";
+import { useTranslation } from "react-i18next";
 
 export interface ExplainTarget {
   text: string;
@@ -49,6 +50,7 @@ export interface UseExplainState {
 }
 
 export function useExplain(target: ExplainTarget | null): UseExplainState {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [data, setData] = useState<ExplainResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -133,9 +135,9 @@ export function useExplain(target: ExplainTarget | null): UseExplainState {
           return;
         }
         if (err instanceof MissingApiKeyError) {
-          setError(err.message);
+          setError(t("ai.missingApiKey"));
         } else {
-          setError((err as Error)?.message ?? "Failed to get explanation");
+          setError((err as Error)?.message ?? t("ai.explanationFailed"));
         }
       } finally {
         if (latestRunRef.current === runId) {
@@ -171,7 +173,7 @@ export function useExplain(target: ExplainTarget | null): UseExplainState {
     return () => {
       abortController.abort();
     };
-  }, [target?.text, target?.context, settings, reloadNonce]);
+  }, [target?.text, target?.context, settings, reloadNonce, t]);
 
   const refresh = useCallback(() => {
     setReloadNonce((n) => n + 1);

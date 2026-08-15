@@ -1,13 +1,14 @@
 /**
  * @purpose 当前句面板：显示当前字幕文本与时间，并提供“回到当前句”。
  * @role    SubtitlePanelShell 中列表与 footer 之间的区域。
- * @deps    @heroui/react、lib/subtitles/subtitleTypes
+ * @deps    @heroui/react、react-i18next、lib/subtitles/subtitleTypes
  * @gotcha  showReturnToActive 由 useSubtitleAutoScroll 计算，不要在这里自行判断滚动位置
  */
 import { FC } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { useTranslation } from "react-i18next";
 
 interface ActiveSegmentPanelProps {
   currentSubtitle: SubtitleItem | null;
@@ -30,6 +31,8 @@ export const ActiveSegmentPanel: FC<ActiveSegmentPanelProps> = ({
   showReturnToActive,
   onReturnToActive,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/95 px-3 py-3 backdrop-blur-xl">
       <div className="min-h-[112px] rounded-md border border-zinc-200 bg-white p-3 shadow-sm">
@@ -39,7 +42,9 @@ export const ActiveSegmentPanel: FC<ActiveSegmentPanelProps> = ({
               isActive ? "text-blue-600" : "text-zinc-400"
             }`}
           >
-            {currentSubtitle ? (isActive ? "Active Segment" : "Recent Segment") : "Active Segment"}
+            {currentSubtitle && !isActive
+              ? t("subtitles.recentSegment")
+              : t("subtitles.activeSegment")}
           </span>
           {currentSubtitle && showReturnToActive ? (
             <Button
@@ -54,7 +59,7 @@ export const ActiveSegmentPanel: FC<ActiveSegmentPanelProps> = ({
                 icon="mdi:crosshairs-gps"
                 className="h-[1em] w-[1em] shrink-0 text-[0.95rem]"
               />
-              Back to current
+              {t("subtitles.backToCurrent")}
             </Button>
           ) : currentSubtitle ? (
             <span className="font-mono text-[11px] text-zinc-400">
@@ -77,7 +82,7 @@ export const ActiveSegmentPanel: FC<ActiveSegmentPanelProps> = ({
           </p>
         ) : (
           <p className="text-sm leading-6 text-zinc-400">
-            Waiting for current subtitle...
+            {t("subtitles.waitingForCurrent")}
           </p>
         )}
       </div>

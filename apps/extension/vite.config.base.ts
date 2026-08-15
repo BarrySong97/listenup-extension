@@ -24,8 +24,7 @@ const environments = JSON.parse(
   )
 );
 const environment = environments[isDev ? "development" : "production"];
-// set this flag to true, if you want localization support
-const localize = false;
+const localize = true;
 
 export const baseManifest = {
   ...manifest,
@@ -33,8 +32,10 @@ export const baseManifest = {
   ...(isDev ? devManifest : ({} as ManifestV3Export)),
   ...(localize
     ? {
-        name: "__MSG_extName__",
-        description: "__MSG_extDescription__",
+        name: isDev ? "__MSG_extNameDev__" : "__MSG_extName__",
+        description: isDev
+          ? "__MSG_extDescriptionDev__"
+          : "__MSG_extDescription__",
         default_locale: "en",
       }
     : {}),
@@ -43,6 +44,9 @@ export const baseManifest = {
 export const baseBuildOptions: BuildOptions = {
   sourcemap: isDev,
   emptyOutDir: !isDev,
+  rollupOptions: {
+    input: [resolve(__dirname, "src/pages/newtab/index.html")],
+  },
 };
 
 export default defineConfig({

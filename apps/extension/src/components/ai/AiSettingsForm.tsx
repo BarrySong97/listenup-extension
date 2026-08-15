@@ -1,7 +1,7 @@
 /**
  * @purpose AI 设置表单：base URL / API key / model / 图片搜索引擎，含连通性测试。
  * @role    被 options 页和内容脚本面板内的 AiSettingsCard 共用。
- * @deps    @heroui/react、services/ai/aiSettings、services/ai/explainClient 的 testAiConnection
+ * @deps    @heroui/react、react-i18next、services/ai/aiSettings、services/ai/explainClient
  * @gotcha  API key 明文存 chrome.storage.local；字段说明见 docs/modules/extension/ai-settings.md
  */
 import { FC, useEffect, useState } from "react";
@@ -15,6 +15,7 @@ import {
   saveAiSettings,
 } from "@src/services/ai/aiSettings";
 import { testAiConnection } from "@src/services/ai/explainClient";
+import { useTranslation } from "react-i18next";
 
 type SaveState = "idle" | "saving" | "saved";
 type TestState =
@@ -23,10 +24,10 @@ type TestState =
   | { kind: "success"; sample: string }
   | { kind: "error"; message: string };
 
-const ENGINE_OPTIONS: Array<{ key: ImageSearchEngine; label: string }> = [
-  { key: "bing", label: "Bing Images" },
-  { key: "google", label: "Google Images" },
-  { key: "baidu", label: "Baidu Images" },
+const ENGINE_OPTIONS: Array<{ key: ImageSearchEngine; labelKey: string }> = [
+  { key: "bing", labelKey: "ai.bingImages" },
+  { key: "google", labelKey: "ai.googleImages" },
+  { key: "baidu", labelKey: "ai.baiduImages" },
 ];
 
 interface AiSettingsFormProps {
@@ -36,6 +37,7 @@ interface AiSettingsFormProps {
 export const AiSettingsForm: FC<AiSettingsFormProps> = ({
   sectionClassName,
 }) => {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<AiSettings>(DEFAULT_AI_SETTINGS);
   const [loaded, setLoaded] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -87,7 +89,7 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
       <div
         className={`flex min-h-[12rem] items-center justify-center text-sm text-zinc-500 ${resolvedSectionClassName}`}
       >
-        Loading…
+        {t("ai.loading")}
       </div>
     );
   }
@@ -95,23 +97,22 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
   return (
     <div className="flex flex-col gap-4">
       <section className={resolvedSectionClassName}>
-        <h2 className="text-base font-semibold text-zinc-900">AI Provider</h2>
+        <h2 className="text-base font-semibold text-zinc-900">{t("ai.provider")}</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          Any OpenAI-compatible endpoint works (OpenAI, Groq, OpenRouter,
-          Azure OpenAI, self-hosted, …).
+          {t("ai.providerDescription")}
         </p>
 
         <div className="mt-4 flex flex-col gap-4">
           <Input
-            label="Base URL"
+            label={t("ai.baseUrl")}
             placeholder="https://api.openai.com/v1"
             value={settings.baseUrl}
             onValueChange={(value) => update("baseUrl", value)}
-            description="Must end without a trailing slash."
+            description={t("ai.baseUrlDescription")}
           />
 
           <Input
-            label="API Key"
+            label={t("ai.apiKey")}
             placeholder="sk-…"
             value={settings.apiKey}
             onValueChange={(value) => update("apiKey", value)}
@@ -119,7 +120,7 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
             endContent={
               <button
                 type="button"
-                aria-label={showKey ? "Hide key" : "Show key"}
+                aria-label={showKey ? t("ai.hideKey") : t("ai.showKey")}
                 onClick={() => setShowKey((current) => !current)}
                 className="text-zinc-500"
               >
@@ -132,7 +133,7 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
           />
 
           <Input
-            label="Model"
+            label={t("ai.model")}
             placeholder="gpt-4o-mini"
             value={settings.model}
             onValueChange={(value) => update("model", value)}
@@ -142,15 +143,14 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
 
       <section className={resolvedSectionClassName}>
         <h2 className="text-base font-semibold text-zinc-900">
-          Visual Reference
+          {t("ai.visualReference")}
         </h2>
         <p className="mt-1 text-xs text-zinc-500">
-          The engine used to fetch the image strip shown inside the Explain
-          card.
+          {t("ai.visualReferenceDescription")}
         </p>
         <div className="mt-4">
           <Select
-            label="Image search engine"
+            label={t("ai.imageSearchEngine")}
             selectedKeys={[settings.imageSearchEngine]}
             onSelectionChange={(keys) => {
               const value = Array.from(keys)[0] as
@@ -162,7 +162,7 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
             }}
           >
             {ENGINE_OPTIONS.map((option) => (
-              <SelectItem key={option.key}>{option.label}</SelectItem>
+              <SelectItem key={option.key}>{t(option.labelKey)}</SelectItem>
             ))}
           </Select>
         </div>
@@ -174,7 +174,7 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
           onPressStart={handleSave}
           isLoading={saveState === "saving"}
         >
-          {saveState === "saved" ? "Saved" : "Save"}
+          {saveState === "saved" ? t("ai.saved") : t("ai.save")}
         </Button>
         <Button
           color="default"
@@ -182,13 +182,13 @@ export const AiSettingsForm: FC<AiSettingsFormProps> = ({
           onPressStart={handleTest}
           isLoading={testState.kind === "running"}
         >
-          Test connection
+          {t("ai.testConnection")}
         </Button>
 
         {testState.kind === "success" ? (
           <span className="flex items-center gap-1 text-sm text-emerald-600">
             <Icon icon="mdi:check-circle" width={18} />
-            Connected · sample: "{testState.sample}"
+            {t("ai.connectedSample", { sample: testState.sample })}
           </span>
         ) : null}
         {testState.kind === "error" ? (

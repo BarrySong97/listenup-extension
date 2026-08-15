@@ -29,14 +29,26 @@
 
 | 文件 | 作用 |
 |---|---|
-| `vite.config.base.ts` | 通用插件 + 合并 manifest / 版本号；从环境矩阵注入本构建的 Native Host 与深链接 |
+| `vite.config.base.ts` | 通用插件 + 合并 manifest / 版本号；注入 Native 环境，并把非 manifest 引用的 Preview 加入 Rollup input |
 | `vite.config.chrome.ts` | Chrome 的 `crx()` 配置与输出目录 |
 | `vite.config.firefox.ts` | Firefox 输出；**把通用 MV3 的 `background.service_worker` 转成 CRX Firefox 分支要的 `background.scripts` 数组** |
-| `custom-vite-plugins.ts` | dev icon 清理、可选 i18n 资源注入 |
+| `custom-vite-plugins.ts` | dev icon 清理、把 `src/locales/` 输出为 `_locales/` |
+| `scripts/check-build.mjs` | 构建后校验页面入口、locale、环境名称、background 形态与 `nativeMessaging` |
 | `tailwind-rem-to-em.js` | Shadow DOM 场景的单位转换 |
 | `nodemon.chrome.json` / `nodemon.firefox.json` | dev 模式的重建监听 |
 
 🚨 **不要为了 Firefox 去改 `manifest.json`**——那会连带弄坏 Chrome 构建。Firefox 差异只允许写在 `vite.config.firefox.ts` 的转换里。
+
+## 中英文 locale
+
+`vite.config.base.ts` 会把 manifest 的名称和说明替换为 `__MSG_*__`，并声明
+`default_locale: "en"`；`custom-vite-plugins.ts` 把 `src/locales/en/messages.json` 与
+`src/locales/zh_CN/messages.json` 原样输出到构建产物 `_locales/`。Chrome manifest locale
+目录沿用下划线形式 `zh_CN`，React 运行时语言则使用标准 BCP 47 tag `zh-CN`。
+
+DEV 构建使用独立的 `extNameDev` / `extDescriptionDev` message key，不能因为本地化而把扩展名
+退回正式版名称。React UI 文案不从 `chrome.i18n.getMessage()` 读取，统一由
+`src/i18n/resources.ts` 的 `react-i18next` 资源提供。
 
 ## 命令与产物
 
@@ -48,6 +60,10 @@
 | `pnpm dev:extension` / `pnpm dev:firefox` | 同上，watch 模式 |
 
 `apps/extension/public/manifest.json` 是构建生成的，已在 `.gitignore` 里，不要手改。
+
+三条 build script 都会继续运行 `scripts/check-build.mjs`。UI Preview 没有直接登记在 manifest，
+因此必须保留 `baseBuildOptions.rollupOptions.input` 中的 `src/pages/newtab/index.html`；否则 Popup /
+Options 的预览链接会在打包后 404。产物检查会把这类回归直接变成构建失败。
 
 当前商店审核基线为 `1.5.3`，线上已发布版本仍为 `1.5.2`。`1.5.3` 把仓库已实现的 Native
 Messaging v5（含 `playbackEpoch`）提交到 Chrome Web Store；Desktop `0.5.2` 同时兼容商店

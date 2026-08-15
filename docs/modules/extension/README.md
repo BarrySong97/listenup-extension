@@ -31,6 +31,8 @@ src/services/ai/       Explain 请求、缓存、prompt、schema、设置读写
 src/services/search/   图片搜索与缓存
 src/services/tts/      speechSynthesis 朗读
 src/shared/            与桌面端共享的 Native Messaging 协议定义
+src/i18n/              i18next/react-i18next 初始化、en/zh-CN 资源与语言测试
+src/locales/           MV3 manifest 的 en/zh_CN _locales 资源
 public/scripts/        注入页面上下文的桥接脚本（web-accessible）
 ```
 
@@ -52,12 +54,16 @@ public/scripts/        注入页面上下文的桥接脚本（web-accessible）
 - 浏览器侧：`manifest.json` 声明的 popup / options / devtools 页面、内容脚本、`web_accessible_resources`
 - 对桌面端：`src/shared/nativeSubtitleProtocol.ts` 定义的 v5 双向 session / cursor /
   playback command-result 消息（见 [Native Messaging 专题](../../topics/native-messaging.md)）
-- 对用户数据：`chrome.storage.local` 的 `ai_settings` / `explain_cache` / `image_search_cache` / 字幕缓存
+- 对用户数据：`chrome.storage.local` 的 `ui_language` / `ai_settings` / `explain_cache` /
+  `image_search_cache` / 字幕缓存
 
 ## 注意事项
 
 - Shadow DOM 下 HeroUI 部分交互不稳，按钮用 `onPressStart`，下拉用自建 `Dropdown.tsx`。详见 [faq.md](faq.md)
-- `src/locales/` 的 i18n 默认关闭，只有在 `vite.config.base.ts` 打开 `localize` 才参与构建
+- React 界面 i18n 使用 `i18next` + `react-i18next`，运行时资源在 `src/i18n/resources.ts`；
+  manifest 的 `_locales` 独立放在 `src/locales/`，由构建插件输出，二者不能混为同一套格式
+- UI 只支持 `en` / `zh-CN`：无偏好时按浏览器 UI 语言选择，所有中文地区码统一映射简体中文；
+  用户切换后写 `ui_language`，已打开页面通过 `chrome.storage.onChanged` 同步
 - 扩展用 HeroUI **v2**，website 用 v3 走 pnpm catalog——不要互相串版本
 - `dist_chrome*/`、`dist_firefox/`、`public/manifest.json` 都是生成物
 

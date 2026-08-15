@@ -1,10 +1,11 @@
 /**
  * @purpose 所选麦克风的实时输入电平（0~1）。
  * @role    header 麦克风菜单展开时给出说话反馈。
- * @deps    getUserMedia、Web Audio AnalyserNode
+ * @deps    getUserMedia、Web Audio AnalyserNode、react-i18next
  * @gotcha  只在 enabled 时开流，用完必须关闭 track，否则浏览器录音指示灯不灭
  */
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
@@ -12,6 +13,7 @@ export const useAudioInputLevel = (
   selectedDeviceId: string,
   enabled: boolean
 ) => {
+  const { t } = useTranslation();
   const [level, setLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +98,7 @@ export const useAudioInputLevel = (
           setError(
             nextError instanceof Error
               ? nextError.message
-              : "Unable to monitor microphone level"
+              : t("audio.monitorFailed")
           );
           setLevel(0);
         }
@@ -109,7 +111,7 @@ export const useAudioInputLevel = (
       disposed = true;
       cleanup();
     };
-  }, [enabled, selectedDeviceId]);
+  }, [enabled, selectedDeviceId, t]);
 
   return { level, error };
 };

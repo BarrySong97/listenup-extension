@@ -1,7 +1,7 @@
 /**
  * @purpose 面板底部：当前句时间、循环开关与录音控制。
  * @role    SubtitlePanelShell 的底部区域。
- * @deps    hooks/useAudioRecording、@heroui/react
+ * @deps    hooks/useAudioRecording、@heroui/react、react-i18next
  * @gotcha  录音是多 take 的，播放优先命中最新一段
  */
 import { Icon } from "@iconify/react";
@@ -10,6 +10,7 @@ import { iconScale } from "@src/components/ui/iconScale";
 import React, { FC, useCallback } from "react";
 import { useAudioRecording } from "../hooks/useAudioRecording";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
+import { useTranslation } from "react-i18next";
 
 interface SubtitleFooterProps {
   currentSubtitle: SubtitleItem | null;
@@ -36,6 +37,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
   isSegmentPlaying,
   selectedDeviceId,
 }) => {
+  const { t } = useTranslation();
   const {
     isRecording,
     isPlaying,
@@ -80,7 +82,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
               : "bg-zinc-200/50 text-zinc-700 hover:bg-zinc-200"
           }`}
           onPressStart={onToggleLoop}
-          aria-label={isLooping ? "Disable loop playback" : "Enable loop playback"}
+          aria-label={isLooping ? t("subtitles.disableLoop") : t("subtitles.enableLoop")}
         >
           <Icon
             icon={isLooping ? "mdi:repeat-once" : "mdi:repeat-once"}
@@ -100,7 +102,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
               : "border-blue-200/50 bg-blue-50 text-blue-600 hover:bg-blue-100"
           }`}
           onPressStart={handlePrimaryRecordingAction}
-          aria-label="Recording action"
+          aria-label={t("subtitles.recordingAction")}
         >
           <Icon icon={recordingIcon} className={iconScale.primaryControl} />
         </Button>
@@ -116,7 +118,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
             onPressStart={isPlaying ? pauseRecording : playRecording}
           >
             <Icon icon={playbackIcon} className={iconScale.secondaryAction} />
-            {isPlaying ? "Pause" : "Play"}
+            {isPlaying ? t("common.pause") : t("common.play")}
           </Button>
           <Button
             size="sm"
@@ -129,7 +131,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
               icon="mdi:delete-outline"
               className={iconScale.secondaryAction}
             />
-            Delete
+            {t("common.delete")}
           </Button>
           <Button
             size="sm"
@@ -142,7 +144,7 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
               icon="mdi:microphone-plus"
               className={iconScale.secondaryAction}
             />
-            Continue
+            {t("common.continue")}
           </Button>
         </div>
       )}
@@ -151,16 +153,16 @@ export const SubtitleFooter: FC<SubtitleFooterProps> = ({
         <div className="mt-2 flex items-center justify-between px-0.5 text-[10px]">
           <span className="text-zinc-400">
             {hasRecording || isRecording
-              ? `${recordingCount > 1 ? `${recordingCount} takes · ` : ""}${formatClock(
+              ? `${recordingCount > 1 ? t("subtitles.takes", { count: recordingCount }) : ""}${formatClock(
                   duration
                 )}`
               : ""}
           </span>
           <span className="text-zinc-400">
             {isRecording
-              ? "Recording"
+              ? t("subtitles.recording")
               : isSegmentPlaying
-              ? "Segment Playing"
+              ? t("subtitles.segmentPlaying")
               : ""}
           </span>
           {error ? <span className="text-red-500">{error}</span> : null}

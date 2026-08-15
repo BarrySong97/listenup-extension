@@ -1,10 +1,18 @@
 {
   "extName": {
-    "message": "name in src/locales/en/messages.json",
+    "message": "ListenUp",
     "description": "Extension name"
   },
   "extDescription": {
-    "message": "description in src/locales/en/messages.json",
+    "message": "Interactive YouTube subtitles: replay lines, ask AI for explanations, and export transcripts.",
     "description": "Extension description"
+  },
+  "extNameDev": {
+    "message": "ListenUp DEV",
+    "description": "Development extension name"
+  },
+  "extDescriptionDev": {
+    "message": "ListenUp development build — interactive YouTube subtitles.",
+    "description": "Development extension description"
   }
 }

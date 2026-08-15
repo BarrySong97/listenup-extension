@@ -1,7 +1,7 @@
 /**
  * @purpose 单条字幕：点击跳转、当前句高亮，以及选中文本后的浮动 Copy / Explain 工具条。
  * @role    字幕列表的行组件，Explain 链路的触发点。
- * @deps    @iconify/react、hooks/useExplain 的 ExplainTarget 类型
+ * @deps    @iconify/react、react-i18next、hooks/useExplain 的 ExplainTarget 类型
  * @gotcha  靠 selectionchange 监听选区；onRequestExplain 只上抛 text+context，videoId 由 subtitles.tsx 补。见 docs/modules/extension/explain-card.md
  */
 import {
@@ -15,6 +15,7 @@ import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
 import { SubtitleItem } from "../lib/subtitles/subtitleTypes";
 import { ExplainTarget } from "../hooks/useExplain";
+import { useTranslation } from "react-i18next";
 
 interface SubtitleItemProps {
   subtitle: SubtitleItem;
@@ -33,6 +34,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
   onRequestExplain,
   index,
 }: SubtitleItemProps) {
+  const { t } = useTranslation();
   const TOOLBAR_WIDTH = 156;
   const TOOLBAR_HEIGHT = 36;
   const TOOLBAR_GAP = 6;
@@ -258,7 +260,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
     event.stopPropagation();
 
     try {
-      const explainText = `Explain this sentence to me in the context of the whole subtitle: ${subtitle.text}`;
+      const explainText = t("subtitles.explanationPrompt", { text: subtitle.text });
 
       await navigator.clipboard.writeText(explainText);
       showExplainSuccess();
@@ -283,7 +285,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
 
     try {
       await navigator.clipboard.writeText(selectionActions.text);
-      onToast?.("Copied selection");
+      onToast?.(t("subtitles.copiedSelection"));
       clearSelection();
     } catch (error) {
       console.error("复制失败:", error);
@@ -348,7 +350,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
             type="button"
             className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-white hover:text-zinc-700"
             onClick={handleCopyExplain}
-            aria-label="Copy explanation prompt"
+            aria-label={t("subtitles.copyExplanationPrompt")}
           >
             <Icon
               icon={explainStatus ? "mdi:check" : "mdi:translate"}
@@ -361,7 +363,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
             type="button"
             className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-white hover:text-zinc-700"
             onClick={handleCopySubtitle}
-            aria-label="Copy subtitle"
+            aria-label={t("subtitles.copySubtitle")}
           >
             <Icon
               icon={copyStatus ? "mdi:check" : "mdi:content-copy"}
@@ -394,7 +396,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
                 icon="mdi:content-copy"
                 className={iconScale.secondaryAction}
               />
-              Copy
+              {t("common.copy")}
             </button>
             <button
               type="button"
@@ -405,7 +407,7 @@ export const SubtitleItemComponent = memo(function SubtitleItem({
                 icon="mdi:translate"
                 className={iconScale.secondaryAction}
               />
-              Explain
+              {t("common.explain")}
             </button>
           </div>
         )}

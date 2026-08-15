@@ -1,7 +1,7 @@
 /**
  * @purpose 面板内右侧滑出的 AI 设置卡片，包着共享的 AiSettingsForm。
  * @role    header 菜单与 Explain 卡片的设置入口都指向它（不跳新标签页）。
- * @deps    components/ai/AiSettingsForm、framer-motion
+ * @deps    components/ai/AiSettingsForm、framer-motion、react-i18next
  * @gotcha  打开时接管 Esc 键；见 docs/modules/extension/ai-settings.md
  */
 import { FC, useEffect } from "react";
@@ -10,6 +10,7 @@ import { Button } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { iconScale } from "@src/components/ui/iconScale";
 import { AiSettingsForm } from "@src/components/ai/AiSettingsForm";
+import { useTranslation } from "react-i18next";
 
 interface AiSettingsCardProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ export const AiSettingsCard: FC<AiSettingsCardProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -52,11 +55,10 @@ export const AiSettingsCard: FC<AiSettingsCardProps> = ({
           <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-4 pt-3 pb-3">
             <div className="min-w-0 flex-1">
               <div className="text-xl font-bold leading-tight text-zinc-900">
-                AI Settings
+                {t("ai.settings")}
               </div>
               <p className="mt-1 text-sm text-zinc-500">
-                Configure the AI provider used by Explain and choose the image
-                source for visual references.
+                {t("ai.settingsDescription")}
               </p>
             </div>
             <Button
@@ -65,7 +67,7 @@ export const AiSettingsCard: FC<AiSettingsCardProps> = ({
               variant="light"
               className={headerActionButtonClassName}
               onPressStart={onClose}
-              aria-label="Close"
+              aria-label={t("common.close")}
             >
               <Icon icon="mdi:close" className={iconScale.headerAction} />
             </Button>

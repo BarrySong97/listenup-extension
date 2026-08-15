@@ -11,6 +11,9 @@
 
 都用 `chrome.tabs.create()` 打开后自动关闭 popup。桌面端 Demo 联调时，popup 里的 "Open ListenUp Desktop" 走 `listenup://open`（dev 构建走 `listenup-dev://open`）深链接。
 
+底部的 English / 简体中文切换会立即写入 `chrome.storage.local.ui_language`；Popup、Options、
+Preview 和 YouTube 内容脚本共用该偏好。
+
 **边界**：不要把用户核心能力堆进 popup。真要做成产品入口需要单独设计。
 
 ## options（`src/pages/options/`）
@@ -18,6 +21,8 @@
 正式的 AI 设置入口，承载 `AiSettingsForm`。字段与排错见 [ai-settings.md](ai-settings.md)。
 
 顶部保留一个 `Open UI Preview` 按钮，方便配置完切回预览页调样式。
+
+标题下方提供同一个中英文切换器；默认语言来自浏览器 UI，用户选择后由扩展存储覆盖。
 
 三处入口最终都指向同一个表单：popup 的 `AI Settings`、面板 header 菜单的 `AI settings`（面板内右侧滑出）、Explain 卡片头部与错误态。
 
@@ -28,6 +33,7 @@ UI Preview / 字幕面板实验室。直接复用内容脚本的大部分 UI 组
 - loaded / loading / empty / error / ad 五种状态
 - 足够长的 mock 字幕列表，验证滚动与「返回当前句」
 - "Show Explain Card" 按钮离线切换 Explain 卡片的四种状态
+- 中英文切换及共享组件翻译后的长度、布局和状态文案
 
 **为什么存在**：真实内容脚本依赖 YouTube 宿主页面，为了调一个间距就重载扩展代价太高。
 
