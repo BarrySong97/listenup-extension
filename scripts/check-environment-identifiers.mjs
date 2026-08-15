@@ -2,7 +2,7 @@
 /**
  * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 输入/hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
- * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault、website/Tauri/CLI/Query 配置
+ * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault/i18n、website/Tauri/CLI/Query 配置
  * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
  */
 import assert from "node:assert/strict";
@@ -501,7 +501,7 @@ assert.match(
 );
 assert.match(
   desktopAppSource,
-  /state\.phase === "available"[\s\S]*<DesktopButton[\s\S]*onPress=\{onInstall\}[\s\S]*>\s*立即更新\s*<\/DesktopButton>/,
+  /state\.phase === "available"[\s\S]*<DesktopButton[\s\S]*onPress=\{onInstall\}[\s\S]*>\s*\{t\("update\.updateNow"\)\}\s*<\/DesktopButton>/,
   "startup update notice must require an explicit HeroUI user action"
 );
 assert.match(

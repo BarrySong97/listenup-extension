@@ -394,7 +394,7 @@ GUI 启动时会在 `~/Library/Application Support/Google/Chrome/NativeMessaging
 
 正式版启动后由 `useDesktopUpdater` 静默检查一次；没有新版或检查失败时不打扰用户，发现新版
 则持续显示“发现新版本 vX / 立即更新”。启动检查只提示，绝不自动下载、安装或重启。列表
-Footer 左下角和菜单栏 tray 提供用户主动触发的“检查更新”：
+Footer 右下角和菜单栏 tray 提供用户主动触发的“检查更新”；Footer 右下角同时显示当前应用版本：
 
 1. 从 GitHub 最新已发布 Release 的 `latest.json` 检查 SemVer；
 2. 启动检查发现新版时等待用户点击“立即更新”；主动检查发现新版时直接进入下载；
@@ -411,8 +411,9 @@ Footer 左下角和菜单栏 tray 提供用户主动触发的“检查更新”�
 
 DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.json` 也关闭 updater artifact 生成。首个带 updater 的正式版本仍需用户手工安装一次，从下一版开始才能应用内更新。
 
-当前发布基线为 `v0.5.2`；`v0.5.1 → v0.5.2` 是 Chrome 商店 Extension 1.5.2 / Native v4
-向后兼容的紧急更新回归链路，必须确认“已连接”后能收到字幕并以来源版本回发控制命令。
+当前发布基线为 `v0.5.3`；该版本新增中文 / 英文界面切换并持久化偏好，Footer 左侧提供语言入口，
+右侧显示当前版本与“检查更新”。`v0.5.1 → v0.5.2` 的 Chrome 商店 Extension 1.5.2 / Native v4
+向后兼容链路仍是发布回归基线，必须确认“已连接”后能收到字幕并以来源版本回发控制命令。
 
 ## 验证
 
