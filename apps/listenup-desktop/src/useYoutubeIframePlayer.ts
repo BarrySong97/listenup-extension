@@ -1,13 +1,14 @@
 /**
  * @purpose 在可信 main 中挂载无权限 loopback 播放页，并把官方 YouTube IFrame API postMessage 映射为 EmbeddedSource 事件。
  * @role    iframe 播放适配器；负责 ready/error/cursor、play/pause/seek 与固定命令确认。
- * @deps    @tauri-apps/api、@listenup/youtube-core、Rust embedded_player_host、types
+ * @deps    @tauri-apps/api、@listenup/youtube-core、i18n、Rust embedded_player_host、types
  * @gotcha  只接受当前 iframe window + 精确 loopback origin；播放页无 Tauri capability，main 不读取 YouTube iframe DOM。
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { PlaybackEpochTracker } from "@listenup/youtube-core";
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { i18n } from "./i18n";
 import type { SubtitleItem, ViewerSnapshot } from "./types";
 
 type EmbeddedSource = NonNullable<ViewerSnapshot["source"]>;
@@ -54,11 +55,11 @@ const emitEmbedded = (payload: Record<string, unknown>) =>
   invoke("embedded_source_event", { payload: JSON.stringify(payload) });
 
 const iframeErrorLabel = (code: number | undefined) => {
-  if (code === 2) return "YouTube videoId 无效";
-  if (code === 100) return "这个 YouTube 视频不存在或已经被移除";
-  if (code === 101 || code === 150) return "视频作者禁止在嵌入式播放器中播放";
-  if (code === 153) return "YouTube 无法识别当前播放器来源";
-  return "YouTube 嵌入式播放器暂时无法播放这个视频";
+  if (code === 2) return i18n.t("embedded.invalidVideoId");
+  if (code === 100) return i18n.t("embedded.videoMissing");
+  if (code === 101 || code === 150) return i18n.t("embedded.embedForbidden");
+  if (code === 153) return i18n.t("embedded.originRejected");
+  return i18n.t("embedded.unavailable");
 };
 
 export const useYoutubeIframePlayer = ({
@@ -116,7 +117,7 @@ export const useYoutubeIframePlayer = ({
         return;
       }
       if (event.data.type === "loadError") {
-        setError("YouTube iframe API 下载失败");
+        setError(i18n.t("embedded.playerApiFailed"));
         return;
       }
       if (event.data.type === "error") {
@@ -168,7 +169,7 @@ export const useYoutubeIframePlayer = ({
       if (disposed) return;
       const url = new URL(hostUrl);
       if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") {
-        throw new Error("本地播放器来源无效");
+        throw new Error(i18n.t("embedded.invalidLocalOrigin"));
       }
       url.searchParams.set("videoId", source.videoId);
       playerOrigin = url.origin;
@@ -177,7 +178,7 @@ export const useYoutubeIframePlayer = ({
       iframe.className = "h-full w-full border-0";
       iframe.allow = "autoplay; encrypted-media; picture-in-picture";
       iframe.allowFullscreen = true;
-      iframe.title = "YouTube video player";
+      iframe.title = i18n.t("embedded.playerTitle");
       host.append(iframe);
       unlistenCommand = await listen<EmbeddedPlaybackCommand>(
         "embedded-playback-command",
@@ -206,7 +207,7 @@ export const useYoutubeIframePlayer = ({
       );
     })().catch((cause) => {
       if (!disposed) {
-        setError(cause instanceof Error ? cause.message : "本地播放器初始化失败");
+        setError(cause instanceof Error ? cause.message : i18n.t("embedded.localInitFailed"));
       }
     });
 

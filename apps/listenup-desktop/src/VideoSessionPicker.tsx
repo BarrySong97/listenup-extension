@@ -1,10 +1,11 @@
 /**
  * @purpose 多个 YouTube 视频同时播放时，让用户选择 Desktop 显示哪个视频的字幕。
  * @role    App 的不可关闭 HeroUI Modal，只在播放来源冲突时出现。
- * @deps    @iconify/react、DesktopModal、DesktopButton、./types
+ * @deps    @iconify/react、react-i18next、DesktopModal、DesktopButton、./types
  * @gotcha  这里只展示 Rust 标记为 verified 且正在播放的候选，不自行推断播放状态。
  */
 import { Icon } from "@iconify/react";
+import { useTranslation } from "react-i18next";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopModal } from "./components/ui/DesktopModal";
 import type { PlayingCandidate } from "./types";
@@ -25,7 +26,9 @@ export const VideoSessionPicker = ({
   busySessionId,
   error,
   onSelect,
-}: VideoSessionPickerProps) => (
+}: VideoSessionPickerProps) => {
+  const { t } = useTranslation();
+  return (
   <DesktopModal
     isOpen={isOpen}
     onClose={() => undefined}
@@ -47,13 +50,13 @@ export const VideoSessionPicker = ({
           id="video-session-picker-title"
           className="m-0 text-[13px] font-semibold text-fg"
         >
-          选择字幕视频
+          {t("videoPicker.title")}
         </h2>
         <p
           id="video-session-picker-description"
           className="m-0 mt-0.5 text-[10px] leading-normal text-fg-faint"
         >
-          检测到多个视频正在播放，请选择字幕来源。
+          {t("videoPicker.description")}
         </p>
       </div>
     </div>
@@ -81,7 +84,7 @@ export const VideoSessionPicker = ({
             />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12px] font-medium text-fg">
-                {candidate.title || "YouTube 视频"}
+                {candidate.title || t("common.youtubeVideo")}
               </span>
               <span className="block truncate text-[9px] text-fg-faint">
                 YouTube · {candidate.videoId}
@@ -101,4 +104,5 @@ export const VideoSessionPicker = ({
 
     {error && <p className="m-0 mt-2 text-[10px] text-red-300">{error}</p>}
   </DesktopModal>
-);
+  );
+};

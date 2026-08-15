@@ -1,10 +1,11 @@
 /**
  * @purpose 复用列表字幕、无字幕/错误空态与缺译文引导的展示层。
  * @role    main BrowserSource 与 player-ui EmbeddedSource 共用的下半区 viewer。
- * @deps    SubtitleList、TranslationMissingState、virtua、DisplayBlock
+ * @deps    react-i18next、SubtitleList、TranslationMissingState、virtua、DisplayBlock
  * @gotcha  只接收 active/played 边界，不订阅连续 currentTime，保持 React cursor 渲染边界。
  */
 import type { RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import type { VListHandle } from "virtua";
 import { SubtitleList, type DisplayBlock } from "./SubtitleList";
 import {
@@ -45,6 +46,7 @@ export const SubtitleViewer = ({
   seekDisabled,
   translationMissing,
 }: SubtitleViewerProps) => {
+  const { t } = useTranslation();
   if (translationMissing) {
     return (
       <TranslationMissingState
@@ -62,7 +64,7 @@ export const SubtitleViewer = ({
         <p className="m-0 mb-1.5 text-[13px] text-fg">{emptyMessage}</p>
         {!connected && (
           <small className="max-w-[280px] leading-normal text-fg-faint">
-            在 YouTube 播放带字幕的视频，字幕会自动连接过来。
+            {t("subtitleViewer.emptyHint")}
           </small>
         )}
       </div>

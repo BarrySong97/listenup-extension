@@ -1,10 +1,11 @@
 /**
  * @purpose 用 HeroUI Select 渲染当前原文 revision 可用的目标译文语言。
  * @role    App 列表 header 中受控的目标语言选择器。
- * @deps    @heroui/react
+ * @deps    @heroui/react、react-i18next
  * @gotcha  空选项时只显示禁用 placeholder；选择值仍由 App 的 localStorage 偏好控制。
  */
 import { ListBox, Select } from "@heroui/react";
+import { useTranslation } from "react-i18next";
 
 export interface TargetLanguageOption {
   displayName: string;
@@ -22,12 +23,13 @@ export const TargetLanguageSelect = ({
   options,
   value,
 }: TargetLanguageSelectProps) => {
+  const { t } = useTranslation();
   const isDisabled = options.length === 0;
 
   return (
     <Select
-      aria-label="目标字幕语言"
-      placeholder={isDisabled ? "无可用译文" : "选择译文语言"}
+      aria-label={t("targetLanguage.label")}
+      placeholder={isDisabled ? t("targetLanguage.unavailable") : t("targetLanguage.choose")}
       selectedKey={value}
       onSelectionChange={(key) => {
         if (key !== null) onChange(String(key));

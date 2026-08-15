@@ -164,7 +164,8 @@ node scripts/check-docs.mjs                                              # 永�
 - 旧版本正式 Desktop 启动后静默检查并持续显示“发现新版本 / 立即更新”；点击前不下载、不安装、
   不重启，点击后才显示下载进度并完成更新
 - 已是最新版或启动检查网络失败时不弹提示；用户主动检查失败仍显示错误
-- Footer 左下角和菜单栏“检查更新”都能触发同一流程；重复点击不会并行下载
+- Footer 左下角显示“中 / EN”语言切换，右下角显示当前版本号与“检查更新”，不显示语义块数量；两种语言即时切换并在重启后保持
+- Footer“检查更新”和菜单栏“检查更新”都能触发同一流程；重复点击不会并行下载
 - 已是最新版、网络失败、下载进度都有明确反馈；有效签名更新能安装并重启，篡改签名必须拒绝
 - DEV app 点击更新只提示不会安装正式版，DEV build 不要求 updater 私钥
 
@@ -180,7 +181,7 @@ node scripts/check-docs.mjs                                              # 永�
 - 无译文时列表显示居中引导、影院显示紧凑入口；复制内容含固定 Skill / CLI 版本、视频与原语元数据，并要求先询问目标语言
 - 剪贴板 capability 只有 `clipboard-manager:allow-write-text`，复制成功 / 失败都有可恢复反馈
 - CLI 提交期间 Desktop 不自动变化；切回 Desktop 后 focus refetch 显示新译文
-- 列表 footer 不显示 YouTube / SQLite 来源，只显示语义块数量；冷启动 SQLite 字幕仍正常显示
+- 列表 Footer 不显示 YouTube / SQLite 来源或语义块数量；冷启动 SQLite 字幕仍正常显示
 - 没有 `refetchInterval`、SQLite watcher、`PRAGMA data_version` 或 CLI 通知链路
 - production/DEV 默认数据库不同，`--env dev` 不会写入 production
 - production/DEV `.app` 都包含 `listenup` sidecar，CLI 构建不修改 shell profile

@@ -1,18 +1,19 @@
 /**
  * @purpose 用 HeroUI ToggleButtonGroup 渲染原语、译文、双语三选一控件。
  * @role    列表 header 与影院 hover 工具条共享同一受控字幕模式交互。
- * @deps    @heroui/react、../../types
+ * @deps    @heroui/react、react-i18next、../../types
  * @gotcha  单选组禁止清空；影院 compact 只改变像素样式，不建立第二份模式状态。
  */
 import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
+import { useTranslation } from "react-i18next";
 import type { SubtitleDisplayMode } from "../../types";
 
 const SUBTITLE_MODE_OPTIONS: ReadonlyArray<
   readonly [SubtitleDisplayMode, string]
 > = [
-  ["source", "原语"],
-  ["translation", "译文"],
-  ["bilingual", "双语"],
+  ["source", "subtitleMode.source"],
+  ["translation", "subtitleMode.translation"],
+  ["bilingual", "subtitleMode.bilingual"],
 ];
 
 interface SubtitleModeControlProps {
@@ -25,9 +26,11 @@ export const SubtitleModeControl = ({
   compact = false,
   onChange,
   value,
-}: SubtitleModeControlProps) => (
-  <ToggleButtonGroup
-    aria-label="字幕显示模式"
+}: SubtitleModeControlProps) => {
+  const { t } = useTranslation();
+
+  return <ToggleButtonGroup
+    aria-label={t("subtitleMode.label")}
     selectionMode="single"
     disallowEmptySelection
     selectedKeys={[value]}
@@ -60,8 +63,8 @@ export const SubtitleModeControl = ({
               }`
         }
       >
-        {label}
+        {t(label)}
       </ToggleButton>
     ))}
-  </ToggleButtonGroup>
-);
+  </ToggleButtonGroup>;
+};

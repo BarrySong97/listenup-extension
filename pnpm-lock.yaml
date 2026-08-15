@@ -165,12 +165,18 @@ importers:
       '@tauri-apps/plugin-updater':
         specifier: ^2.10.1
         version: 2.10.1
+      i18next:
+        specifier: ^26.3.6
+        version: 26.3.6(typescript@5.9.2)
       react:
         specifier: ^19.1.0
         version: 19.2.4
       react-dom:
         specifier: ^19.1.0
         version: 19.2.4(react@19.2.4)
+      react-i18next:
+        specifier: ^17.0.11
+        version: 17.0.11(i18next@26.3.6(typescript@5.9.2))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.2)
       virtua:
         specifier: ^0.41.5
         version: 0.41.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)

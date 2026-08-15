@@ -1,10 +1,11 @@
 /**
  * @purpose 渲染并虚拟化 Desktop 字幕列表，只响应字幕边界而非连续播放时间。
  * @role    App 的高成本列表子树；通过 memo 隔离 100ms cursor 更新。
- * @deps    react、virtua、DesktopRowButton、./subtitleCursor
+ * @deps    react、react-i18next、virtua、DesktopRowButton、./subtitleCursor
  * @gotcha  props 不得接收 currentTime/cursor；seek 只传稳定 callback 与 disabled primitive。
  */
 import { memo, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { VList, type VListHandle } from "virtua";
 import { DesktopRowButton } from "./components/ui/DesktopRowButton";
 import type { TimedSubtitleBlock } from "./subtitleCursor";
@@ -39,9 +40,10 @@ const SubtitleRow = memo(function SubtitleRow({
   onSeek,
   subtitle,
 }: SubtitleRowProps) {
+  const { t } = useTranslation();
   return (
     <DesktopRowButton
-      aria-label={`跳转到 ${formatTime(subtitle.startTime)}`}
+      aria-label={t("playback.seekTo", { time: formatTime(subtitle.startTime) })}
       className={`group relative isolate mx-2 grid h-auto w-[calc(100%-1rem)] grid-cols-[12px_40px_minmax(0,1fr)] items-start justify-start gap-2 overflow-hidden whitespace-normal rounded-[10px] py-2 pl-2.5 pr-2 text-left [contain:paint] focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/35 ${
         isActive ? "bg-wash-active" : ""
       } ${

@@ -1,11 +1,12 @@
 /**
  * @purpose 在 EmbeddedSource 内用 HeroUI Modal 输入并切换到新的 YouTube 链接。
  * @role    只承载换链接表单；播放器迁移、错误状态和请求状态仍由 App 编排。
- * @deps    React、@iconify/react、Desktop UI primitives
+ * @deps    React、react-i18next、@iconify/react、Desktop UI primitives
  * @gotcha  不用原生 autoFocus：它会在底部布局稳定前滚动 Portal，造成弹窗先闪到顶部；必须在下一帧 preventScroll 聚焦。
  */
 import { Icon } from "@iconify/react";
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { DesktopButton } from "./components/ui/DesktopButton";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
 import { DesktopModal } from "./components/ui/DesktopModal";
@@ -33,6 +34,7 @@ export const EmbeddedLinkEditorModal = ({
   onClose,
   onSubmit,
 }: EmbeddedLinkEditorModalProps) => {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -62,14 +64,14 @@ export const EmbeddedLinkEditorModal = ({
           id="embedded-link-editor-title"
           className="m-0 flex-1 text-[13px] font-[650] text-fg"
         >
-          播放新链接
+          {t("linkEditor.title")}
         </h2>
         <DesktopIconButton
           className={iconButtonClassName}
           onPress={onClose}
           isDisabled={pending}
-          tooltip="取消"
-          ariaLabel="取消更换链接"
+          tooltip={t("common.cancel")}
+          ariaLabel={t("linkEditor.cancelLabel")}
           icon={
             <Icon
               icon="mdi:close"
@@ -83,12 +85,12 @@ export const EmbeddedLinkEditorModal = ({
         id="embedded-link-editor-description"
         className="mb-3 mt-2 text-[11px] leading-relaxed text-fg-muted"
       >
-        当前窗口会原地切换视频，标题栏、字幕区和所有操作保持不变。
+        {t("linkEditor.description")}
       </p>
       <div className="flex gap-2">
         <DesktopTextField
           ref={inputRef}
-          aria-label="新的 YouTube 视频链接"
+          aria-label={t("linkEditor.linkLabel")}
           aria-invalid={error ? true : undefined}
           placeholder="https://youtu.be/..."
           value={url}
@@ -103,7 +105,7 @@ export const EmbeddedLinkEditorModal = ({
           isDisabled={pending}
           onPress={onSubmit}
         >
-          {pending ? "切换中" : "播放"}
+          {pending ? t("common.switching") : t("common.play")}
         </DesktopButton>
       </div>
       {error && (

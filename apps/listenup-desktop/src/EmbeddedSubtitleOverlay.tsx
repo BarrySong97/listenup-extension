@@ -1,7 +1,7 @@
 /**
  * @purpose 在 Embedded 视频上显示当前 ListenUp 字幕，并通过独立手柄限制性拖动。
  * @role    EmbeddedVideoPanel 的可信 iframe 同级 Overlay；不拥有字幕查询、播放控制或持久化。
- * @deps    react、@iconify/react、DesktopIconButton、TranslationMissingState、位置纯函数。
+ * @deps    react、react-i18next、@iconify/react、DesktopIconButton、TranslationMissingState、位置纯函数。
  * @gotcha  根层必须保持 pointer-events-none；只有字幕卡和手柄拦截视频区域指针。
  */
 import { Icon } from "@iconify/react";
@@ -15,6 +15,7 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { DesktopIconButton } from "./components/ui/DesktopIconButton";
 import type { DisplayBlock } from "./SubtitleList";
 import {
@@ -55,6 +56,7 @@ export const EmbeddedSubtitleOverlay = memo(function EmbeddedSubtitleOverlay({
   position,
   translationMissing,
 }: EmbeddedSubtitleOverlayProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const localPositionRef = useRef(position);
@@ -230,8 +232,8 @@ export const EmbeddedSubtitleOverlay = memo(function EmbeddedSubtitleOverlay({
             if (isArrowKey(event.key)) persistKeyboardMove();
           }}
           onBlur={persistKeyboardMove}
-          tooltip="拖动悬浮字幕；方向键微调，Shift 加速"
-          ariaLabel="拖动悬浮字幕"
+          tooltip={t("embedded.dragOverlay")}
+          ariaLabel={t("embedded.dragOverlayLabel")}
           icon={
             <Icon
               icon="mdi:drag-vertical"

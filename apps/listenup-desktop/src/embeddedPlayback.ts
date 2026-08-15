@@ -13,7 +13,7 @@ export const normalizeYoutubeWatchUrl = (input: string) => {
   try {
     url = new URL(input.trim());
   } catch {
-    throw new Error("请输入有效的 YouTube 链接");
+    throw new YoutubeLinkError("enterValid");
   }
   if (
     url.protocol !== "https:" ||
@@ -21,7 +21,7 @@ export const normalizeYoutubeWatchUrl = (input: string) => {
     url.username ||
     url.password
   ) {
-    throw new Error("只支持标准 HTTPS YouTube 链接");
+    throw new YoutubeLinkError("httpsOnly");
   }
 
   let videoId: string | null = null;
@@ -35,10 +35,22 @@ export const normalizeYoutubeWatchUrl = (input: string) => {
     if (segments.length === 1) videoId = segments[0];
   }
   if (!videoId || !VIDEO_ID_PATTERN.test(videoId)) {
-    throw new Error("链接中没有有效的 YouTube videoId");
+    throw new YoutubeLinkError("missingVideoId");
   }
   return `https://www.youtube.com/watch?v=${videoId}`;
 };
+
+export type YoutubeLinkErrorCode = "enterValid" | "httpsOnly" | "missingVideoId";
+
+export class YoutubeLinkError extends Error {
+  readonly code: YoutubeLinkErrorCode;
+
+  constructor(code: YoutubeLinkErrorCode) {
+    super(code);
+    this.code = code;
+    this.name = "YoutubeLinkError";
+  }
+}
 
 export const shouldShowSourceEntry = (viewer: ViewerSnapshot) =>
   viewer.sourceMode === "empty" && viewer.activeSession === null;

@@ -18,6 +18,7 @@ Tauri v2，Rust 后端 + React 前端。
 
 ```
 src/App.tsx        唯一 Desktop layout：浏览器/链接双入口、同窗视频行、播放控制与字幕列表
+src/i18n/ / src/components/ui/LanguageSwitcher.tsx  Desktop 中英文资源、系统语言兜底、偏好持久化与 Footer 切换入口
 src/EmbeddedVideoPanel.tsx / src/useYoutubeIframePlayer.ts  官方 iframe 视频行与播放事件适配
 src/EmbeddedSubtitleOverlay.tsx / src/embeddedSubtitleOverlayPosition.ts  可拖动可信字幕层与归一化位置
 src/useViewerSession.ts / src/SubtitleViewer.tsx  主窗口快照订阅和唯一字幕展示层
@@ -142,7 +143,8 @@ watch、TV player 与 timedtext 对 connect/timeout 做最多三次、150ms 间�
 jar；避免连续换视频重复代理/TLS 握手。
 
 主窗口在 coordinator 无权威来源时显示双入口；BrowserSource 活跃时，标题栏原更新位置显示
-“切换”，而“检查更新”移到 Footer 左下角。用户也可以先明确点击 Desktop 激活应用，再在非输入
+“切换”。Footer 左下角显示“中 / EN”界面语言切换，右下角显示当前版本号与“检查更新”，不再显示语义块数量；
+用户也可以先明确点击 Desktop 激活应用，再在非输入
 区域粘贴单个 HTTPS watch/youtu.be 链接；根级 listener 只读取这次标准 `paste` 事件，输入框、
 Cookie 文本域和 contenteditable 仍走普通粘贴。链接先在本地纯函数校验，再由 Rust 独立复验；
 没有后台 clipboard read、轮询或全局 `Command+V`，无效内容只显示短暂提示，不会暂停浏览器或
@@ -198,6 +200,10 @@ Cookie 原值、键名和数量不进入错误、Debug、日志、SQLite、viewe
 Desktop 本身不下载 Skill、不安装 CLI、也不内置翻译。已有译文时列表按 AI 重组后的语义时间块
 显示；影院模式在双语时显示上下两层，并在 hover 工具条中提供原语、译文、双语切换，与列表
 模式共用同一份显示偏好。进入影院时工具条先显示 3 秒，之后才恢复为仅 hover 显示。
+
+Desktop 固定界面文案使用 `i18next` + `react-i18next`，只提供英文与简体中文；首次启动跟随
+macOS/WebView 语言，显式选择写入 `localStorage.listenup-ui-language`。界面语言与字幕目标语言
+彼此独立，切换不会改变原字幕、译文、视频标题或已选译文语言。
 
 持久字幕通过 TanStack React Query 调 `get_subtitle_view`。query key 包含 video、模式和
 目标语言；窗口重新聚焦时由 Tauri focus event 触发 refetch。没有 SQLite 文件监测、定时

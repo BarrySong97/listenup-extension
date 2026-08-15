@@ -1,7 +1,7 @@
 /**
  * @purpose 渲染官方 YouTube iframe、独立加载字幕，并组合可信的同级悬浮字幕层。
  * @role    App.tsx 的单一视频行；作为 iframe 与 EmbeddedSubtitleOverlay 的定位边界。
- * @deps    @tauri-apps/api、@listenup/youtube-core、EmbeddedSubtitleOverlay、useYoutubeIframePlayer、types
+ * @deps    @tauri-apps/api、@listenup/youtube-core、react-i18next、i18n、EmbeddedSubtitleOverlay、useYoutubeIframePlayer、types
  * @gotcha  Overlay 只能是可信 main 的 iframe sibling，不得向 loopback 播放页传字幕正文。
  */
 import { invoke } from "@tauri-apps/api/core";
@@ -15,7 +15,9 @@ import {
   type YouTubePlayerResponse,
 } from "@listenup/youtube-core";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { EmbeddedSubtitleOverlay } from "./EmbeddedSubtitleOverlay";
+import { i18n } from "./i18n";
 import type { EmbeddedSubtitleOverlayPosition } from "./embeddedSubtitleOverlayPosition";
 import type { DisplayBlock } from "./SubtitleList";
 import type { TranslationCopyStatus } from "./TranslationMissingState";
@@ -39,7 +41,7 @@ const emitSession = (
       sourceId: source.sourceId,
       sessionId: source.sessionId,
       videoId: source.videoId,
-      title: response?.videoDetails?.title || "YouTube 视频",
+      title: response?.videoDetails?.title || i18n.t("common.youtubeVideo"),
       identityStatus: "verified",
       status,
       error,
@@ -58,42 +60,42 @@ const emitSession = (
 
 const subtitleTransportError = (cause: unknown) => {
   const category = String(cause);
-  if (category.includes("player-response-missing")) return "YouTube 没有返回可用的字幕信息";
-  if (category.includes("player-config")) return "YouTube 播放参数读取失败，请重新加载";
-  if (category.includes("player-build")) return "已保存 Cookie 无法用于字幕请求";
-  if (category.includes("player-timeout")) return "YouTube 字幕轨请求超时";
-  if (category.includes("player-connect")) return "YouTube 字幕轨连接失败";
+  if (category.includes("player-response-missing")) return i18n.t("embeddedErrors.playerResponseMissing");
+  if (category.includes("player-config")) return i18n.t("embeddedErrors.playerConfig");
+  if (category.includes("player-build")) return i18n.t("embeddedErrors.playerBuild");
+  if (category.includes("player-timeout")) return i18n.t("embeddedErrors.playerTimeout");
+  if (category.includes("player-connect")) return i18n.t("embeddedErrors.playerConnect");
   if (category.includes("player-request") || category.includes("player-http")) {
-    return "YouTube 字幕轨请求暂时不可用";
+    return i18n.t("embeddedErrors.playerHttp");
   }
-  if (category.includes("player-response-invalid")) return "YouTube 字幕轨响应格式异常";
-  if (category.includes("proxy-invalid")) return "网络代理配置无效";
-  if (category.includes("caption-url-invalid")) return "YouTube 字幕地址校验失败";
-  if (category.includes("caption-empty")) return "YouTube 返回了空字幕文档，请重新加载";
-  if (category.includes("caption-http")) return "YouTube 字幕请求暂时不可用";
-  if (category.includes("caption-build")) return "已保存 Cookie 无法用于字幕下载";
-  if (category.includes("caption-timeout")) return "YouTube 字幕下载超时";
-  if (category.includes("caption-connect")) return "YouTube 字幕连接失败";
-  if (category.includes("caption-request")) return "YouTube 字幕请求失败";
-  if (category.includes("caption-read")) return "YouTube 字幕读取中断";
+  if (category.includes("player-response-invalid")) return i18n.t("embeddedErrors.playerInvalid");
+  if (category.includes("proxy-invalid")) return i18n.t("embeddedErrors.proxyInvalid");
+  if (category.includes("caption-url-invalid")) return i18n.t("embeddedErrors.captionUrlInvalid");
+  if (category.includes("caption-empty")) return i18n.t("embeddedErrors.captionEmpty");
+  if (category.includes("caption-http")) return i18n.t("embeddedErrors.captionHttp");
+  if (category.includes("caption-build")) return i18n.t("embeddedErrors.captionBuild");
+  if (category.includes("caption-timeout")) return i18n.t("embeddedErrors.captionTimeout");
+  if (category.includes("caption-connect")) return i18n.t("embeddedErrors.captionConnect");
+  if (category.includes("caption-request")) return i18n.t("embeddedErrors.captionRequest");
+  if (category.includes("caption-read")) return i18n.t("embeddedErrors.captionRead");
   if (
     category.includes("watch-http") ||
     category.includes("watch-request") ||
     category.includes("watch-read")
   ) {
-    return "YouTube 视频信息请求暂时不可用";
+    return i18n.t("embeddedErrors.watchHttp");
   }
-  if (category.includes("watch-build")) return "已保存 Cookie 无法用于视频信息请求";
-  if (category.includes("watch-timeout")) return "YouTube 视频信息请求超时";
+  if (category.includes("watch-build")) return i18n.t("embeddedErrors.watchBuild");
+  if (category.includes("watch-timeout")) return i18n.t("embeddedErrors.watchTimeout");
   if (category.includes("watch-connect-shell-proxy")) {
-    return "YouTube 视频信息连接失败（登录代理）";
+    return i18n.t("embeddedErrors.watchLoginProxy");
   }
   if (category.includes("watch-connect-env-proxy")) {
-    return "YouTube 视频信息连接失败（进程代理）";
+    return i18n.t("embeddedErrors.watchProcessProxy");
   }
-  if (category.includes("watch-connect")) return "YouTube 视频信息连接失败（直连）";
-  if (category.includes("cookie-store")) return "已保存 Cookie 暂时无法读取";
-  return "YouTube 字幕读取失败";
+  if (category.includes("watch-connect")) return i18n.t("embeddedErrors.watchConnect");
+  if (category.includes("cookie-store")) return i18n.t("embeddedErrors.cookieStore");
+  return i18n.t("embeddedErrors.generic");
 };
 
 export const EmbeddedVideoPanel = ({
@@ -119,6 +121,7 @@ export const EmbeddedVideoPanel = ({
   subtitles: SubtitleItem[];
   translationMissing?: boolean;
 }) => {
+  const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const iframePlayer = useYoutubeIframePlayer({
@@ -151,7 +154,7 @@ export const EmbeddedVideoPanel = ({
             track,
           }).ok
         ) {
-          await emitSession(source, response, "error", "字幕轨与当前视频身份不一致", null, []);
+          await emitSession(source, response, "error", t("embedded.identityMismatch"), null, []);
           return;
         }
         const document = await invoke<string>("fetch_youtube_caption_document", {
@@ -177,7 +180,7 @@ export const EmbeddedVideoPanel = ({
     return () => {
       disposed = true;
     };
-  }, [reloadToken, source.sessionId, source.videoId]);
+  }, [reloadToken, source.sessionId, source.videoId, t]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -205,7 +208,7 @@ export const EmbeddedVideoPanel = ({
         fillAvailableSpace ? "h-full min-h-0" : "aspect-video"
       }`}
     >
-      <div ref={hostRef} className="h-full w-full" aria-label="YouTube 视频区域" />
+      <div ref={hostRef} className="h-full w-full" aria-label={t("embedded.videoRegion")} />
       {overlayEnabled && (
         <EmbeddedSubtitleOverlay
           block={overlayBlock}
@@ -218,7 +221,7 @@ export const EmbeddedVideoPanel = ({
       )}
       {!iframePlayer.ready && !iframePlayer.error && (
         <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center bg-black text-[11px] text-fg-muted">
-          正在加载 YouTube 播放器…
+          {t("embedded.loadingPlayer")}
         </div>
       )}
       {iframePlayer.error && (
@@ -228,7 +231,7 @@ export const EmbeddedVideoPanel = ({
       )}
       {iframePlayer.autoplayBlocked && !iframePlayer.error && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-black/65 px-3 py-1.5 text-center text-[10px] text-white/65">
-          点击播放器即可开始播放
+          {t("embedded.clickToPlay")}
         </div>
       )}
     </section>
