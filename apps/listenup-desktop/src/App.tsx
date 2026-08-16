@@ -2,7 +2,7 @@
  * @purpose 普通 Desktop 主窗口与独立影院浮层 UI：组合浏览器同步、YouTube iframe、字幕交互与原生 hover tracking。
  * @role    main 标签渲染标准窗口，cinema 标签只渲染置顶字幕浮层；两者共享 Rust 来源权威。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、react-i18next、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
- * @gotcha  cinema 隐藏后会复用；每次原生呈现后须等 WebView 两帧布局再刷新 tracking，不能用 React pointer state 掩盖底层失效。
+ * @gotcha  cinema 隐藏后会复用；每次原生呈现后须等 WebView 两帧布局再刷新 tracking，且不得把窗口运行时 class-swap 为 NSPanel。
  */
 import { Icon } from "@iconify/react";
 import { getVersion } from "@tauri-apps/api/app";
@@ -164,7 +164,7 @@ const applyWindowSizeForMode = async (
   }
   // 影院模式追求沉浸：关掉 vibrancy 磨砂和系统窗口投影
   // （投影在透明窗口上会形成一圈黑边），列表模式恢复。vibrancy
-  // 命令最后执行，它会在所有几何变化后刷新 NSPanel 的鼠标 tracking areas。
+  // 命令最后执行，它会在所有几何变化后刷新影院 WebView 的鼠标 tracking areas。
   await appWindow.setShadow(mode === "list");
   await invoke("set_vibrancy", { enabled: mode === "list" });
 };

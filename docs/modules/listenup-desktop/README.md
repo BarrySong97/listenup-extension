@@ -38,7 +38,7 @@ src/main.tsx       React 挂载与 QueryClientProvider
 src/types.ts       与 Rust 侧共享的实时快照 / 持久字幕视图类型
 src/windowPresentation.ts  窗口 label → list/cinema 视图的纯映射
 src/styles.css     Tailwind v4 @theme（唯一的设计 token 权威，见 design.md）
-src-tauri/src/lib.rs   Tauri 入口、普通 main、独立 cinema NSPanel、双向 socket、SQLite、tray
+src-tauri/src/lib.rs   Tauri 入口、普通 main、独立置顶 cinema NSWindow、双向 socket、SQLite、tray
 src-tauri/src/browser_source.rs  浏览器字幕影子状态、多视频仲裁与 bridgeId 控制目标
 src-tauri/src/source_coordinator.rs  双来源权威、Embedded 锁与 playbackEpoch 退出屏障
 src-tauri/src/embedded_source.rs  Embedded schema、大小/频率/身份校验与单会话状态
@@ -253,10 +253,9 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 - `main` 始终是 Tauri 创建的标准 `NSWindow`，使用 `ActivationPolicy::Regular` 且
   `alwaysOnTop=false`。它可以被其他窗口遮挡，点击后正常成为 key window；WKWebView 输入框和
   `Cmd+A/C/X/V` 走系统标准 first-responder 链路，不需要任何 `activate_text_input` 或根级 pointer 激活。
-- `cinema` 是按需创建的独立 WebviewWindow。只有它 class-swap 成
-  `NSPanel + nonactivatingPanel`，使用高 level、`canJoinAllSpaces`、`fullScreenAuxiliary` 和
-  always-on-top，因而可覆盖其他 app 的原生全屏 Space且不抢走视频 app 焦点。影院不允许承载文本输入，
-  `becomesKeyOnlyIfNeeded=true`。
+- `cinema` 是按需创建的独立标准 `NSWindow` WebviewWindow；不得运行时 class-swap 为 `NSPanel`。
+  只有它使用高 level、`canJoinAllSpaces`、`fullScreenAuxiliary` 和 always-on-top，因而仍可覆盖其他
+  app 的原生全屏 Space。仅移动鼠标不会激活应用；点击控件按标准 macOS 窗口规则处理焦点。
 - 进入影院时隐藏 main；退出影院、点击 tray 或关闭影院时隐藏 cinema，并显示、聚焦 main。两个窗口只
   共享 Rust coordinator / SQLite / socket 权威，不复制连接或来源状态。
 - Header 和 tray 都没有 Menubar Mode；旧 `desktop-preferences.json` 不再读取，应用不会切换
@@ -270,7 +269,7 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 
 | | 列表模式 | 影院模式 |
 |---|---|---|
-| 原生窗口 | 普通 `main` NSWindow | 独立 `cinema` NSPanel |
+| 原生窗口 | 普通 `main` NSWindow | 独立置顶 `cinema` NSWindow |
 | 形态 | YouTube 标志 + 标题 + 状态 + 完整字幕列表 + footer | 整窗为一条字幕带（当前句，最多两行） |
 | 背景 | vibrancy 磨砂 + `--color-glass` | **运行时关掉 vibrancy**（`set_vibrancy` 命令）+ 纯透明 + `--color-glass-cinema` |
 | 工具条 | 常驻 header | 默认隐藏；hover 整条影院字幕窗口时显示，可切换原语 / 译文 / 双语，鼠标离开窗口后隐藏 |
@@ -279,10 +278,12 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 `ensure_window_visible` 做原生显示器交集校验。
 main 与 cinema 权限分别在 `capabilities/default.json` 和 `capabilities/cinema.json`。
 列表/影院缩放、vibrancy/阴影切换、全屏 Space 重排和 tray 重显都会重新启用
-`acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免非激活 NSPanel 偶发停止命中
-CSS `:hover`。窗口隐藏再显示还必须发送 presentation 事件，在 WebView 完成可见布局后再刷新一次；
-只换成 React pointer enter / leave 无法绕过失效的原生 tracking。完整决策见
-[ADR-0019](../../decisions/0019-desktop-normal-window-and-dedicated-cinema-panel.md)。
+`acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免窗口状态变化后停止命中 CSS `:hover`。
+窗口隐藏再显示还必须发送 presentation 事件，在 WebView 完成可见布局后再刷新一次；只换成 React
+pointer enter / leave 无法绕过失效的原生 tracking。运行时 `object_setClass(NSPanel)` 会让新建
+cinema WebView 永久收不到鼠标事件，已由 sensor 明确禁止。完整决策见
+[ADR-0019](../../decisions/0019-desktop-normal-window-and-dedicated-cinema-panel.md) 与
+[ADR-0020](../../decisions/0020-cinema-keeps-standard-nswindow.md)。
 
 ## 来源权威与多视频仲裁
 

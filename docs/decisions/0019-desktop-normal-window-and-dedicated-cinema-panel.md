@@ -1,6 +1,6 @@
 # 0019. Desktop 固定普通主窗口，影院使用独立 NSPanel
 
-- 状态：已采纳
+- 状态：部分被 [ADR-0020](0020-cinema-keeps-standard-nswindow.md) 取代
 - 日期：2026-08-16
 - 取代：[ADR-0010](0010-desktop-and-menubar-app-modes.md)、[ADR-0011](0011-menubar-preserves-desktop-window-size.md)
 - Plane：LISTENUP-30
@@ -38,6 +38,9 @@
    cinema-only `refresh_window_mouse_tracking` 刷新原生 tracking areas，且不改 vibrancy。工具条保留
    WebKit `group-hover`；React pointer state 依赖同一条失效的原生事件链，不能作为替代方案。
 
+第 2 条中运行时转换为 `NSPanel + nonactivatingPanel` 的部分已被 ADR-0020 取代。独立 cinema
+WebviewWindow、置顶 / 跨 Space、双窗口几何与 presentation 事件等其余决策继续有效。
+
 ## 理由
 
 - 标准主窗口天然满足文本输入和菜单快捷键，不需要跨层级强制激活或根级 pointer 副作用。
@@ -54,4 +57,5 @@
   也不靠 React pointer state 或永久显示规避 hover。
 - tray 左键永远恢复主窗口并退出影院，不再提供失焦自动收起或 appMode 切换。
 - `windowPresentation.test.ts` 与 `scripts/check-environment-identifiers.mjs` 固定窗口 label、capability、
-  主窗口非置顶、仅影院 NSPanel 化、v2 几何隔离、屏外恢复以及禁止全局激活的架构棘轮。
+  主窗口非置顶、仅影院 always-on-top、v2 几何隔离、屏外恢复以及禁止全局激活的架构棘轮；
+  ADR-0020 进一步禁止两个 WebviewWindow 的 runtime class-swap。

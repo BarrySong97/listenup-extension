@@ -3,7 +3,7 @@
  * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/native hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault/i18n、website/Tauri/CLI/Query 配置
- * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、React pointer 伪 hover、旧单窗口几何键、启动强装、本地 `.app` 残留或发布缺口。
+ * @gotcha  ADR-0008/0020：不得恢复英语优先、环境串库、WebviewWindow 运行时 class-swap、React pointer 伪 hover、旧单窗口几何键、启动强装、本地 `.app` 残留或发布缺口。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -497,12 +497,12 @@ assert.match(
 assert.match(
   rustSource,
   /setAcceptsMouseMovedEvents: true/,
-  "NSPanel must keep distributing mouse-moved events after native state changes"
+  "the cinema window must keep distributing mouse-moved events after native state changes"
 );
 assert.match(
   rustSource,
   /updateTrackingAreas/,
-  "NSPanel must recalculate WebView tracking areas after resize/vibrancy changes"
+  "the cinema window must recalculate WebView tracking areas after resize/vibrancy changes"
 );
 assert.match(
   rustSource,
@@ -519,15 +519,15 @@ assert.match(
   /const CINEMA_PRESENTED_EVENT: &str = "desktop-cinema-presented"/,
   "every reused cinema window presentation needs a stable reset event"
 );
-assert.doesNotMatch(
-  rustSource,
-  /setBecomesKeyOnlyIfNeeded:\s*false/,
-  "the dedicated cinema NSPanel has no text input and must stay nonactivating"
-);
 assert.match(
   rustSource,
-  /fn configure_cinema_panel_on_main_thread[\s\S]*object_setClass[\s\S]*setBecomesKeyOnlyIfNeeded:\s*true/,
-  "only the dedicated cinema window may be converted into a nonactivating NSPanel"
+  /fn configure_cinema_window_on_main_thread[\s\S]*set_vibrancy_on_main_thread\(window, false\)/,
+  "cinema must retain a dedicated standard NSWindow while applying its visual treatment"
+);
+assert.doesNotMatch(
+  rustSource,
+  /object_setClass|setBecomesKeyOnlyIfNeeded|nonactivatingPanel/,
+  "ADR-0020: runtime NSPanel conversion breaks mouse delivery to a newly created cinema WebView"
 );
 assert.match(
   rustSource,
@@ -546,6 +546,11 @@ assert.match(
 );
 assert.doesNotMatch(rustSource, /activate_text_input|activateIgnoringOtherApps|makeKeyWindow/);
 assert.doesNotMatch(rustSource, /mod app_mode|AppMode|Focused\(false\)/);
+assert.doesNotMatch(
+  rustSource,
+  /CINEMA_DIAGNOSTIC|report_cinema_hover_diagnostic/,
+  "temporary cinema hover probes must not ship"
+);
 assert.equal(productionTauri.app.windows[0].alwaysOnTop, false);
 assert.equal(developmentTauri.app.windows[0].alwaysOnTop, false);
 
@@ -580,7 +585,12 @@ assert.match(
 assert.doesNotMatch(
   desktopAppSource,
   /cinemaToolbarPointerInside|onPointerEnter|onPointerLeave/,
-  "React pointer state cannot replace a broken native NSPanel tracking area"
+  "React pointer state cannot replace native WebView hover tracking"
+);
+assert.doesNotMatch(
+  desktopAppSource,
+  /CINEMA_HOVER_DIAGNOSTIC|reportCinemaHoverDiagnostic|data-cinema-(?:root|toolbar)/,
+  "temporary cinema hover probes must not ship"
 );
 assert.match(
   desktopAppSource,

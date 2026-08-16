@@ -1,7 +1,7 @@
-// @purpose 桌面端 Rust 入口：普通主窗口、影院 NSPanel、GUI/桥接双模式、字幕来源与影院呈现事件协调。
+// @purpose 桌面端 Rust 入口：普通主窗口、独立影院窗口、GUI/桥接双模式、字幕来源与影院呈现事件协调。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
-// @gotcha  stdout 只写 Native Messaging 长度帧；主窗口不得 NSPanel 化或置顶；cinema 每次 show 后必须发事件重置 WebView hover 生命周期。
+// @gotcha  stdout 只写 Native Messaging 长度帧；任何 WebviewWindow 都不得运行时 class-swap；cinema 每次 show 后必须发事件重置 hover 生命周期。
 mod browser_source;
 pub mod cli;
 mod cookie_vault;
@@ -807,7 +807,7 @@ fn run_socket_server(app: AppHandle) {
     }
 }
 
-/// 恢复 NSPanel / WebView 的鼠标移动分发与 hover tracking。必须主线程调用。
+/// 恢复原生窗口 / WebView 的鼠标移动分发与 hover tracking。必须主线程调用。
 #[cfg(target_os = "macos")]
 fn refresh_mouse_tracking(window: &tauri::WebviewWindow) {
     if let Ok(ns_window) = window.ns_window() {
@@ -836,8 +836,8 @@ fn refresh_mouse_tracking(window: &tauri::WebviewWindow) {
         let ns_window = ns_window as *mut AnyObject;
         unsafe {
             // NSWindow defaults this to false. Resizing, changing shadow/vibrancy,
-            // class-swapping to NSPanel, or moving between fullscreen Spaces can
-            // invalidate WebKit's hover tracking until the next process launch.
+            // or moving between fullscreen Spaces can invalidate WebKit's hover
+            // tracking until the next process launch.
             let _: () = msg_send![ns_window, setAcceptsMouseMovedEvents: true];
             let content_view: *mut AnyObject = msg_send![ns_window, contentView];
             update_view_tree(content_view);
@@ -1007,26 +1007,9 @@ fn ensure_window_visible(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-fn configure_cinema_panel_on_main_thread(window: &tauri::WebviewWindow) {
-    if let Ok(ns_window) = window.ns_window() {
-        use objc2::msg_send;
-        use objc2::runtime::{AnyClass, AnyObject};
-        let ns_window = ns_window as *mut AnyObject;
-        unsafe {
-            if let Some(panel_class) = AnyClass::get(c"NSPanel") {
-                objc2::ffi::object_setClass(
-                    ns_window.cast(),
-                    (panel_class as *const AnyClass).cast(),
-                );
-                let style: usize = msg_send![ns_window, styleMask];
-                let _: () = msg_send![ns_window, setStyleMask: style | (1 << 7)];
-                let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: true];
-                let _: () = msg_send![ns_window, setHidesOnDeactivate: false];
-                let _: () = msg_send![ns_window, setReleasedWhenClosed: false];
-                eprintln!("[listenup] cinema window converted to NSPanel");
-            }
-        }
-    }
+fn configure_cinema_window_on_main_thread(window: &tauri::WebviewWindow) {
+    // 保留 Tauri 创建的标准 NSWindow。运行时 class-swap 为 NSPanel 会让隐藏创建、
+    // 从未成为 responder 的 cinema WebView 永久收不到 mouseMoved，CSS :hover 随之失效。
     set_vibrancy_on_main_thread(window, false);
 }
 
@@ -1122,7 +1105,7 @@ fn enter_cinema_mode(app: AppHandle) -> Result<(), String> {
         let target = cinema.clone();
         cinema
             .run_on_main_thread(move || {
-                configure_cinema_panel_on_main_thread(&target);
+                configure_cinema_window_on_main_thread(&target);
                 let _ = target.show();
                 apply_overlay_window_style(&target);
             })

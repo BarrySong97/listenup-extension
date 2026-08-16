@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "cinema",
-  "description": "Minimal capability for the dedicated nonactivating cinema overlay",
+  "description": "Minimal capability for the dedicated always-on-top cinema overlay",
   "webviews": ["cinema"],
   "permissions": [
     "core:default",

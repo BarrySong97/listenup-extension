@@ -38,4 +38,5 @@
 | [0016](0016-desktop-embedded-subtitle-sibling-overlay.md) | Desktop Embedded 字幕使用可信 iframe 同级 Overlay | 已采纳 | 2026-08-13 |
 | [0017](0017-desktop-embedded-list-collapse-and-overlay-independent.md) | Desktop Embedded 列表收起与视频 Overlay 独立 | 已采纳 | 2026-08-13 |
 | [0018](0018-desktop-backward-compatible-native-protocol.md) | Desktop 对商店上一版 Native Messaging 协议保持向后兼容 | 已采纳 | 2026-08-14 |
-| [0019](0019-desktop-normal-window-and-dedicated-cinema-panel.md) | Desktop 固定普通主窗口，影院使用独立 NSPanel | 已采纳 | 2026-08-16 |
+| [0019](0019-desktop-normal-window-and-dedicated-cinema-panel.md) | Desktop 固定普通主窗口，影院使用独立 NSPanel | 部分被 0020 取代 | 2026-08-16 |
+| [0020](0020-cinema-keeps-standard-nswindow.md) | 影院保留标准 NSWindow，不做运行时 NSPanel 转换 | 已采纳 | 2026-08-16 |
