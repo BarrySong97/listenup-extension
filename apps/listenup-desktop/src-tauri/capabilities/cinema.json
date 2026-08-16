@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "cinema",
+  "description": "Minimal capability for the dedicated nonactivating cinema overlay",
+  "webviews": ["cinema"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-set-min-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-outer-position",
+    "core:window:allow-scale-factor",
+    "core:window:allow-set-position",
+    "core:window:allow-set-shadow",
+    "allow-control-playback",
+    "allow-exit-cinema-mode",
+    "allow-select-subtitle-session",
+    "allow-set-vibrancy",
+    "allow-viewer-read"
+  ]
+}

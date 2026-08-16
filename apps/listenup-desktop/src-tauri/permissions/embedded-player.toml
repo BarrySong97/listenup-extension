@@ -1,7 +1,7 @@
-# @purpose 为可信 main 精确声明 iframe Embedded 播放与只读 YouTube 字幕 transport 权限。
+# @purpose 为可信 main 与 cinema 精确声明 Embedded 播放、字幕读取和窗口形态命令权限。
 # @role    capability 引用的 app command allow-list；iframe 本身没有任何 Tauri capability。
 # @deps    embedded_player.rs Tauri commands
-# @gotcha  fetch commands 必须在 Rust 内再次校验 main、YouTube host/path 与同一 videoId。
+# @gotcha  main/cinema 使用不同 capability；fetch commands 还必须在 Rust 内校验 main、YouTube host/path 与同一 videoId。
 
 [[permission]]
 identifier = "allow-start-embedded-playback"
@@ -59,9 +59,24 @@ description = "Allows trusted local viewer webviews to read coordinator snapshot
 commands.allow = ["get_snapshot", "get_subtitle_view"]
 
 [[permission]]
-identifier = "allow-main-window-commands"
-description = "Allows only main to manage app mode, video selection, NSPanel vibrancy, and explicit text-input activation."
-commands.allow = ["activate_text_input", "get_app_mode", "set_app_mode", "select_subtitle_session", "set_vibrancy"]
+identifier = "allow-enter-cinema-mode"
+description = "Allows the trusted main window to open the dedicated cinema overlay."
+commands.allow = ["enter_cinema_mode"]
+
+[[permission]]
+identifier = "allow-exit-cinema-mode"
+description = "Allows the dedicated cinema overlay to return to the regular main window."
+commands.allow = ["exit_cinema_mode"]
+
+[[permission]]
+identifier = "allow-select-subtitle-session"
+description = "Allows trusted local viewer windows to select an existing subtitle session."
+commands.allow = ["select_subtitle_session"]
+
+[[permission]]
+identifier = "allow-set-vibrancy"
+description = "Allows trusted local viewer windows to apply their label-specific visual material."
+commands.allow = ["set_vibrancy"]
 
 [[permission]]
 identifier = "allow-fetch-youtube-player-response"

@@ -1,8 +1,7 @@
-// @purpose 桌面端 Rust 入口：GUI/桥接双模式、来源协调、双向播放/字幕 seek、字幕持久化、NSPanel 与 tray。
+// @purpose 桌面端 Rust 入口：普通主窗口、影院 NSPanel、GUI/桥接双模式与字幕来源协调。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
-// @gotcha  stdout 只写 Native Messaging 长度帧；商店 v4 cursor 需合成 playbackEpoch，v5 必须原样保留；NSPanel 必须允许 WKWebView 文本框成为 key responder。
-mod app_mode;
+// @gotcha  stdout 只写 Native Messaging 长度帧；主窗口不得 NSPanel 化或置顶，只有 cinema 窗口能使用 overlay AppKit 属性。
 mod browser_source;
 pub mod cli;
 mod cookie_vault;
@@ -11,7 +10,6 @@ pub mod domain;
 mod embedded_player;
 mod embedded_player_host;
 mod embedded_source;
-mod positioning;
 mod source_coordinator;
 mod youtube_subtitles;
 
@@ -29,10 +27,7 @@ use std::{
     collections::HashMap,
     env,
     io::{self, Read},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::Mutex,
     time::Duration,
 };
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -44,6 +39,7 @@ const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
 const CHECK_UPDATE_EVENT: &str = "desktop-check-for-update";
+const CINEMA_WINDOW_LABEL: &str = "cinema";
 const EXTENSION_ID: &str = env!("LISTENUP_EXTENSION_ID");
 const NATIVE_HOST_NAME: &str = env!("LISTENUP_NATIVE_HOST_NAME");
 const PRODUCT_NAME: &str = env!("LISTENUP_PRODUCT_NAME");
@@ -903,8 +899,12 @@ fn set_vibrancy_on_main_thread(window: &tauri::WebviewWindow, enabled: bool) {
         }
     }
 
-    // 每次模式切换顺带重申 overlay 属性，防止被系统或 tao 内部操作重置
-    apply_overlay_window_style(window);
+    if window.label() == CINEMA_WINDOW_LABEL {
+        // 只有影院浮层需要跨 Space 置顶；普通主窗口必须保持系统默认层级。
+        apply_overlay_window_style(window);
+    } else {
+        refresh_mouse_tracking(window);
+    }
 }
 
 /// Tauri command 默认跑在 worker 线程，而 AppKit 的 view/window 操作必须在主线程，
@@ -922,50 +922,144 @@ fn set_vibrancy(window: tauri::WebviewWindow, enabled: bool) {
     let _ = (window, enabled);
 }
 
-/// nonactivatingPanel 可以把普通按键交给 key responder，但 app 未激活时，
-/// Cmd+A/C/X/V 等 key equivalent 仍会被上一个活跃 app 的菜单处理。
-/// 只在可信 main 的文本输入获得焦点时激活 ListenUp；字幕点击等普通面板交互仍不抢焦点。
-#[tauri::command]
-fn activate_text_input(window: tauri::WebviewWindow) {
-    #[cfg(target_os = "macos")]
-    {
-        let target = window.clone();
-        let _ = window.run_on_main_thread(move || {
-            let Ok(ns_window) = target.ns_window() else {
-                return;
-            };
-            use objc2::msg_send;
-            use objc2::runtime::{AnyClass, AnyObject};
-            let ns_window = ns_window as *mut AnyObject;
-            unsafe {
-                let Some(app_class) = AnyClass::get(c"NSApplication") else {
-                    return;
-                };
-                let ns_app: *mut AnyObject = msg_send![app_class, sharedApplication];
-                let _: () = msg_send![ns_app, activateIgnoringOtherApps: true];
-                let _: () = msg_send![ns_window, makeKeyWindow];
+#[cfg(target_os = "macos")]
+fn configure_cinema_panel_on_main_thread(window: &tauri::WebviewWindow) {
+    if let Ok(ns_window) = window.ns_window() {
+        use objc2::msg_send;
+        use objc2::runtime::{AnyClass, AnyObject};
+        let ns_window = ns_window as *mut AnyObject;
+        unsafe {
+            if let Some(panel_class) = AnyClass::get(c"NSPanel") {
+                objc2::ffi::object_setClass(
+                    ns_window.cast(),
+                    (panel_class as *const AnyClass).cast(),
+                );
+                let style: usize = msg_send![ns_window, styleMask];
+                let _: () = msg_send![ns_window, setStyleMask: style | (1 << 7)];
+                let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: true];
+                let _: () = msg_send![ns_window, setHidesOnDeactivate: false];
+                let _: () = msg_send![ns_window, setReleasedWhenClosed: false];
+                eprintln!("[listenup] cinema window converted to NSPanel");
             }
-        });
+        }
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = window;
+    set_vibrancy_on_main_thread(window, false);
 }
 
-fn show_main_window(
-    app: &AppHandle,
-    tray_rect: Option<tauri::Rect>,
-    click_position: Option<tauri::PhysicalPosition<f64>>,
-) {
+#[cfg(target_os = "macos")]
+fn spawn_cinema_overlay_keeper(window: tauri::WebviewWindow) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(2000));
+        let target = window.clone();
+        if window
+            .run_on_main_thread(move || {
+                if let Ok(ns_window) = target.ns_window() {
+                    use objc2::msg_send;
+                    use objc2::runtime::AnyObject;
+                    let ns_window = ns_window as *mut AnyObject;
+                    unsafe {
+                        let visible: bool = msg_send![ns_window, isVisible];
+                        if !visible {
+                            return;
+                        }
+                        let _: () = msg_send![ns_window, setLevel: 25_isize];
+                        let behavior: usize = (1 << 0) | (1 << 8);
+                        let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+                        let _: () = msg_send![ns_window, setAcceptsMouseMovedEvents: true];
+                        let _: () = msg_send![ns_window, orderFrontRegardless];
+                    }
+                }
+            })
+            .is_err()
+        {
+            break;
+        }
+    });
+}
+
+fn exit_cinema_mode_inner(app: &AppHandle) {
+    if let Some(cinema) = app.get_webview_window(CINEMA_WINDOW_LABEL) {
+        let _ = cinema.hide();
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.unminimize();
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+}
+
+#[tauri::command]
+fn exit_cinema_mode(app: AppHandle) {
+    exit_cinema_mode_inner(&app);
+}
+
+#[tauri::command]
+fn enter_cinema_mode(app: AppHandle) -> Result<(), String> {
+    let cinema = if let Some(window) = app.get_webview_window(CINEMA_WINDOW_LABEL) {
+        window
+    } else {
+        let window = tauri::WebviewWindowBuilder::new(
+            &app,
+            CINEMA_WINDOW_LABEL,
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .title("ListenUp Cinema")
+        .inner_size(760.0, 148.0)
+        .min_inner_size(420.0, 72.0)
+        .resizable(true)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
+        .always_on_top(true)
+        .focused(false)
+        .visible(false)
+        .build()
+        .map_err(|error| format!("创建影院浮层失败：{error}"))?;
+
+        let close_app = app.clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                exit_cinema_mode_inner(&close_app);
+            }
+        });
+
+        #[cfg(target_os = "macos")]
+        spawn_cinema_overlay_keeper(window.clone());
+        window
+    };
+
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.hide();
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let target = cinema.clone();
+        cinema
+            .run_on_main_thread(move || {
+                configure_cinema_panel_on_main_thread(&target);
+                let _ = target.show();
+                apply_overlay_window_style(&target);
+            })
+            .map_err(|error| format!("显示影院浮层失败：{error}"))?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        cinema
+            .show()
+            .map_err(|error| format!("显示影院浮层失败：{error}"))?;
+    }
+    Ok(())
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(cinema) = app.get_webview_window(CINEMA_WINDOW_LABEL) {
+        let _ = cinema.hide();
+    }
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-    if app.state::<app_mode::AppModeState>().current() == app_mode::AppMode::Menubar {
-        let positioned = tray_rect
-            .is_some_and(|rect| positioning::position_panel(&window, rect, click_position));
-        if !positioned {
-            let _ = window.center();
-        }
-    }
     let _ = window.unminimize();
     let _ = window.show();
     #[cfg(target_os = "macos")]
@@ -1119,9 +1213,6 @@ pub fn run() {
         .manage(SharedBridges::default())
         .manage(SharedPlaybackCommands::default())
         .invoke_handler(tauri::generate_handler![
-            activate_text_input,
-            app_mode::get_app_mode,
-            app_mode::set_app_mode,
             control_playback,
             cookie_vault::clear_youtube_cookies,
             cookie_vault::get_youtube_cookie_status,
@@ -1135,6 +1226,8 @@ pub fn run() {
             embedded_player_host::get_embedded_player_host_url,
             youtube_subtitles::fetch_youtube_caption_document,
             youtube_subtitles::fetch_youtube_player_response,
+            enter_cinema_mode,
+            exit_cinema_mode,
             get_snapshot,
             get_subtitle_view,
             select_subtitle_session,
@@ -1143,14 +1236,6 @@ pub fn run() {
         .setup(|app| {
             app.manage(embedded_player_host::start().map_err(std::io::Error::other)?);
             let app_data_dir = app.path().app_data_dir()?;
-            let app_mode_path = app_mode::preference_path(&app_data_dir);
-            let initial_app_mode = app_mode::load(&app_mode_path);
-            app_mode::configure_initial(app, initial_app_mode)
-                .map_err(std::io::Error::other)?;
-            app.manage(app_mode::AppModeState::new(
-                app_mode_path,
-                initial_app_mode,
-            ));
 
             let database_path = app_data_dir.join("listenup.sqlite");
             let database =
@@ -1197,105 +1282,21 @@ pub fn run() {
 
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
-                // 把 NSWindow 运行时换成 NSPanel（tauri-nspanel 同款 class-swap）。
-                // 实测（同屏严格测试）：Accessory + canJoinAllSpaces + fullScreenAuxiliary
-                // + level 25 的普通 NSWindow 仍进不了别人的全屏 Space；
-                // 只有 NSPanel + nonactivatingPanel 能被系统排进去。
-                // 副作用：点击字幕条不再抢走视频 app 的焦点，正合适。
-                if let Ok(ns_window) = window.ns_window() {
-                    use objc2::msg_send;
-                    use objc2::runtime::{AnyClass, AnyObject};
-                    let ns_window = ns_window as *mut AnyObject;
-                    unsafe {
-                        if let Some(panel_class) = AnyClass::get(c"NSPanel") {
-                            objc2::ffi::object_setClass(
-                                ns_window.cast(),
-                                (panel_class as *const AnyClass).cast(),
-                            );
-                            // nonactivatingPanel(1<<7)：进全屏 Space 的必要条件
-                            let style: usize = msg_send![ns_window, styleMask];
-                            let _: () = msg_send![ns_window, setStyleMask: style | (1 << 7)];
-                            // WKWebView 不会实现 AppKit 的 needsPanelToBecomeKey。若设为 true，
-                            // React 输入框虽然能显示 focus 外观，却收不到普通按键或 Cmd+C/V。
-                            // nonactivatingPanel 仍保证 app 不被激活；这里只允许 panel 自身在
-                            // 用户点击后成为 key window，把键盘事件交给 WebView first responder。
-                            let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: false];
-                            // NSPanel 默认在 app 失活时隐藏，字幕条必须常驻，显式关掉
-                            let _: () = msg_send![ns_window, setHidesOnDeactivate: false];
-                            let _: () = msg_send![ns_window, setReleasedWhenClosed: false];
-                            eprintln!("[listenup] window converted to NSPanel");
-                        }
-                    }
-                }
-
-                // setup 跑在主线程，直接调；默认按列表模式加磨砂，
-                // 前端 mount 后会按持久化的模式再调 set_vibrancy 纠正
+                // 主窗口保持 Tauri 创建的标准 NSWindow，只应用列表磨砂。
+                // 跨 Space 置顶属性全部隔离到按需创建的 cinema 窗口。
                 set_vibrancy_on_main_thread(&window, true);
 
-                // 关闭按钮改为"收进菜单栏"：拦截关闭请求，隐藏窗口。
-                // 真正退出走菜单栏图标的"退出"。
+                // 标准 macOS 行为：关闭主窗口但保持应用和 tray，可从 tray 重新显示。
                 let hide_target = window.clone();
-                let focus_app = app.handle().clone();
-                let panel_had_focus = Arc::new(AtomicBool::new(false));
-                let focus_state = Arc::clone(&panel_had_focus);
                 window.on_window_event(move |event| {
-                    match event {
-                        tauri::WindowEvent::CloseRequested { api, .. } => {
-                            api.prevent_close();
-                            let _ = hide_target.hide();
-                        }
-                        tauri::WindowEvent::Focused(true) => {
-                            focus_state.store(true, Ordering::SeqCst);
-                        }
-                        tauri::WindowEvent::Focused(false) => {
-                            if focus_app.state::<app_mode::AppModeState>().current()
-                                == app_mode::AppMode::Menubar
-                                && focus_state.swap(false, Ordering::SeqCst)
-                            {
-                                let _ = hide_target.hide();
-                            }
-                        }
-                        _ => {}
-                    }
-                });
-
-                // 周期性重申 overlay 属性并把窗口重新排到最前。
-                // 别人进原生全屏会创建新 Space，canJoinAllSpaces 窗口有时
-                // 不会被自动排进去，需要 orderFrontRegardless 重新入列。
-                // 注意窗口被隐藏（收进菜单栏）时跳过，否则会把它重新拉出来。
-                let keeper = window.clone();
-                std::thread::spawn(move || loop {
-                    std::thread::sleep(std::time::Duration::from_millis(2000));
-                    let target = keeper.clone();
-                    if keeper
-                        .run_on_main_thread(move || {
-                            if let Ok(ns_window) = target.ns_window() {
-                                use objc2::msg_send;
-                                use objc2::runtime::AnyObject;
-                                let ns_window = ns_window as *mut AnyObject;
-                                unsafe {
-                                    let visible: bool = msg_send![ns_window, isVisible];
-                                    if !visible {
-                                        return;
-                                    }
-                                    let _: () = msg_send![ns_window, setLevel: 25_isize];
-                                    let behavior: usize = (1 << 0) | (1 << 8);
-                                    let _: () =
-                                        msg_send![ns_window, setCollectionBehavior: behavior];
-                                    let _: () =
-                                        msg_send![ns_window, setAcceptsMouseMovedEvents: true];
-                                    let _: () = msg_send![ns_window, orderFrontRegardless];
-                                }
-                            }
-                        })
-                        .is_err()
-                    {
-                        break;
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = hide_target.hide();
                     }
                 });
             }
 
-            // tray 左键按 appMode 显示/隐藏 panel；右键菜单负责更新、形态切换和退出。
+            // tray 是普通应用的辅助入口：显示主窗口、检查更新或退出。
             {
                 use tauri::menu::{Menu, MenuItem};
                 use tauri::tray::{
@@ -1305,46 +1306,20 @@ pub fn run() {
                 let show_item = MenuItem::with_id(app, "show", "显示字幕窗口", true, None::<&str>)?;
                 let update_item =
                     MenuItem::with_id(app, "check-update", "检查更新…", true, None::<&str>)?;
-                let toggle_mode_text = match initial_app_mode {
-                    app_mode::AppMode::Desktop => "切换到菜单栏 App",
-                    app_mode::AppMode::Menubar => "切换到自由窗口",
-                };
-                let toggle_mode_item = MenuItem::with_id(
-                    app,
-                    "toggle-app-mode",
-                    toggle_mode_text,
-                    true,
-                    None::<&str>,
-                )?;
                 let quit_item =
                     MenuItem::with_id(app, "quit", "退出 ListenUp Desktop", true, None::<&str>)?;
-                let menu = Menu::with_items(
-                    app,
-                    &[&show_item, &update_item, &toggle_mode_item, &quit_item],
-                )?;
-                app.manage(app_mode::AppModeMenuItem(toggle_mode_item.clone()));
+                let menu = Menu::with_items(app, &[&show_item, &update_item, &quit_item])?;
 
                 let mut tray = TrayIconBuilder::with_id("main-tray")
                     .menu(&menu)
                     .show_menu_on_left_click(false)
                     .on_menu_event(|app, event| match event.id.as_ref() {
                         "show" => {
-                            let tray_rect = app
-                                .tray_by_id("main-tray")
-                                .and_then(|tray| tray.rect().ok().flatten());
-                            show_main_window(app, tray_rect, None);
+                            show_main_window(app);
                         }
                         "check-update" => {
-                            let tray_rect = app
-                                .tray_by_id("main-tray")
-                                .and_then(|tray| tray.rect().ok().flatten());
-                            show_main_window(app, tray_rect, None);
+                            show_main_window(app);
                             let _ = app.emit(CHECK_UPDATE_EVENT, ());
-                        }
-                        "toggle-app-mode" => {
-                            if let Err(error) = app_mode::toggle(app) {
-                                let _ = app.emit(app_mode::APP_MODE_ERROR_EVENT, error);
-                            }
                         }
                         "quit" => app.exit(0),
                         _ => {}
@@ -1353,21 +1328,10 @@ pub fn run() {
                         if let TrayIconEvent::Click {
                             button: MouseButton::Left,
                             button_state: MouseButtonState::Up,
-                            rect,
-                            position,
                             ..
                         } = event
                         {
-                            let app = tray.app_handle();
-                            if let Some(window) = app.get_webview_window("main") {
-                                let is_menubar = app.state::<app_mode::AppModeState>().current()
-                                    == app_mode::AppMode::Menubar;
-                                if is_menubar && window.is_visible().unwrap_or(false) {
-                                    let _ = window.hide();
-                                } else {
-                                    show_main_window(app, Some(rect), Some(position));
-                                }
-                            }
+                            show_main_window(tray.app_handle());
                         }
                     });
                 // 专用黑白 template 图标（变体 A：字幕框 + 字幕条）；

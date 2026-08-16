@@ -13,8 +13,8 @@
 |---|---|---|
 | Extension | ⚠️ 少量 Node test | videoId 三重身份校验、Native cursor 调度、v4 协议守卫 + 构建 + 手工回归 |
 | Website | ⚠️ 只有 `eslint` | 构建 + 打开页面看 |
-| Desktop 前端 | ⚠️ 少量 Node test | appMode 尺寸策略 + 构建 + 手工回归 |
-| Desktop Rust | ✅ `cargo test` | session/bridge/command 状态机、appMode 偏好与定位、SQLite、翻译与 CLI |
+| Desktop 前端 | ⚠️ 少量 Node test | 窗口 label / UI 架构策略 + 构建 + 手工回归 |
+| Desktop Rust | ✅ `cargo test` | session/bridge/command 状态机、SQLite、翻译与 CLI |
 
 `apps/extension/src/pages/content/lib/subtitles/`（纯解析 / 清洗 / 合并）对 DOM 和 `chrome.*` 零依赖，是**最该先补单测**的一层。
 
@@ -27,7 +27,7 @@ pnpm build:firefox                                                       # 改�
 pnpm build:website && pnpm --filter @listenup/website lint               # 改站点
 pnpm build:web:static                                                    # 改了可能影响静态导出的东西
 pnpm --filter @listenup/desktop build                                    # 改桌面前端
-pnpm --filter @listenup/desktop test                                     # 改 appMode 尺寸策略
+pnpm --filter @listenup/desktop test                                     # 改窗口呈现 / UI 策略
 cargo test --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml    # 改 Rust
 cargo build --manifest-path apps/listenup-desktop/src-tauri/Cargo.toml --bin listenup # 改 CLI
 pnpm clean:desktop:bundles                                               # 本地完整 bundle 回归后必跑
@@ -90,11 +90,11 @@ node scripts/check-docs.mjs                                              # 永�
 - 空态同时保留浏览器自动接入说明和 YouTube 链接入口；无效链接不建立 Embedded 锁
 - BrowserSource 活跃时 header 原更新位置显示“切换”，Footer 左下角显示“检查更新”；点击切换
   打开空链接 Modal，在 Desktop 非输入区域物理 `Cmd+V` 有效链接打开同一 Modal 并预填
-- Desktop 只有在用户明确点击后才成为当前键盘 app；仅 hover、置顶、tray 重显或浏览器消息到达
-  时，`Cmd+V` 仍属于原 app。无效文本只短暂提示，不弹 Modal、不建立 Embedded 锁
+- 普通 main 点击后正常成为当前键盘 app；仅 hover 或浏览器消息到达不能抢焦点。tray 左键显式恢复
+  main 时应像普通 app 一样显示并聚焦。无效文本只短暂提示，不弹 Modal、不建立 Embedded 锁
 - 点击 YouTube 链接输入框后可连续输入普通字符、移动光标和删除；macOS 标准
   `Cmd+A/C/X/V` 在链接输入框与 Cookie 输入框都正常。不能只用自动化 `setValue` 代替真实按键，
-  它会绕过 NSPanel key-window / WKWebView first-responder 链路；也不能用按 app 定向注入的
+  它会绕过 NSWindow key-window / WKWebView first-responder 链路；也不能用按 app 定向注入的
   快捷键代替物理 Command 键，因为它会绕过“当前活跃 app 的 Edit 菜单”路由
 - 输入链接后仍是同一个 `main` 窗口和原 Desktop layout：原标题栏 / 按钮 / `SubtitleViewer` /
   底栏不替换，只在标题栏与字幕之间增加 16:9 官方 iframe 视频行
@@ -136,7 +136,7 @@ node scripts/check-docs.mjs                                              # 永�
   状态只随真实 cursor 更新，不能乐观翻转
 - Desktop 原语、译文和双语字幕行都有整行 hover / focus-visible；鼠标或 Enter / Space 跳到
   显示块起点，播放中保持播放、暂停中保持暂停，并只随真实 seek cursor 更新高亮
-- Desktop / 菜单栏列表的播放按钮固定在原语 / 译文 / 双语行最右侧；原语模式隐藏语言 Select、
+- Desktop 列表的播放按钮固定在原语 / 译文 / 双语行最右侧；原语模式隐藏语言 Select、
   译文 / 双语显示语言 Select 时都不能移位。纯图标操作 hover / 键盘 focus 都显示 Tooltip，
   disabled Tooltip 能解释 pending、断连、无 cursor 或广告原因；Tooltip 必须至少在一次冷启动的
   production `.app` 中回归，Vite DEV / HMR 中显示不能作为发布验收证据
@@ -146,21 +146,15 @@ node scripts/check-docs.mjs                                              # 永�
 - SPA 切视频后 Native 窗口先 loading 再替换为新字幕，全程不闪上一视频字幕
 - 两个播放标签页出现选择遮罩，选定后第三个播放标签页不抢占
 - 所选视频暂停或关闭后，按剩余播放数量自动跟随或重新显示选择遮罩
-- 列表 / 影院模式切换、窗口尺寸恢复、影院模式拖动、毛玻璃在深浅桌面上的可读性
+- 普通 main / 独立影院窗口切换、各自尺寸与位置恢复、影院拖动、毛玻璃在深浅桌面上的可读性
 - 列表切到影院后工具条先显示 3 秒再隐藏；反复切换、拖动、进入/退出 Chrome 全屏 Space
   后，移入影院字幕条仍显示工具条，不需要重启 Desktop
-- 从菜单栏隐藏再重显影院窗口后 hover 仍有效
-- 没有 `desktop-preferences.json`、文件损坏或版本未知时默认自由 Desktop；production / DEV
-  偏好互不串用
-- 自由 Desktop ↔ 菜单栏 App 可从 header 和 tray 菜单双向切换；Desktop 是 `Regular`，菜单栏
-  是 `Accessory`。固定在 Dock 的快捷图标可以保留，但菜单栏形态不显示运行状态圆点
-- 菜单栏形态使用列表、不可缩放且不进入影院，但必须保持切换前 Desktop 的当前宽高，不能跳回
-  400×640；重启直接进入 Menubar 时恢复最后 Desktop 视图尺寸
-- tray 左键在图标下方切换显示/隐藏，面板越过显示器边缘时被 clamp，副屏和不同缩放比例都验证
-- 菜单栏面板真正获得焦点后，点到 Chrome 或桌面会自动隐藏；刚显示、系统弹窗或切换形态时
-  不应被错误失焦事件立即吞掉
-- 从 tray 菜单切换（不经过 React header）后，切回自由 Desktop 仍恢复原位置、尺寸与
-  list/cinema；重启后恢复所选 appMode。制造偏好写入失败时保持旧形态并给出错误
+- main 必须是 `Regular` 普通窗口且 `alwaysOnTop=false`：任意非输入点击不会隐藏，切到 Chrome 后
+  留在普通窗口层级；旧 `desktop-preferences.json` 即使写着 Menubar 也不能改变启动形态
+- 只有 cinema 是 `NSPanel + nonactivatingPanel` 并跨 Space 置顶；进入后 main 隐藏，播放、seek、
+  hover 和拖动不抢 Chrome 焦点，退出后 main 恢复原位置、尺寸并可立即输入
+- tray 左键在列表或影院中都只隐藏影院、显示并聚焦普通 main；右键菜单只有显示、检查更新和退出，
+  不得出现形态切换、tray 下方定位或失焦自动隐藏
 - 旧版本正式 Desktop 启动后静默检查并持续显示“发现新版本 / 立即更新”；点击前不下载、不安装、
   不重启，点击后才显示下载进度并完成更新
 - 已是最新版或启动检查网络失败时不弹提示；用户主动检查失败仍显示错误

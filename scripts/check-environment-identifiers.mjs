@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 输入/hover/更新/CLI 与发布边界不漂移。
+ * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault/i18n、website/Tauri/CLI/Query 配置
- * @gotcha  ADR-0008：不得恢复英语优先、环境串库、NSPanel hover/启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
+ * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -109,7 +109,11 @@ assert.deepEqual(cliTauri.bundle.externalBin, ["target/sidecars/listenup"]);
 const defaultCapability = await readJson(
   "apps/listenup-desktop/src-tauri/capabilities/default.json"
 );
+const cinemaCapability = await readJson(
+  "apps/listenup-desktop/src-tauri/capabilities/cinema.json"
+);
 assert.deepEqual(defaultCapability.webviews, ["main"]);
+assert.deepEqual(cinemaCapability.webviews, ["cinema"]);
 assert.ok(!Object.hasOwn(defaultCapability, "windows"));
 assert.ok(
   defaultCapability.permissions.includes("clipboard-manager:allow-write-text"),
@@ -132,11 +136,13 @@ for (const permission of [
   "allow-fetch-youtube-player-response",
   "allow-get-embedded-player-host-url",
   "allow-get-youtube-cookie-status",
-  "allow-main-window-commands",
+  "allow-enter-cinema-mode",
   "allow-reload-embedded-playback",
   "allow-report-embedded-player-failure",
   "allow-replace-embedded-playback",
   "allow-save-youtube-cookies",
+  "allow-select-subtitle-session",
+  "allow-set-vibrancy",
   "allow-viewer-read",
 ]) {
   assert.ok(
@@ -150,9 +156,32 @@ const mainWindowPermissionSource = await readFile(
 );
 assert.match(
   mainWindowPermissionSource,
-  /commands\.allow = \["activate_text_input", "get_app_mode", "set_app_mode", "select_subtitle_session", "set_vibrancy"\]/,
-  "trusted main must retain the explicit text-input activation command"
+  /identifier = "allow-enter-cinema-mode"[\s\S]*commands\.allow = \["enter_cinema_mode"\]/,
+  "only the main capability should expose the cinema entry command"
 );
+for (const permission of [
+  "allow-control-playback",
+  "allow-exit-cinema-mode",
+  "allow-select-subtitle-session",
+  "allow-set-vibrancy",
+  "allow-viewer-read",
+]) {
+  assert.ok(
+    cinemaCapability.permissions.includes(permission),
+    `cinema must retain ${permission}`
+  );
+}
+for (const forbiddenPermission of [
+  "allow-enter-cinema-mode",
+  "allow-save-youtube-cookies",
+  "allow-start-embedded-playback",
+  "updater:default",
+]) {
+  assert.ok(
+    !cinemaCapability.permissions.includes(forbiddenPermission),
+    `cinema must not receive ${forbiddenPermission}`
+  );
+}
 const iframePlayerSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src/useYoutubeIframePlayer.ts"),
   "utf8"
@@ -465,28 +494,35 @@ assert.match(
 );
 assert.match(
   rustSource,
-  /setBecomesKeyOnlyIfNeeded:\s*false/,
-  "NSPanel must let WKWebView text fields become the key responder for typing and Cmd+C/V"
+  /const CINEMA_WINDOW_LABEL: &str = "cinema"/,
+  "the overlay must have a dedicated native window label"
 );
 assert.doesNotMatch(
   rustSource,
-  /setBecomesKeyOnlyIfNeeded:\s*true/,
-  "WKWebView does not implement needsPanelToBecomeKey; true silently breaks all text input"
+  /setBecomesKeyOnlyIfNeeded:\s*false/,
+  "the dedicated cinema NSPanel has no text input and must stay nonactivating"
 );
 assert.match(
   rustSource,
-  /fn activate_text_input[\s\S]*activateIgnoringOtherApps:\s*true[\s\S]*makeKeyWindow/,
-  "focused text input must activate the app so macOS routes Cmd+A/C/X/V to ListenUp's Edit menu"
+  /fn configure_cinema_panel_on_main_thread[\s\S]*object_setClass[\s\S]*setBecomesKeyOnlyIfNeeded:\s*true/,
+  "only the dedicated cinema window may be converted into a nonactivating NSPanel"
 );
+assert.match(
+  rustSource,
+  /fn enter_cinema_mode[\s\S]*CINEMA_WINDOW_LABEL[\s\S]*\.always_on_top\(true\)/,
+  "cinema must be created as the only always-on-top runtime window"
+);
+assert.doesNotMatch(rustSource, /activate_text_input|activateIgnoringOtherApps|makeKeyWindow/);
+assert.doesNotMatch(rustSource, /mod app_mode|AppMode|Focused\(false\)/);
+assert.equal(productionTauri.app.windows[0].alwaysOnTop, false);
+assert.equal(developmentTauri.app.windows[0].alwaysOnTop, false);
 
 for (const inputWrapperPath of [
   "apps/listenup-desktop/src/components/ui/DesktopTextField.tsx",
   "apps/listenup-desktop/src/components/ui/DesktopSecretArea.tsx",
 ]) {
   const inputWrapperSource = await readFile(resolve(ROOT, inputWrapperPath), "utf8");
-  assert.match(inputWrapperSource, /invoke\("activate_text_input"\)/);
-  assert.match(inputWrapperSource, /onPointerDownCapture/);
-  assert.match(inputWrapperSource, /onFocus/);
+  assert.doesNotMatch(inputWrapperSource, /@tauri-apps\/api\/core|activate_text_input/);
 }
 
 const desktopAppSource = await readFile(
@@ -509,11 +545,8 @@ assert.match(
   /document\.addEventListener\("paste", handlePaste, true\)/,
   "BrowserSource switching must inspect only a user-generated paste event"
 );
-assert.match(
-  desktopAppSource,
-  /onPointerDownCapture=\{activateDesktopKeyboard\}/,
-  "an explicit Desktop click must activate the app before macOS routes paste"
-);
+assert.doesNotMatch(desktopAppSource, /activateDesktopKeyboard|activate_text_input/);
+assert.match(desktopAppSource, /resolveWindowViewMode\(CURRENT_WINDOW\.label\)/);
 assert.doesNotMatch(
   desktopAppSource,
   /readText\s*\(/,

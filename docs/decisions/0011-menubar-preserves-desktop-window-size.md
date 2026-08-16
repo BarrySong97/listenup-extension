@@ -1,6 +1,6 @@
 # 0011. 菜单栏形态保留 Desktop 窗口尺寸
 
-- 状态：已采纳
+- 状态：已被 [ADR-0019](0019-desktop-normal-window-and-dedicated-cinema-panel.md) 取代
 - 日期：2026-08-07
 - 取代：[ADR-0010](0010-desktop-and-menubar-app-modes.md) 中“Menubar 固定 400×640”的部分
 

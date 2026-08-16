@@ -1,6 +1,6 @@
 # 0010. 同一 NSPanel 支持自由 Desktop 与菜单栏 App 双形态
 
-- 状态：部分被 0011 取代
+- 状态：已被 [ADR-0019](0019-desktop-normal-window-and-dedicated-cinema-panel.md) 取代
 - 日期：2026-08-07
 
 ## 背景
