@@ -85,3 +85,7 @@ seek 正常且不抢 Chrome 焦点；tray 左键仅恢复主窗口；升级、�
 - Production 后续验收发现隐藏后复用的 cinema Webview 不会再次触发固定 `[mode]` effect，且可能
   保留隐藏前的 CSS `:hover`。修复改为每次 native show 发 presentation 事件，并由前端显式重置
   3 秒提示与 pointer enter / move / leave 状态；不恢复全局 `activate_text_input`。
+- 上述 React pointer 方案经用户验收仍失败：pointer 事件本身也依赖未恢复的 NSPanel tracking。
+  第二次返修恢复历史 `9b8d715` 的 `group-hover`，presentation 事件只负责重置 3 秒提示，并在 WebView
+  可见布局两个 animation frame 后调用 cinema-only `refresh_window_mouse_tracking`；该命令复用历史
+  `setAcceptsMouseMovedEvents + updateTrackingAreas`，不改变 vibrancy。

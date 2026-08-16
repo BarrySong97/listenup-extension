@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/确定性 hover/更新/CLI 与发布边界不漂移。
+ * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/native hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault/i18n、website/Tauri/CLI/Query 配置
- * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、CSS-only 影院 hover、旧单窗口几何键、启动强装、本地 `.app` 残留或发布缺口。
+ * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、React pointer 伪 hover、旧单窗口几何键、启动强装、本地 `.app` 残留或发布缺口。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -151,6 +151,10 @@ for (const permission of [
     `main must retain ${permission} after custom command ACL is enabled`
   );
 }
+assert.ok(
+  !defaultCapability.permissions.includes("allow-refresh-window-mouse-tracking"),
+  "the regular main window must not receive the cinema-only tracking refresh"
+);
 const mainWindowPermissionSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src-tauri/permissions/embedded-player.toml"),
   "utf8"
@@ -160,10 +164,16 @@ assert.match(
   /identifier = "allow-enter-cinema-mode"[\s\S]*commands\.allow = \["enter_cinema_mode"\]/,
   "only the main capability should expose the cinema entry command"
 );
+assert.match(
+  mainWindowPermissionSource,
+  /identifier = "allow-refresh-window-mouse-tracking"[\s\S]*commands\.allow = \["refresh_window_mouse_tracking"\]/,
+  "cinema hover refresh needs a dedicated command permission"
+);
 for (const permission of [
   "allow-control-playback",
   "allow-ensure-window-visible",
   "allow-exit-cinema-mode",
+  "allow-refresh-window-mouse-tracking",
   "allow-select-subtitle-session",
   "allow-set-vibrancy",
   "allow-viewer-read",
@@ -496,6 +506,11 @@ assert.match(
 );
 assert.match(
   rustSource,
+  /fn refresh_window_mouse_tracking[\s\S]*window\.label\(\) != CINEMA_WINDOW_LABEL[\s\S]*run_on_main_thread[\s\S]*refresh_mouse_tracking/,
+  "the post-layout tracking command must be restricted to the cinema window"
+);
+assert.match(
+  rustSource,
   /const CINEMA_WINDOW_LABEL: &str = "cinema"/,
   "the overlay must have a dedicated native window label"
 );
@@ -549,18 +564,23 @@ const desktopAppSource = await readFile(
 assert.match(desktopAppSource, /CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000/);
 assert.match(
   desktopAppSource,
-  /CURRENT_WINDOW\.listen\([\s\S]*CINEMA_PRESENTED_EVENT,[\s\S]*resetCinemaToolbarPresentation/,
+  /CURRENT_WINDOW\.listen\(CINEMA_PRESENTED_EVENT, handleCinemaPresented\)/,
   "the reused cinema WebView must reset its entry hint on every native presentation"
 );
 assert.match(
   desktopAppSource,
-  /onPointerEnter=\{\(\) => setCinemaToolbarPointerInside\(true\)\}[\s\S]*onPointerLeave=\{\(\) => setCinemaToolbarPointerInside\(false\)\}/,
-  "cinema toolbar visibility must follow explicit pointer entry and exit"
+  /handleCinemaPresented[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*invoke\("refresh_window_mouse_tracking"\)/,
+  "cinema must refresh native tracking after two visible WebView layout frames"
+);
+assert.match(
+  desktopAppSource,
+  /group-hover:opacity-100/,
+  "cinema toolbar must retain WebKit CSS hover after native tracking recovers"
 );
 assert.doesNotMatch(
   desktopAppSource,
-  /group-hover:opacity-100/,
-  "persistent cinema WebViews must not rely on stale CSS-only hover state"
+  /cinemaToolbarPointerInside|onPointerEnter|onPointerLeave/,
+  "React pointer state cannot replace a broken native NSPanel tracking area"
 );
 assert.match(
   desktopAppSource,
@@ -581,7 +601,6 @@ const windowPresentationSource = await readFile(
 assert.match(windowPresentationSource, /listenup-window-position-main-v2/);
 assert.match(windowPresentationSource, /listenup-window-position-cinema-v2/);
 assert.match(windowPresentationSource, /desktop-cinema-presented/);
-assert.match(windowPresentationSource, /hintVisible \|\| pointerInside/);
 assert.doesNotMatch(
   windowPresentationSource,
   /listenup-window-position-desktop|listenup-window-size-list|listenup-window-size-cinema"/,

@@ -1,7 +1,7 @@
-# @purpose 为可信 main 与 cinema 精确声明 Embedded 播放、字幕读取和窗口形态命令权限。
+# @purpose 为可信 main 与 cinema 精确声明 Embedded 播放、字幕读取、窗口形态与影院 tracking 命令权限。
 # @role    capability 引用的 app command allow-list；iframe 本身没有任何 Tauri capability。
 # @deps    embedded_player.rs Tauri commands
-# @gotcha  main/cinema 使用不同 capability；fetch commands 还必须在 Rust 内校验 main、YouTube host/path 与同一 videoId。
+# @gotcha  main/cinema 使用不同 capability；tracking refresh 只授予 cinema，fetch commands 仍须在 Rust 内校验 main 与 YouTube 边界。
 
 [[permission]]
 identifier = "allow-start-embedded-playback"
@@ -77,6 +77,11 @@ commands.allow = ["select_subtitle_session"]
 identifier = "allow-set-vibrancy"
 description = "Allows trusted local viewer windows to apply their label-specific visual material."
 commands.allow = ["set_vibrancy"]
+
+[[permission]]
+identifier = "allow-refresh-window-mouse-tracking"
+description = "Allows only the dedicated cinema webview to refresh native hover tracking after it becomes visible."
+commands.allow = ["refresh_window_mouse_tracking"]
 
 [[permission]]
 identifier = "allow-ensure-window-visible"

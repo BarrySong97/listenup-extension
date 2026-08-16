@@ -16,6 +16,7 @@
     "allow-control-playback",
     "allow-ensure-window-visible",
     "allow-exit-cinema-mode",
+    "allow-refresh-window-mouse-tracking",
     "allow-select-subtitle-session",
     "allow-set-vibrancy",
     "allow-viewer-read"

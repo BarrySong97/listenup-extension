@@ -34,8 +34,9 @@
 6. 双窗口几何使用新的 v2 localStorage key，不迁移旧单 NSPanel 的位置与尺寸。每次恢复后由 Rust
    检查窗口与当前显示器至少有 64×64 物理像素交集，否则自动居中。
 7. `cinema` Webview 退出时只隐藏、再次进入时复用。每次原生 `show` 后必须发送
-   `desktop-cinema-presented`，前端据此重置 3 秒入场提示和 pointer 命中状态；工具条用显式
-   pointer enter / move / leave 决定 hover 可见性，不依赖隐藏 Webview 可能保留的 CSS `:hover`。
+   `desktop-cinema-presented`，前端据此重置 3 秒入场提示，并在两个 animation frame 后通过既有
+   cinema-only `refresh_window_mouse_tracking` 刷新原生 tracking areas，且不改 vibrancy。工具条保留
+   WebKit `group-hover`；React pointer state 依赖同一条失效的原生事件链，不能作为替代方案。
 
 ## 理由
 
@@ -49,7 +50,8 @@
 - 列表和 Desktop Playback 与普通 macOS app 一样出现在 Dock / Cmd+Tab，可被其他窗口遮挡，点击后正常
   成为 key window。
 - 影院浮层仍能跨 Space 覆盖原生全屏视频，但不得新增文本输入；如未来需要输入，应先退出影院回主窗口。
-- 影院窗口每次重新呈现都会获得独立的工具条生命周期；不恢复根级点击激活，也不靠永久显示规避 hover。
+- 影院窗口每次重新呈现都会获得独立的工具条生命周期和布局后 tracking refresh；不恢复根级点击激活，
+  也不靠 React pointer state 或永久显示规避 hover。
 - tray 左键永远恢复主窗口并退出影院，不再提供失焦自动收起或 appMode 切换。
 - `windowPresentation.test.ts` 与 `scripts/check-environment-identifiers.mjs` 固定窗口 label、capability、
   主窗口非置顶、仅影院 NSPanel 化、v2 几何隔离、屏外恢复以及禁止全局激活的架构棘轮。

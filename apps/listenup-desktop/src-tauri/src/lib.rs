@@ -923,6 +923,23 @@ fn set_vibrancy(window: tauri::WebviewWindow, enabled: bool) {
     let _ = (window, enabled);
 }
 
+#[tauri::command]
+fn refresh_window_mouse_tracking(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != CINEMA_WINDOW_LABEL {
+        return Err("只有影院浮层可以刷新 mouse tracking".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let target = window.clone();
+        window
+            .run_on_main_thread(move || refresh_mouse_tracking(&target))
+            .map_err(|error| format!("刷新影院 mouse tracking 失败：{error}"))?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct WindowRect {
     x: i32,
@@ -1301,6 +1318,7 @@ pub fn run() {
             exit_cinema_mode,
             get_snapshot,
             get_subtitle_view,
+            refresh_window_mouse_tracking,
             select_subtitle_session,
             set_vibrancy
         ])

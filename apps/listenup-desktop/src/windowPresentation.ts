@@ -1,8 +1,8 @@
 /**
- * @purpose 固定 Tauri 窗口 label、影院呈现事件与工具条显示规则。
- * @role    App.tsx 的窗口职责边界：main/未知窗口渲染列表，只有 cinema 标签渲染影院浮层并重置 hover 生命周期。
+ * @purpose 固定 Tauri 窗口 label、影院呈现事件与双窗口几何键。
+ * @role    App.tsx 的窗口职责边界：main/未知窗口渲染列表，cinema 标签渲染影院浮层并接收每次呈现通知。
  * @deps    无
- * @gotcha  cinema 会隐藏后复用；每次呈现必须由原生事件重置提示与 pointer 状态，不能只监听固定 label。
+ * @gotcha  cinema 会隐藏后复用；每次呈现必须由原生事件重置入场提示并触发延后 tracking refresh。
  */
 export type WindowViewMode = "list" | "cinema";
 
@@ -24,11 +24,3 @@ export const WINDOW_GEOMETRY_STORAGE_KEYS: Record<
 
 export const resolveWindowViewMode = (label: string): WindowViewMode =>
   label === "cinema" ? "cinema" : "list";
-
-export const resolveCinemaToolbarVisibility = ({
-  hintVisible,
-  pointerInside,
-}: {
-  hintVisible: boolean;
-  pointerInside: boolean;
-}) => hintVisible || pointerInside;
