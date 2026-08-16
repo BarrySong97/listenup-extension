@@ -94,3 +94,18 @@ seek 正常；tray 左键仅恢复主窗口；升级、重启和旧 Menubar 偏�
   但 class-swap 后的 WKWebView 始终没有 mousemove / pointermove、DOM `:hover=false`。同一包仅跳过
   `object_setClass(NSPanel)` 后用户真实移入 / 移出立即恢复，因此最终删除 runtime class-swap，
   保留独立标准 `NSWindow` 与原有置顶 / 跨 Space 属性，并删除全部临时诊断探针。
+
+## 0.5.5 发布验证
+
+- 修复提交 `a3c004c`，版本提交 `d06e53f`；tag `v0.5.5` 指向版本提交。
+- 本地验证：Desktop Node 36/36、Rust 51/51、Production frontend、完整 Production `.app`、
+  environment sensor、docs sensor、cargo fmt 与 `git diff --check` 全部通过。`/Applications` 已覆盖为
+  0.5.5 并完成 ad-hoc `codesign --verify --deep --strict`；普通启动仅有一个前台 GUI。
+- 用户在与最终窗口路径相同的 Production A/B 包上真实确认影院工具条移入显示、移出隐藏；最终包仅删除
+  诊断探针并把“跳过 NSPanel class-swap”固化为无条件行为。
+- GitHub Actions run `31933088973` 全部成功，用时 12m56s；完成 arm64 构建、Apple 公证、DMG 替换、
+  updater URL 重写与公开发布。
+- 公开 Release：<https://github.com/BarrySong97/listenup-extension/releases/tag/v0.5.5>。资产包含公证 DMG、
+  updater tarball、416-byte signature 与 `latest.json`；后者版本为 0.5.5，下载 URL 使用
+  `github.com/.../releases/download/...`，不含 `api.github.com`。
+- 本地 bundle 回归结束后已执行 `pnpm clean:desktop:bundles`；仓库 target 下不残留 `ListenUp*.app`。
