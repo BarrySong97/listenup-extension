@@ -82,3 +82,6 @@ seek 正常且不抢 Chrome 焦点；tray 左键仅恢复主窗口；升级、�
 - Production 首轮本机验收发现旧单面板 `x=-1177,y=238` 与 814 高度的几何键被新窗口复用，导致
   mount 后把居中的 main 移到当前两块屏幕范围外。后续修复改用 main/cinema v2 键，并加入原生
   64×64 显示器交集检查与自动居中；确定性测试固定该真实回归坐标。
+- Production 后续验收发现隐藏后复用的 cinema Webview 不会再次触发固定 `[mode]` effect，且可能
+  保留隐藏前的 CSS `:hover`。修复改为每次 native show 发 presentation 事件，并由前端显式重置
+  3 秒提示与 pointer enter / move / leave 状态；不恢复全局 `activate_text_input`。

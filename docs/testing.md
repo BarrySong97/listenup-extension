@@ -150,8 +150,8 @@ node scripts/check-docs.mjs                                              # 永�
 - 升级前写入旧 `listenup-window-position-desktop` 的屏外坐标（回归值 `x=-1177,y=238`）与旧
   list/cinema 纵向尺寸后启动新版，main 必须忽略旧键并居中；保存 v2 坐标后拔掉对应外接屏再启动，
   原生可见区域校验必须把窗口恢复到当前屏幕
-- 列表切到影院后工具条先显示 3 秒再隐藏；反复切换、拖动、进入/退出 Chrome 全屏 Space
-  后，移入影院字幕条仍显示工具条，不需要重启 Desktop
+- 列表切到影院后工具条先显示 3 秒再隐藏；退出后再次进入必须重新开始 3 秒提示。提示结束后移入
+  影院字幕条显示、移出立即隐藏；反复切换、拖动、点击控件、进入/退出 Chrome 全屏 Space 后仍成立
 - main 必须是 `Regular` 普通窗口且 `alwaysOnTop=false`：任意非输入点击不会隐藏，切到 Chrome 后
   留在普通窗口层级；旧 `desktop-preferences.json` 即使写着 Menubar 也不能改变启动形态
 - 只有 cinema 是 `NSPanel + nonactivatingPanel` 并跨 Space 置顶；进入后 main 隐藏，播放、seek、

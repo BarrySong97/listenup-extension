@@ -200,7 +200,9 @@ Cookie 原值、键名和数量不进入错误、Debug、日志、SQLite、viewe
 固定 `cli-v0.1.0` Skill URL 和 CLI `0.1.0`，要求 Agent 先询问目标语言、dry-run 后再 commit，
 Desktop 本身不下载 Skill、不安装 CLI、也不内置翻译。已有译文时列表按 AI 重组后的语义时间块
 显示；影院模式在双语时显示上下两层，并在 hover 工具条中提供原语、译文、双语切换，与列表
-模式共用同一份显示偏好。进入影院时工具条先显示 3 秒，之后才恢复为仅 hover 显示。
+模式共用同一份显示偏好。每次显示影院窗口时，Rust 都向复用中的 cinema Webview 发送
+`desktop-cinema-presented`；前端收到后重置入场提示和 pointer 状态：工具条先显示 3 秒，之后仅在
+pointer 位于影院窗口内时显示，离开立即隐藏。
 
 Desktop 固定界面文案使用 `i18next` + `react-i18next`，只提供英文与简体中文；首次启动跟随
 macOS/WebView 语言，显式选择写入 `localStorage.listenup-ui-language`。界面语言与字幕目标语言
@@ -276,6 +278,7 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 main 与 cinema 权限分别在 `capabilities/default.json` 和 `capabilities/cinema.json`。
 列表/影院缩放、vibrancy/阴影切换、全屏 Space 重排和 tray 重显都会重新启用
 `acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免非激活 NSPanel 偶发停止命中
+pointer enter / move / leave。窗口隐藏再显示还必须发送 presentation 事件，不能依赖 WebKit 可能缓存的
 CSS `:hover`。完整决策见
 [ADR-0019](../../decisions/0019-desktop-normal-window-and-dedicated-cinema-panel.md)。
 
@@ -341,7 +344,8 @@ Rust `SourceCoordinator` 是 viewer、SQLite 和播放控制来源的唯一权�
   100ms cursor 下有额外检查与 HMR 开销，可用于功能调试，但不能据此判断发布版帧率。
 - 实时原语列表以扩展传来的 `currentIndex` 为当前项权威值；所有更早的条目至少标记为已播放，
   避免字幕切换容差或相邻时间重叠让“当前项之前一条”短暂显示成未播放。译文与缓存列表仍按时间映射。
-- 影院工具条保持“入场短显 + `group-hover`”；原生层负责在窗口状态变化后恢复鼠标 tracking，不能改成永久显示掩盖问题
+- 影院工具条保持“每次呈现短显 + 显式 pointer enter/leave”；原生层负责恢复 tracking 并发送
+  presentation 事件。不能退回 CSS-only `group-hover`，也不能永久显示掩盖问题
 - 滚动条只在滚动中显示：thumb 平时透明，`onScroll` / `onScrollEnd` 维护 `.scrolling` class
 - 列表 footer 只显示语义块数量，不暴露 YouTube videoId 或 SQLite 来源文案；这不改变 SQLite
   冷启动缓存和持久字幕查询

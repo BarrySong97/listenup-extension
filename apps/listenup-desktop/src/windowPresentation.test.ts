@@ -1,12 +1,14 @@
 /**
- * @purpose 固定 Desktop 窗口 label 与视图形态的一对一回归契约。
- * @role    windowPresentation 的 Node 内建测试。
+ * @purpose 固定 Desktop 窗口 label、影院呈现事件与 hover 工具条回归契约。
+ * @role    windowPresentation 的 Node 内建确定性测试。
  * @deps    node:test、node:assert、windowPresentation
- * @gotcha  只有专用 cinema 窗口能进入影院视图；main 和未知 label 必须保持普通列表。
+ * @gotcha  工具条只允许由入场短显或真实 pointer 命中显示，不能退回永久显示。
  */
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CINEMA_PRESENTED_EVENT,
+  resolveCinemaToolbarVisibility,
   resolveWindowViewMode,
   WINDOW_GEOMETRY_STORAGE_KEYS,
 } from "./windowPresentation.ts";
@@ -31,4 +33,32 @@ test("dedicated windows never reuse legacy single-panel geometry", () => {
       size: "listenup-window-size-cinema-v2",
     },
   });
+});
+
+test("cinema presentation uses a stable native-to-webview event", () => {
+  assert.equal(CINEMA_PRESENTED_EVENT, "desktop-cinema-presented");
+});
+
+test("cinema toolbar is visible only for the entry hint or pointer hover", () => {
+  assert.equal(
+    resolveCinemaToolbarVisibility({
+      hintVisible: false,
+      pointerInside: false,
+    }),
+    false
+  );
+  assert.equal(
+    resolveCinemaToolbarVisibility({
+      hintVisible: true,
+      pointerInside: false,
+    }),
+    true
+  );
+  assert.equal(
+    resolveCinemaToolbarVisibility({
+      hintVisible: false,
+      pointerInside: true,
+    }),
+    true
+  );
 });

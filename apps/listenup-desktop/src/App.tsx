@@ -1,8 +1,8 @@
 /**
- * @purpose 普通 Desktop 主窗口与独立影院浮层 UI：组合浏览器同步、YouTube iframe 与字幕交互。
+ * @purpose 普通 Desktop 主窗口与独立影院浮层 UI：组合浏览器同步、YouTube iframe、字幕交互与确定性 hover。
  * @role    main 标签渲染标准窗口，cinema 标签只渲染置顶字幕浮层；两者共享 Rust 来源权威。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、react-i18next、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
- * @gotcha  窗口 label 决定 list/cinema；双窗口只能使用 v2 几何键且恢复后必须让 Rust 校验可见区域，不能复用旧单 NSPanel 坐标。
+ * @gotcha  cinema 隐藏后会复用；工具条须监听每次原生呈现事件重置 pointer/hint，不能只依赖固定 mode 或 WebKit 缓存的 CSS :hover。
  */
 import { Icon } from "@iconify/react";
 import { getVersion } from "@tauri-apps/api/app";
@@ -62,6 +62,8 @@ import { useSubtitleView } from "./useSubtitleView";
 import { VideoSessionPicker } from "./VideoSessionPicker";
 import { useViewerSession } from "./useViewerSession";
 import {
+  CINEMA_PRESENTED_EVENT,
+  resolveCinemaToolbarVisibility,
   resolveWindowViewMode,
   WINDOW_GEOMETRY_STORAGE_KEYS,
   type WindowViewMode,
@@ -385,6 +387,8 @@ export default function App() {
   const [translationCopyStatus, setTranslationCopyStatus] =
     useState<TranslationCopyStatus>("idle");
   const [showCinemaToolbarHint, setShowCinemaToolbarHint] = useState(false);
+  const [cinemaToolbarPointerInside, setCinemaToolbarPointerInside] =
+    useState(false);
   const [playbackPending, setPlaybackPending] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [embeddedActionPending, setEmbeddedActionPending] = useState<
@@ -415,6 +419,7 @@ export default function App() {
     blocks: DisplayBlock[];
   } | null>(null);
   const scrollIdleTimerRef = useRef<number | null>(null);
+  const cinemaToolbarHintTimerRef = useRef<number | null>(null);
   const updater = useDesktopUpdater({ enabled: !IS_DEV_BUILD && !IS_CINEMA_WINDOW });
   const liveSession = viewer.activeSession;
   const embeddedSource =
@@ -586,19 +591,51 @@ export default function App() {
     }
   }, [applyViewerSnapshot]);
 
+  const resetCinemaToolbarPresentation = useCallback(() => {
+    if (cinemaToolbarHintTimerRef.current !== null) {
+      window.clearTimeout(cinemaToolbarHintTimerRef.current);
+    }
+    setCinemaToolbarPointerInside(false);
+    setShowCinemaToolbarHint(true);
+    cinemaToolbarHintTimerRef.current = window.setTimeout(() => {
+      cinemaToolbarHintTimerRef.current = null;
+      setShowCinemaToolbarHint(false);
+    }, CINEMA_TOOLBAR_HINT_DURATION_MS);
+  }, []);
+
   useEffect(() => {
     if (mode !== "cinema") {
+      setCinemaToolbarPointerInside(false);
       setShowCinemaToolbarHint(false);
       return;
     }
 
-    setShowCinemaToolbarHint(true);
-    const timer = window.setTimeout(
-      () => setShowCinemaToolbarHint(false),
-      CINEMA_TOOLBAR_HINT_DURATION_MS
-    );
-    return () => window.clearTimeout(timer);
-  }, [mode]);
+    resetCinemaToolbarPresentation();
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void CURRENT_WINDOW.listen(
+      CINEMA_PRESENTED_EVENT,
+      resetCinemaToolbarPresentation
+    )
+      .then((dispose) => {
+        if (disposed) {
+          dispose();
+        } else {
+          unlisten = dispose;
+        }
+      })
+      .catch((error) => {
+        console.error("failed to listen for cinema presentation", error);
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+      if (cinemaToolbarHintTimerRef.current !== null) {
+        window.clearTimeout(cinemaToolbarHintTimerRef.current);
+        cinemaToolbarHintTimerRef.current = null;
+      }
+    };
+  }, [mode, resetCinemaToolbarPresentation]);
 
   const switchMode = useCallback(async (nextMode: ViewMode) => {
     if (nextMode === mode) return;
@@ -979,12 +1016,20 @@ export default function App() {
           : cursor.isAdPlaying
             ? t("playback.adPlaying")
             : undefined;
+  const cinemaToolbarVisible = resolveCinemaToolbarVisibility({
+    hintVisible: showCinemaToolbarHint,
+    pointerInside: cinemaToolbarPointerInside,
+  });
 
   if (!embeddedSource && mode === "cinema") {
     return (
       <main
-        className="group relative flex h-full cursor-grab select-none items-center justify-center overflow-hidden rounded-2xl bg-glass-cinema px-5 py-2 active:cursor-grabbing"
+        className="relative flex h-full cursor-grab select-none items-center justify-center overflow-hidden rounded-2xl bg-glass-cinema px-5 py-2 active:cursor-grabbing"
         data-tauri-drag-region
+        onPointerEnter={() => setCinemaToolbarPointerInside(true)}
+        onPointerMove={() => setCinemaToolbarPointerInside(true)}
+        onPointerLeave={() => setCinemaToolbarPointerInside(false)}
+        onPointerCancel={() => setCinemaToolbarPointerInside(false)}
       >
         <UpdateNotice
           state={updater.state}
@@ -1034,9 +1079,12 @@ export default function App() {
           )}
         </div>
         <div
-          className={`absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 transition-opacity group-hover:opacity-100 ${
-            showCinemaToolbarHint ? "opacity-100" : "opacity-0"
+          className={`absolute right-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 transition-opacity ${
+            cinemaToolbarVisible
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
           }`}
+          aria-hidden={!cinemaToolbarVisible}
         >
           <DesktopButton
             className="flex h-6 cursor-pointer items-center gap-[5px] rounded-full border-none bg-transparent px-1.5 text-[11px] text-fg-muted transition-colors hover:text-fg"

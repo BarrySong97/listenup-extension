@@ -1,10 +1,12 @@
 /**
- * @purpose 将 Tauri 窗口 label 映射为唯一允许的 Desktop 视图形态。
- * @role    App.tsx 的窗口职责边界：main/未知窗口渲染列表，只有 cinema 标签渲染影院浮层。
+ * @purpose 固定 Tauri 窗口 label、影院呈现事件与工具条显示规则。
+ * @role    App.tsx 的窗口职责边界：main/未知窗口渲染列表，只有 cinema 标签渲染影院浮层并重置 hover 生命周期。
  * @deps    无
- * @gotcha  不得从本地偏好恢复 Menubar 或用普通窗口冒充 cinema；原生窗口属性由 Rust label 分流。
+ * @gotcha  cinema 会隐藏后复用；每次呈现必须由原生事件重置提示与 pointer 状态，不能只监听固定 label。
  */
 export type WindowViewMode = "list" | "cinema";
+
+export const CINEMA_PRESENTED_EVENT = "desktop-cinema-presented";
 
 export const WINDOW_GEOMETRY_STORAGE_KEYS: Record<
   WindowViewMode,
@@ -22,3 +24,11 @@ export const WINDOW_GEOMETRY_STORAGE_KEYS: Record<
 
 export const resolveWindowViewMode = (label: string): WindowViewMode =>
   label === "cinema" ? "cinema" : "list";
+
+export const resolveCinemaToolbarVisibility = ({
+  hintVisible,
+  pointerInside,
+}: {
+  hintVisible: boolean;
+  pointerInside: boolean;
+}) => hintVisible || pointerInside;

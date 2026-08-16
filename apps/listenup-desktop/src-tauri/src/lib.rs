@@ -1,7 +1,7 @@
-// @purpose 桌面端 Rust 入口：普通主窗口、影院 NSPanel、GUI/桥接双模式与字幕来源协调。
+// @purpose 桌面端 Rust 入口：普通主窗口、影院 NSPanel、GUI/桥接双模式、字幕来源与影院呈现事件协调。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
-// @gotcha  stdout 只写 Native Messaging 长度帧；主窗口不得 NSPanel 化或置顶；恢复几何必须校验当前显示器，只有 cinema 能使用 overlay AppKit 属性。
+// @gotcha  stdout 只写 Native Messaging 长度帧；主窗口不得 NSPanel 化或置顶；cinema 每次 show 后必须发事件重置 WebView hover 生命周期。
 mod browser_source;
 pub mod cli;
 mod cookie_vault;
@@ -40,6 +40,7 @@ const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
 const CHECK_UPDATE_EVENT: &str = "desktop-check-for-update";
 const CINEMA_WINDOW_LABEL: &str = "cinema";
+const CINEMA_PRESENTED_EVENT: &str = "desktop-cinema-presented";
 const EXTENSION_ID: &str = env!("LISTENUP_EXTENSION_ID");
 const NATIVE_HOST_NAME: &str = env!("LISTENUP_NATIVE_HOST_NAME");
 const PRODUCT_NAME: &str = env!("LISTENUP_PRODUCT_NAME");
@@ -1116,6 +1117,9 @@ fn enter_cinema_mode(app: AppHandle) -> Result<(), String> {
             .show()
             .map_err(|error| format!("显示影院浮层失败：{error}"))?;
     }
+    cinema
+        .emit(CINEMA_PRESENTED_EVENT, ())
+        .map_err(|error| format!("通知影院浮层重置交互失败：{error}"))?;
     Ok(())
 }
 

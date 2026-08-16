@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/hover/更新/CLI 与发布边界不漂移。
+ * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/确定性 hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault/i18n、website/Tauri/CLI/Query 配置
- * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、旧单窗口几何键、启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
+ * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、CSS-only 影院 hover、旧单窗口几何键、启动强装、本地 `.app` 残留或发布缺口。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -499,6 +499,11 @@ assert.match(
   /const CINEMA_WINDOW_LABEL: &str = "cinema"/,
   "the overlay must have a dedicated native window label"
 );
+assert.match(
+  rustSource,
+  /const CINEMA_PRESENTED_EVENT: &str = "desktop-cinema-presented"/,
+  "every reused cinema window presentation needs a stable reset event"
+);
 assert.doesNotMatch(
   rustSource,
   /setBecomesKeyOnlyIfNeeded:\s*false/,
@@ -513,6 +518,11 @@ assert.match(
   rustSource,
   /fn enter_cinema_mode[\s\S]*CINEMA_WINDOW_LABEL[\s\S]*\.always_on_top\(true\)/,
   "cinema must be created as the only always-on-top runtime window"
+);
+assert.match(
+  rustSource,
+  /fn enter_cinema_mode[\s\S]*\.show\(\)[\s\S]*\.emit\(CINEMA_PRESENTED_EVENT, \(\)\)/,
+  "every cinema show must reset the persistent WebView hover lifecycle"
 );
 assert.match(
   rustSource,
@@ -539,8 +549,18 @@ const desktopAppSource = await readFile(
 assert.match(desktopAppSource, /CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000/);
 assert.match(
   desktopAppSource,
-  /showCinemaToolbarHint \? "opacity-100" : "opacity-0"/,
-  "cinema toolbar must remain discoverable while native hover tracking recovers"
+  /CURRENT_WINDOW\.listen\([\s\S]*CINEMA_PRESENTED_EVENT,[\s\S]*resetCinemaToolbarPresentation/,
+  "the reused cinema WebView must reset its entry hint on every native presentation"
+);
+assert.match(
+  desktopAppSource,
+  /onPointerEnter=\{\(\) => setCinemaToolbarPointerInside\(true\)\}[\s\S]*onPointerLeave=\{\(\) => setCinemaToolbarPointerInside\(false\)\}/,
+  "cinema toolbar visibility must follow explicit pointer entry and exit"
+);
+assert.doesNotMatch(
+  desktopAppSource,
+  /group-hover:opacity-100/,
+  "persistent cinema WebViews must not rely on stale CSS-only hover state"
 );
 assert.match(
   desktopAppSource,
@@ -560,6 +580,8 @@ const windowPresentationSource = await readFile(
 );
 assert.match(windowPresentationSource, /listenup-window-position-main-v2/);
 assert.match(windowPresentationSource, /listenup-window-position-cinema-v2/);
+assert.match(windowPresentationSource, /desktop-cinema-presented/);
+assert.match(windowPresentationSource, /hintVisible \|\| pointerInside/);
 assert.doesNotMatch(
   windowPresentationSource,
   /listenup-window-position-desktop|listenup-window-size-list|listenup-window-size-cinema"/,
