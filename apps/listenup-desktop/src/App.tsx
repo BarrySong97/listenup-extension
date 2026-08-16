@@ -2,7 +2,7 @@
  * @purpose 普通 Desktop 主窗口与独立影院浮层 UI：组合浏览器同步、YouTube iframe 与字幕交互。
  * @role    main 标签渲染标准窗口，cinema 标签只渲染置顶字幕浮层；两者共享 Rust 来源权威。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、react-i18next、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
- * @gotcha  窗口 label 决定 list/cinema，不能再用根级 pointer 激活或 appMode 改写原生窗口语义。
+ * @gotcha  窗口 label 决定 list/cinema；双窗口只能使用 v2 几何键且恢复后必须让 Rust 校验可见区域，不能复用旧单 NSPanel 坐标。
  */
 import { Icon } from "@iconify/react";
 import { getVersion } from "@tauri-apps/api/app";
@@ -63,6 +63,7 @@ import { VideoSessionPicker } from "./VideoSessionPicker";
 import { useViewerSession } from "./useViewerSession";
 import {
   resolveWindowViewMode,
+  WINDOW_GEOMETRY_STORAGE_KEYS,
   type WindowViewMode,
 } from "./windowPresentation";
 
@@ -82,13 +83,6 @@ const SUBTITLE_MODE_STORAGE_KEY = "listenup-subtitle-display-mode";
 const TARGET_LANGUAGE_STORAGE_KEY = "listenup-target-language";
 const EMBEDDED_SUBTITLE_OVERLAY_POSITION_STORAGE_KEY =
   "listenup-embedded-subtitle-overlay-position-v1";
-const DESKTOP_POSITION_STORAGE_KEY = "listenup-window-position-desktop";
-const CINEMA_POSITION_STORAGE_KEY = "listenup-window-position-cinema";
-const SIZE_STORAGE_KEYS: Record<ViewMode, string> = {
-  list: "listenup-window-size-list",
-  cinema: "listenup-window-size-cinema",
-};
-
 const MIN_SIZES: Record<ViewMode, WindowSize> = {
   list: { width: 340, height: 420 },
   cinema: { width: 420, height: 72 },
@@ -138,7 +132,7 @@ const loadStoredOverlayPosition = () =>
 
 const loadStoredSize = (mode: ViewMode): WindowSize | null => {
   try {
-    const raw = localStorage.getItem(SIZE_STORAGE_KEYS[mode]);
+    const raw = localStorage.getItem(WINDOW_GEOMETRY_STORAGE_KEYS[mode].size);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WindowSize;
     if (!Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) {
@@ -174,11 +168,6 @@ const applyWindowSizeForMode = async (
   await invoke("set_vibrancy", { enabled: mode === "list" });
 };
 
-const positionStorageKey = (mode: ViewMode) =>
-  mode === "cinema"
-    ? CINEMA_POSITION_STORAGE_KEY
-    : DESKTOP_POSITION_STORAGE_KEY;
-
 const persistCurrentWindowPosition = async (mode: ViewMode) => {
   const appWindow = CURRENT_WINDOW;
   const [position, scaleFactor] = await Promise.all([
@@ -188,14 +177,16 @@ const persistCurrentWindowPosition = async (mode: ViewMode) => {
   if (scaleFactor <= 0) return;
   const logical = position.toLogical(scaleFactor);
   localStorage.setItem(
-    positionStorageKey(mode),
+    WINDOW_GEOMETRY_STORAGE_KEYS[mode].position,
     JSON.stringify({ x: logical.x, y: logical.y } satisfies WindowPosition)
   );
 };
 
 const restoreCurrentWindowPosition = async (mode: ViewMode) => {
   try {
-    const raw = localStorage.getItem(positionStorageKey(mode));
+    const raw = localStorage.getItem(
+      WINDOW_GEOMETRY_STORAGE_KEYS[mode].position
+    );
     if (!raw) return;
     const position = JSON.parse(raw) as WindowPosition;
     if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
@@ -218,7 +209,10 @@ const persistCurrentWindowSize = async (mode: ViewMode) => {
     width: Math.round(innerSize.width / scaleFactor),
     height: Math.round(innerSize.height / scaleFactor),
   };
-  localStorage.setItem(SIZE_STORAGE_KEYS[mode], JSON.stringify(logicalSize));
+  localStorage.setItem(
+    WINDOW_GEOMETRY_STORAGE_KEYS[mode].size,
+    JSON.stringify(logicalSize)
+  );
 };
 
 const formatTime = (seconds: number) => {
@@ -454,6 +448,7 @@ export default function App() {
   useEffect(() => {
     void applyWindowSizeForMode(mode)
       .then(() => restoreCurrentWindowPosition(mode))
+      .then(() => invoke("ensure_window_visible"))
       .catch((error) => console.error("failed to initialize window geometry", error));
   }, [mode]);
 

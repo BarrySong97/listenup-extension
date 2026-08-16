@@ -79,3 +79,6 @@ seek 正常且不抢 Chrome 焦点；tray 左键仅恢复主窗口；升级、�
 - Computer Use 回归完整 DEV `.app`：main 被 macOS 识别为 `standard window` 且 window layer 为 0；
   真实点击输入框可连续键入，`Cmd+A` + 删除生效，普通 Tab 点击不隐藏；进入后变为独立
   `ListenUp Cinema`，退出恢复 standard main 与原输入状态。测试 bundle 已按清理规范删除。
+- Production 首轮本机验收发现旧单面板 `x=-1177,y=238` 与 814 高度的几何键被新窗口复用，导致
+  mount 后把居中的 main 移到当前两块屏幕范围外。后续修复改用 main/cinema v2 键，并加入原生
+  64×64 显示器交集检查与自动居中；确定性测试固定该真实回归坐标。

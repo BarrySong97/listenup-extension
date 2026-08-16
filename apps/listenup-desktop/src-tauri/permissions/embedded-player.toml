@@ -79,6 +79,11 @@ description = "Allows trusted local viewer windows to apply their label-specific
 commands.allow = ["set_vibrancy"]
 
 [[permission]]
+identifier = "allow-ensure-window-visible"
+description = "Allows trusted local viewer windows to recover geometry that no longer intersects a connected display."
+commands.allow = ["ensure_window_visible"]
+
+[[permission]]
 identifier = "allow-fetch-youtube-player-response"
 description = "Allows main to fetch a size-limited watch player response for one validated videoId."
 commands.allow = ["fetch_youtube_player_response"]

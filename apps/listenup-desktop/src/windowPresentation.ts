@@ -6,5 +6,19 @@
  */
 export type WindowViewMode = "list" | "cinema";
 
+export const WINDOW_GEOMETRY_STORAGE_KEYS: Record<
+  WindowViewMode,
+  { position: string; size: string }
+> = {
+  list: {
+    position: "listenup-window-position-main-v2",
+    size: "listenup-window-size-main-v2",
+  },
+  cinema: {
+    position: "listenup-window-position-cinema-v2",
+    size: "listenup-window-size-cinema-v2",
+  },
+};
+
 export const resolveWindowViewMode = (label: string): WindowViewMode =>
   label === "cinema" ? "cinema" : "list";

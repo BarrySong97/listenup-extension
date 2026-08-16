@@ -1,7 +1,7 @@
 // @purpose 桌面端 Rust 入口：普通主窗口、影院 NSPanel、GUI/桥接双模式与字幕来源协调。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
-// @gotcha  stdout 只写 Native Messaging 长度帧；主窗口不得 NSPanel 化或置顶，只有 cinema 窗口能使用 overlay AppKit 属性。
+// @gotcha  stdout 只写 Native Messaging 长度帧；主窗口不得 NSPanel 化或置顶；恢复几何必须校验当前显示器，只有 cinema 能使用 overlay AppKit 属性。
 mod browser_source;
 pub mod cli;
 mod cookie_vault;
@@ -922,6 +922,72 @@ fn set_vibrancy(window: tauri::WebviewWindow, enabled: bool) {
     let _ = (window, enabled);
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WindowRect {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+fn has_visible_window_area(window: WindowRect, monitors: &[WindowRect]) -> bool {
+    const MIN_VISIBLE_EDGE: i64 = 64;
+    let window_left = i64::from(window.x);
+    let window_top = i64::from(window.y);
+    let window_right = window_left + i64::from(window.width);
+    let window_bottom = window_top + i64::from(window.height);
+
+    monitors.iter().any(|monitor| {
+        let monitor_left = i64::from(monitor.x);
+        let monitor_top = i64::from(monitor.y);
+        let monitor_right = monitor_left + i64::from(monitor.width);
+        let monitor_bottom = monitor_top + i64::from(monitor.height);
+        let visible_width = window_right.min(monitor_right) - window_left.max(monitor_left);
+        let visible_height = window_bottom.min(monitor_bottom) - window_top.max(monitor_top);
+        visible_width >= MIN_VISIBLE_EDGE && visible_height >= MIN_VISIBLE_EDGE
+    })
+}
+
+#[tauri::command]
+fn ensure_window_visible(window: tauri::WebviewWindow) -> Result<(), String> {
+    let position = window
+        .outer_position()
+        .map_err(|error| format!("读取窗口位置失败：{error}"))?;
+    let size = window
+        .outer_size()
+        .map_err(|error| format!("读取窗口尺寸失败：{error}"))?;
+    let monitors = window
+        .available_monitors()
+        .map_err(|error| format!("读取显示器列表失败：{error}"))?
+        .into_iter()
+        .map(|monitor| WindowRect {
+            x: monitor.position().x,
+            y: monitor.position().y,
+            width: monitor.size().width,
+            height: monitor.size().height,
+        })
+        .collect::<Vec<_>>();
+    let window_rect = WindowRect {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+    };
+
+    if !monitors.is_empty() && !has_visible_window_area(window_rect, &monitors) {
+        eprintln!(
+            "[listenup] recovered off-screen {} window at ({}, {})",
+            window.label(),
+            position.x,
+            position.y
+        );
+        window
+            .center()
+            .map_err(|error| format!("恢复窗口到屏幕中央失败：{error}"))?;
+    }
+    Ok(())
+}
+
 #[cfg(target_os = "macos")]
 fn configure_cinema_panel_on_main_thread(window: &tauri::WebviewWindow) {
     if let Ok(ns_window) = window.ns_window() {
@@ -1226,6 +1292,7 @@ pub fn run() {
             embedded_player_host::get_embedded_player_host_url,
             youtube_subtitles::fetch_youtube_caption_document,
             youtube_subtitles::fetch_youtube_player_response,
+            ensure_window_visible,
             enter_cinema_mode,
             exit_cinema_mode,
             get_snapshot,
@@ -1696,6 +1763,71 @@ mod tests {
             receiver.blocking_recv().unwrap(),
             Err("播放命令响应身份不匹配".to_string())
         );
+    }
+
+    #[test]
+    fn rejects_the_legacy_off_screen_production_geometry() {
+        let monitors = [
+            WindowRect {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+            WindowRect {
+                x: 1920,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+        ];
+
+        assert!(!has_visible_window_area(
+            WindowRect {
+                x: -1177,
+                y: 238,
+                width: 340,
+                height: 814,
+            },
+            &monitors
+        ));
+    }
+
+    #[test]
+    fn accepts_a_window_with_a_usable_area_on_either_monitor() {
+        let monitors = [
+            WindowRect {
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+            WindowRect {
+                x: 1920,
+                y: 0,
+                width: 1920,
+                height: 1080,
+            },
+        ];
+
+        assert!(has_visible_window_area(
+            WindowRect {
+                x: 1860,
+                y: 200,
+                width: 400,
+                height: 640,
+            },
+            &monitors
+        ));
+        assert!(has_visible_window_area(
+            WindowRect {
+                x: 2500,
+                y: 200,
+                width: 400,
+                height: 640,
+            },
+            &monitors
+        ));
     }
 
     #[cfg(target_os = "macos")]

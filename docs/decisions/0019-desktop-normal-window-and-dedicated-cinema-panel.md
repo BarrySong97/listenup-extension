@@ -31,6 +31,8 @@
    形态切换和 `activate_text_input`。已有 `desktop-preferences.json` 留在磁盘但不再读取。
 5. tray 仅提供“显示字幕窗口 / 检查更新 / 退出”。主窗口与影院使用独立 Tauri capability，影院只获得
    字幕读取、播放控制、会话选择、视觉设置和退出影院所需的最小权限。
+6. 双窗口几何使用新的 v2 localStorage key，不迁移旧单 NSPanel 的位置与尺寸。每次恢复后由 Rust
+   检查窗口与当前显示器至少有 64×64 物理像素交集，否则自动居中。
 
 ## 理由
 
@@ -46,4 +48,4 @@
 - 影院浮层仍能跨 Space 覆盖原生全屏视频，但不得新增文本输入；如未来需要输入，应先退出影院回主窗口。
 - tray 左键永远恢复主窗口并退出影院，不再提供失焦自动收起或 appMode 切换。
 - `windowPresentation.test.ts` 与 `scripts/check-environment-identifiers.mjs` 固定窗口 label、capability、
-  主窗口非置顶、仅影院 NSPanel 化以及禁止全局激活的架构棘轮。
+  主窗口非置顶、仅影院 NSPanel 化、v2 几何隔离、屏外恢复以及禁止全局激活的架构棘轮。

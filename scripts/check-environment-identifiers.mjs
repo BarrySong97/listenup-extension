@@ -3,7 +3,7 @@
  * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault/i18n、website/Tauri/CLI/Query 配置
- * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
+ * @gotcha  ADR-0008/0019：不得恢复英语优先、环境串库、主窗口 NSPanel 化、旧单窗口几何键、启动强装、本地 `.app` 残留、sidecar/updater 发布缺口或轮询；更新确认必须保留 HeroUI 显式操作。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -137,6 +137,7 @@ for (const permission of [
   "allow-get-embedded-player-host-url",
   "allow-get-youtube-cookie-status",
   "allow-enter-cinema-mode",
+  "allow-ensure-window-visible",
   "allow-reload-embedded-playback",
   "allow-report-embedded-player-failure",
   "allow-replace-embedded-playback",
@@ -161,6 +162,7 @@ assert.match(
 );
 for (const permission of [
   "allow-control-playback",
+  "allow-ensure-window-visible",
   "allow-exit-cinema-mode",
   "allow-select-subtitle-session",
   "allow-set-vibrancy",
@@ -512,6 +514,11 @@ assert.match(
   /fn enter_cinema_mode[\s\S]*CINEMA_WINDOW_LABEL[\s\S]*\.always_on_top\(true\)/,
   "cinema must be created as the only always-on-top runtime window"
 );
+assert.match(
+  rustSource,
+  /fn ensure_window_visible[\s\S]*has_visible_window_area[\s\S]*\.center\(\)/,
+  "restored geometry must recover when it no longer intersects a connected display"
+);
 assert.doesNotMatch(rustSource, /activate_text_input|activateIgnoringOtherApps|makeKeyWindow/);
 assert.doesNotMatch(rustSource, /mod app_mode|AppMode|Focused\(false\)/);
 assert.equal(productionTauri.app.windows[0].alwaysOnTop, false);
@@ -547,6 +554,17 @@ assert.match(
 );
 assert.doesNotMatch(desktopAppSource, /activateDesktopKeyboard|activate_text_input/);
 assert.match(desktopAppSource, /resolveWindowViewMode\(CURRENT_WINDOW\.label\)/);
+const windowPresentationSource = await readFile(
+  resolve(ROOT, "apps/listenup-desktop/src/windowPresentation.ts"),
+  "utf8"
+);
+assert.match(windowPresentationSource, /listenup-window-position-main-v2/);
+assert.match(windowPresentationSource, /listenup-window-position-cinema-v2/);
+assert.doesNotMatch(
+  windowPresentationSource,
+  /listenup-window-position-desktop|listenup-window-size-list|listenup-window-size-cinema"/,
+  "dedicated main/cinema windows must not reuse legacy single-panel geometry"
+);
 assert.doesNotMatch(
   desktopAppSource,
   /readText\s*\(/,

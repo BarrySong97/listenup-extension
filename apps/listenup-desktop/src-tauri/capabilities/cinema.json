@@ -14,6 +14,7 @@
     "core:window:allow-set-position",
     "core:window:allow-set-shadow",
     "allow-control-playback",
+    "allow-ensure-window-visible",
     "allow-exit-cinema-mode",
     "allow-select-subtitle-session",
     "allow-set-vibrancy",

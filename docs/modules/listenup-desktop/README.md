@@ -259,7 +259,10 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
   Accessory、不会按 tray 定位，也不会失焦自动隐藏。
 - 拖动靠 `data-tauri-drag-region`（没有系统标题栏），关闭按钮在 header / 工具条里
 
-主窗口和影院窗口的尺寸、位置分别持久化在 `localStorage`：
+主窗口和影院窗口的尺寸、位置分别持久化在 `localStorage`。双窗口架构使用独立的 v2 key，升级时
+不读取旧单 NSPanel 的 `listenup-window-position-desktop` / `window-size-list|cinema`，避免把旧面板
+坐标和纵向尺寸套到新的原生窗口。恢复后 Rust 还会按物理像素检查窗口是否至少有 64×64 落在任一
+当前显示器内；外接屏被拔掉或排列变化时自动居中：
 
 | | 列表模式 | 影院模式 |
 |---|---|---|
@@ -268,7 +271,8 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 | 背景 | vibrancy 磨砂 + `--color-glass` | **运行时关掉 vibrancy**（`set_vibrancy` 命令）+ 纯透明 + `--color-glass-cinema` |
 | 工具条 | 常驻 header | 默认隐藏；hover 整条影院字幕窗口时显示，可切换原语 / 译文 / 双语，鼠标离开窗口后隐藏 |
 
-切换前保存当前窗口几何；对应窗口 mount 时用 `setMinSize` + `setSize` + `setPosition` 恢复。
+切换前保存当前窗口几何；对应窗口 mount 时用 `setMinSize` + `setSize` + `setPosition` 恢复，再调用
+`ensure_window_visible` 做原生显示器交集校验。
 main 与 cinema 权限分别在 `capabilities/default.json` 和 `capabilities/cinema.json`。
 列表/影院缩放、vibrancy/阴影切换、全屏 Space 重排和 tray 重显都会重新启用
 `acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免非激活 NSPanel 偶发停止命中
