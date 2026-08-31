@@ -1,7 +1,7 @@
-// @purpose 桌面端 Rust 入口：普通主窗口、独立影院窗口、GUI/桥接双模式、字幕来源与影院呈现事件协调。
+// @purpose 桌面端 Rust 入口：同一 main 的普通列表/影院 Panel 动态切换、GUI/桥接双模式与字幕来源协调。
 // @role    被 main.rs 调用；同时是 Chrome Native Messaging Host 的实现。
 // @deps    browser_source、source_coordinator、cookie_vault、database、domain、tauri、tokio、serde、window-vibrancy、objc2、Unix socket
-// @gotcha  stdout 只写 Native Messaging 长度帧；任何 WebviewWindow 都不得运行时 class-swap；cinema 每次 show 后必须发事件重置 hover 生命周期。
+// @gotcha  stdout 只写 Native Messaging 长度帧；main 在 list 必须是原始 NSWindow，只有已完成影院布局的同一 WebView 才能升级 NSPanel，任何返回 list 路径都须完整恢复。
 mod browser_source;
 pub mod cli;
 mod cookie_vault;
@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 use source_coordinator::{
     BrowserPauseState, PlaybackRoute, SourceCoordinator, SourceMode, SourceRef,
 };
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering as AtomicOrdering};
 use std::{
     collections::HashMap,
     env,
@@ -39,8 +41,23 @@ const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 const UPDATE_EVENT: &str = "native-subtitle-update";
 const CONNECTION_EVENT: &str = "native-subtitle-connection";
 const CHECK_UPDATE_EVENT: &str = "desktop-check-for-update";
-const CINEMA_WINDOW_LABEL: &str = "cinema";
-const CINEMA_PRESENTED_EVENT: &str = "desktop-cinema-presented";
+const MAIN_WINDOW_LABEL: &str = "main";
+const RETURN_TO_LIST_EVENT: &str = "desktop-return-to-list";
+const CINEMA_STATUS_LEVEL: isize = 25;
+const CINEMA_CAN_JOIN_ALL_SPACES: usize = 1 << 0;
+const CINEMA_FULL_SCREEN_AUXILIARY: usize = 1 << 8;
+#[cfg(target_os = "macos")]
+const CINEMA_NONACTIVATING_PANEL_STYLE: usize = 1 << 7;
+#[cfg(target_os = "macos")]
+static CINEMA_PANEL_ACTIVE: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "macos")]
+static MAIN_ORIGINAL_CLASS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "macos")]
+static MAIN_ORIGINAL_STYLE_MASK: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "macos")]
+static MAIN_ORIGINAL_LEVEL: AtomicIsize = AtomicIsize::new(0);
+#[cfg(target_os = "macos")]
+static MAIN_ORIGINAL_COLLECTION_BEHAVIOR: AtomicUsize = AtomicUsize::new(0);
 const EXTENSION_ID: &str = env!("LISTENUP_EXTENSION_ID");
 const NATIVE_HOST_NAME: &str = env!("LISTENUP_NATIVE_HOST_NAME");
 const PRODUCT_NAME: &str = env!("LISTENUP_PRODUCT_NAME");
@@ -845,29 +862,125 @@ fn refresh_mouse_tracking(window: &tauri::WebviewWindow) {
     }
 }
 
-/// 让窗口盖在其他 app（如全屏的 Chrome）的全屏 Space 之上。必须主线程调用。
+fn cinema_collection_behavior() -> usize {
+    CINEMA_CAN_JOIN_ALL_SPACES | CINEMA_FULL_SCREEN_AUXILIARY
+}
+
+/// 让影院形态的 main 复现 57eebdc 已通过同屏严格测试的原生参数。必须主线程调用。
 ///
-/// - `setLevel: 25`（NSStatusWindowLevel）：高于全屏视频画面
-/// - `collectionBehavior = canJoinAllSpaces(1<<0) | fullScreenAuxiliary(1<<8)`：
-///   整体**替换**默认行为——默认里带 fullScreenPrimary，它与 auxiliary 冲突，
-///   会导致窗口进不了别人的全屏 Space。不要用 set_visible_on_all_workspaces，
-///   它只 OR 进 canJoinAllSpaces、保留 Primary、丢失 auxiliary。
+/// 必须整体替换 collection behavior，不能在默认 fullScreenPrimary 上 OR auxiliary；也不叠加
+/// 两轮失败实验中的 screen-saver level、stationary 或 canJoinAllApplications。
 #[cfg(target_os = "macos")]
-fn apply_overlay_window_style(window: &tauri::WebviewWindow) {
+fn apply_cinema_overlay_policy(window: &tauri::WebviewWindow, order_front: bool, log: bool) {
     if let Ok(ns_window) = window.ns_window() {
         use objc2::msg_send;
         use objc2::runtime::AnyObject;
         let ns_window = ns_window as *mut AnyObject;
+        let behavior = cinema_collection_behavior();
         unsafe {
-            let _: () = msg_send![ns_window, setLevel: 25_isize];
-            let behavior: usize = (1 << 0) | (1 << 8);
+            let _: () = msg_send![ns_window, setLevel: CINEMA_STATUS_LEVEL];
             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
-            let level: isize = msg_send![ns_window, level];
-            let applied: usize = msg_send![ns_window, collectionBehavior];
-            eprintln!("[listenup] overlay style: level={level} collectionBehavior={applied:#b}");
+            let _: () = msg_send![ns_window, setAcceptsMouseMovedEvents: true];
+            if order_front {
+                let _: () = msg_send![ns_window, orderFrontRegardless];
+            }
+            if log {
+                let level: isize = msg_send![ns_window, level];
+                let applied: usize = msg_send![ns_window, collectionBehavior];
+                eprintln!(
+                    "[listenup] historical cinema policy: level={level} collectionBehavior={applied:#b}"
+                );
+            }
         }
     }
-    refresh_mouse_tracking(window);
+}
+
+/// 已经初始化并显示 list 的同一 main WebView 完成影院布局两帧后，才升级为历史成功的
+/// nonactivating NSPanel。这里不再创建或转换隐藏的第二个 WebViewWindow。
+#[cfg(target_os = "macos")]
+fn promote_main_to_cinema_panel(window: &tauri::WebviewWindow) {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return;
+    }
+    let Ok(ns_window) = window.ns_window() else {
+        return;
+    };
+
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    let ns_window = ns_window as *mut AnyObject;
+    unsafe {
+        let Some(panel_class) = AnyClass::get(c"NSPanel") else {
+            return;
+        };
+        let panel_class = panel_class as *const AnyClass;
+        let current_class = objc2::ffi::object_getClass(ns_window);
+        if current_class == panel_class {
+            CINEMA_PANEL_ACTIVE.store(true, AtomicOrdering::SeqCst);
+            return;
+        }
+        if current_class.is_null() {
+            return;
+        }
+
+        let style: usize = msg_send![ns_window, styleMask];
+        let level: isize = msg_send![ns_window, level];
+        let behavior: usize = msg_send![ns_window, collectionBehavior];
+        MAIN_ORIGINAL_CLASS.store(current_class as usize, AtomicOrdering::SeqCst);
+        MAIN_ORIGINAL_STYLE_MASK.store(style, AtomicOrdering::SeqCst);
+        MAIN_ORIGINAL_LEVEL.store(level, AtomicOrdering::SeqCst);
+        MAIN_ORIGINAL_COLLECTION_BEHAVIOR.store(behavior, AtomicOrdering::SeqCst);
+
+        objc2::ffi::object_setClass(ns_window, panel_class);
+        let _: () = msg_send![ns_window,
+            setStyleMask: style | CINEMA_NONACTIVATING_PANEL_STYLE
+        ];
+        // 影院不承载文本输入，精确恢复最初全屏成功版本的 Panel key 语义。
+        let _: () = msg_send![ns_window, setBecomesKeyOnlyIfNeeded: true];
+        let _: () = msg_send![ns_window, setHidesOnDeactivate: false];
+        let _: () = msg_send![ns_window, setReleasedWhenClosed: false];
+        CINEMA_PANEL_ACTIVE.store(true, AtomicOrdering::SeqCst);
+        eprintln!("[listenup] initialized main WebView promoted to historical cinema NSPanel");
+    }
+}
+
+/// 任何返回 list 的路径都必须恢复 Tauri main 的完整原生状态，而不只是 class / style。
+#[cfg(target_os = "macos")]
+fn restore_main_list_window(window: &tauri::WebviewWindow) {
+    if window.label() != MAIN_WINDOW_LABEL || !CINEMA_PANEL_ACTIVE.load(AtomicOrdering::SeqCst) {
+        return;
+    }
+    let original_class = MAIN_ORIGINAL_CLASS.load(AtomicOrdering::SeqCst);
+    if original_class == 0 {
+        return;
+    }
+    let Ok(ns_window) = window.ns_window() else {
+        return;
+    };
+
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    let ns_window = ns_window as *mut AnyObject;
+    unsafe {
+        let current_class = objc2::ffi::object_getClass(ns_window);
+        let original_class = original_class as *const AnyClass;
+        if current_class == original_class {
+            CINEMA_PANEL_ACTIVE.store(false, AtomicOrdering::SeqCst);
+            return;
+        }
+        let original_style = MAIN_ORIGINAL_STYLE_MASK.load(AtomicOrdering::SeqCst);
+        let original_level = MAIN_ORIGINAL_LEVEL.load(AtomicOrdering::SeqCst);
+        let original_behavior = MAIN_ORIGINAL_COLLECTION_BEHAVIOR.load(AtomicOrdering::SeqCst);
+        let _: () = msg_send![ns_window, setStyleMask: original_style];
+        objc2::ffi::object_setClass(ns_window, original_class);
+        let _: () = msg_send![ns_window, setLevel: original_level];
+        let _: () = msg_send![ns_window, setCollectionBehavior: original_behavior];
+        let _: () = msg_send![ns_window, setAcceptsMouseMovedEvents: true];
+        CINEMA_PANEL_ACTIVE.store(false, AtomicOrdering::SeqCst);
+        eprintln!(
+            "[listenup] main restored to list NSWindow: level={original_level} collectionBehavior={original_behavior:#b}"
+        );
+    }
 }
 
 /// 列表模式开启 vibrancy 磨砂；影院模式关闭，让视频画面清晰透过。必须主线程调用。
@@ -900,12 +1013,9 @@ fn set_vibrancy_on_main_thread(window: &tauri::WebviewWindow, enabled: bool) {
         }
     }
 
-    if window.label() == CINEMA_WINDOW_LABEL {
-        // 只有影院浮层需要跨 Space 置顶；普通主窗口必须保持系统默认层级。
-        apply_overlay_window_style(window);
-    } else {
-        refresh_mouse_tracking(window);
-    }
+    // 切换尺寸、阴影和 vibrancy 后统一重算同一 main WebView 的 tracking。
+    // Panel 升级必须等影院 DOM 完成两帧布局，不能在这个视觉命令里提前执行。
+    refresh_mouse_tracking(window);
 }
 
 /// Tauri command 默认跑在 worker 线程，而 AppKit 的 view/window 操作必须在主线程，
@@ -921,23 +1031,6 @@ fn set_vibrancy(window: tauri::WebviewWindow, enabled: bool) {
     }
     #[cfg(not(target_os = "macos"))]
     let _ = (window, enabled);
-}
-
-#[tauri::command]
-fn refresh_window_mouse_tracking(window: tauri::WebviewWindow) -> Result<(), String> {
-    if window.label() != CINEMA_WINDOW_LABEL {
-        return Err("只有影院浮层可以刷新 mouse tracking".to_string());
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let target = window.clone();
-        window
-            .run_on_main_thread(move || refresh_mouse_tracking(&target))
-            .map_err(|error| format!("刷新影院 mouse tracking 失败：{error}"))?;
-    }
-    #[cfg(not(target_os = "macos"))]
-    let _ = window;
-    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1007,19 +1100,18 @@ fn ensure_window_visible(window: tauri::WebviewWindow) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-fn configure_cinema_window_on_main_thread(window: &tauri::WebviewWindow) {
-    // 保留 Tauri 创建的标准 NSWindow。运行时 class-swap 为 NSPanel 会让隐藏创建、
-    // 从未成为 responder 的 cinema WebView 永久收不到 mouseMoved，CSS :hover 随之失效。
-    set_vibrancy_on_main_thread(window, false);
-}
-
-#[cfg(target_os = "macos")]
 fn spawn_cinema_overlay_keeper(window: tauri::WebviewWindow) {
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_millis(2000));
+        if !CINEMA_PANEL_ACTIVE.load(AtomicOrdering::SeqCst) {
+            continue;
+        }
         let target = window.clone();
         if window
             .run_on_main_thread(move || {
+                if !CINEMA_PANEL_ACTIVE.load(AtomicOrdering::SeqCst) {
+                    return;
+                }
                 if let Ok(ns_window) = target.ns_window() {
                     use objc2::msg_send;
                     use objc2::runtime::AnyObject;
@@ -1029,13 +1121,9 @@ fn spawn_cinema_overlay_keeper(window: tauri::WebviewWindow) {
                         if !visible {
                             return;
                         }
-                        let _: () = msg_send![ns_window, setLevel: 25_isize];
-                        let behavior: usize = (1 << 0) | (1 << 8);
-                        let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
-                        let _: () = msg_send![ns_window, setAcceptsMouseMovedEvents: true];
-                        let _: () = msg_send![ns_window, orderFrontRegardless];
                     }
                 }
+                apply_cinema_overlay_policy(&target, true, false);
             })
             .is_err()
         {
@@ -1044,99 +1132,59 @@ fn spawn_cinema_overlay_keeper(window: tauri::WebviewWindow) {
     });
 }
 
-fn exit_cinema_mode_inner(app: &AppHandle) {
-    if let Some(cinema) = app.get_webview_window(CINEMA_WINDOW_LABEL) {
-        let _ = cinema.hide();
+fn restore_main_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("只有 main 可以恢复列表窗口语义".to_string());
     }
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.unminimize();
-        let _ = main.show();
-        let _ = main.set_focus();
-    }
-}
-
-#[tauri::command]
-fn exit_cinema_mode(app: AppHandle) {
-    exit_cinema_mode_inner(&app);
-}
-
-#[tauri::command]
-fn enter_cinema_mode(app: AppHandle) -> Result<(), String> {
-    let cinema = if let Some(window) = app.get_webview_window(CINEMA_WINDOW_LABEL) {
-        window
-    } else {
-        let window = tauri::WebviewWindowBuilder::new(
-            &app,
-            CINEMA_WINDOW_LABEL,
-            tauri::WebviewUrl::App("index.html".into()),
-        )
-        .title("ListenUp Cinema")
-        .inner_size(760.0, 148.0)
-        .min_inner_size(420.0, 72.0)
-        .resizable(true)
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
-        .always_on_top(true)
-        .focused(false)
-        .visible(false)
-        .build()
-        .map_err(|error| format!("创建影院浮层失败：{error}"))?;
-
-        let close_app = app.clone();
-        window.on_window_event(move |event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                exit_cinema_mode_inner(&close_app);
-            }
-        });
-
-        #[cfg(target_os = "macos")]
-        spawn_cinema_overlay_keeper(window.clone());
-        window
-    };
-
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.hide();
-    }
-
     #[cfg(target_os = "macos")]
     {
-        let target = cinema.clone();
-        cinema
+        let target = window.clone();
+        window
             .run_on_main_thread(move || {
-                configure_cinema_window_on_main_thread(&target);
-                let _ = target.show();
-                apply_overlay_window_style(&target);
+                restore_main_list_window(&target);
+                refresh_mouse_tracking(&target);
             })
-            .map_err(|error| format!("显示影院浮层失败：{error}"))?;
+            .map_err(|error| format!("恢复 main 列表窗口失败：{error}"))?;
     }
     #[cfg(not(target_os = "macos"))]
-    {
-        cinema
-            .show()
-            .map_err(|error| format!("显示影院浮层失败：{error}"))?;
+    let _ = window;
+    Ok(())
+}
+
+#[tauri::command]
+fn exit_cinema_mode(window: tauri::WebviewWindow) -> Result<(), String> {
+    restore_main_window(window)
+}
+
+#[tauri::command]
+fn enter_cinema_mode(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("只有已初始化的 main 可以进入影院 Panel".to_string());
     }
-    cinema
-        .emit(CINEMA_PRESENTED_EVENT, ())
-        .map_err(|error| format!("通知影院浮层重置交互失败：{error}"))?;
+    #[cfg(target_os = "macos")]
+    {
+        let target = window.clone();
+        window
+            .run_on_main_thread(move || {
+                promote_main_to_cinema_panel(&target);
+                apply_cinema_overlay_policy(&target, true, true);
+                refresh_mouse_tracking(&target);
+            })
+            .map_err(|error| format!("升级 main 影院 Panel 失败：{error}"))?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
     Ok(())
 }
 
 fn show_main_window(app: &AppHandle) {
-    if let Some(cinema) = app.get_webview_window(CINEMA_WINDOW_LABEL) {
-        let _ = cinema.hide();
-    }
-    let Some(window) = app.get_webview_window("main") else {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
         return;
     };
+    let _ = restore_main_window(window.clone());
+    let _ = window.emit(RETURN_TO_LIST_EVENT, ());
     let _ = window.unminimize();
     let _ = window.show();
-    #[cfg(target_os = "macos")]
-    {
-        let target = window.clone();
-        let _ = window.run_on_main_thread(move || refresh_mouse_tracking(&target));
-    }
     let _ = window.set_focus();
 }
 
@@ -1301,7 +1349,6 @@ pub fn run() {
             exit_cinema_mode,
             get_snapshot,
             get_subtitle_view,
-            refresh_window_mouse_tracking,
             select_subtitle_session,
             set_vibrancy
         ])
@@ -1353,16 +1400,18 @@ pub fn run() {
             }
 
             #[cfg(target_os = "macos")]
-            if let Some(window) = app.get_webview_window("main") {
-                // 主窗口保持 Tauri 创建的标准 NSWindow，只应用列表磨砂。
-                // 跨 Space 置顶属性全部隔离到按需创建的 cinema 窗口。
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+                // main 启动时先完成标准 NSWindow + WebView 初始化；影院 Panel 只在用户切换后启用。
                 set_vibrancy_on_main_thread(&window, true);
+                spawn_cinema_overlay_keeper(window.clone());
 
-                // 标准 macOS 行为：关闭主窗口但保持应用和 tray，可从 tray 重新显示。
+                // 关闭时无论当前视图如何，先恢复 list 的原生窗口语义再隐藏。
                 let hide_target = window.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
+                        let _ = restore_main_window(hide_target.clone());
+                        let _ = hide_target.emit(RETURN_TO_LIST_EVENT, ());
                         let _ = hide_target.hide();
                     }
                 });
@@ -1506,6 +1555,14 @@ mod tests {
         assert_eq!(
             validate_playback_request(PlaybackAction::Pause, None),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn cinema_collection_behavior_matches_the_historical_fullscreen_baseline() {
+        assert_eq!(
+            cinema_collection_behavior(),
+            CINEMA_CAN_JOIN_ALL_SPACES | CINEMA_FULL_SCREEN_AUXILIARY
         );
     }
 

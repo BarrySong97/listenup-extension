@@ -1,12 +1,12 @@
 /**
- * @purpose 固定 Tauri 窗口 label、影院呈现事件与双窗口几何键。
- * @role    App.tsx 的窗口职责边界：main/未知窗口渲染列表，cinema 标签渲染影院浮层并接收每次呈现通知。
+ * @purpose 固定同一 main 的列表/影院视图类型、原生返回列表事件与分模式几何键。
+ * @role    App.tsx 的单 WebView 呈现契约：React 管视图，Rust 成对切换同一原生窗口语义。
  * @deps    无
- * @gotcha  cinema 会隐藏后复用；每次呈现必须由原生事件重置入场提示并触发延后 tracking refresh。
+ * @gotcha  tray/关闭可从原生侧恢复 list；事件名必须稳定，且 list/cinema 仍使用不同几何键。
  */
 export type WindowViewMode = "list" | "cinema";
 
-export const CINEMA_PRESENTED_EVENT = "desktop-cinema-presented";
+export const RETURN_TO_LIST_EVENT = "desktop-return-to-list";
 
 export const WINDOW_GEOMETRY_STORAGE_KEYS: Record<
   WindowViewMode,
@@ -21,6 +21,3 @@ export const WINDOW_GEOMETRY_STORAGE_KEYS: Record<
     size: "listenup-window-size-cinema-v2",
   },
 };
-
-export const resolveWindowViewMode = (label: string): WindowViewMode =>
-  label === "cinema" ? "cinema" : "list";

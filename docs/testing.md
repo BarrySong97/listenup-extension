@@ -146,7 +146,7 @@ node scripts/check-docs.mjs                                              # 永�
 - SPA 切视频后 Native 窗口先 loading 再替换为新字幕，全程不闪上一视频字幕
 - 两个播放标签页出现选择遮罩，选定后第三个播放标签页不抢占
 - 所选视频暂停或关闭后，按剩余播放数量自动跟随或重新显示选择遮罩
-- 普通 main / 独立影院窗口切换、各自尺寸与位置恢复、影院拖动、毛玻璃在深浅桌面上的可读性
+- 同一 main 的普通列表 / 影院形态切换、分模式尺寸与位置恢复、影院拖动、毛玻璃在深浅桌面上的可读性
 - 升级前写入旧 `listenup-window-position-desktop` 的屏外坐标（回归值 `x=-1177,y=238`）与旧
   list/cinema 纵向尺寸后启动新版，main 必须忽略旧键并居中；保存 v2 坐标后拔掉对应外接屏再启动，
   原生可见区域校验必须把窗口恢复到当前屏幕
@@ -155,9 +155,15 @@ node scripts/check-docs.mjs                                              # 永�
   DOM 必须保留 `group-hover`，不能用 React pointer state 代替 native tracking 修复
 - main 必须是 `Regular` 普通窗口且 `alwaysOnTop=false`：任意非输入点击不会隐藏，切到 Chrome 后
   留在普通窗口层级；旧 `desktop-preferences.json` 即使写着 Menubar 也不能改变启动形态
-- cinema 保持独立标准 `NSWindow`，不得 runtime class-swap 为 `NSPanel`；只有它跨 Space 置顶。
-  进入后 main 隐藏，hover / 播放 / seek / 拖动正常，退出后 main 恢复原位置、尺寸并可立即输入
-- tray 左键在列表或影院中都只隐藏影院、显示并聚焦普通 main；右键菜单只有显示、检查更新和退出，
+- cinema 必须在同一已初始化 main WebView 中先完成两个影院布局帧，再把 main 升级为 nonactivating
+  `NSPanel`；不得创建独立隐藏 cinema WebView。Panel 必须精确使用 level 25 与
+  `canJoinAllSpaces | fullScreenAuxiliary`，不得叠加 screen-saver level、`stationary` 或
+  `canJoinAllApplications`。退出 / 关闭 / tray 唤回时必须先恢复 main 原始 class / style / level /
+  collection behavior。分别验证
+  “先进入影院、再让 Chrome 进入 YouTube 原生全屏”和“Chrome 已在原生全屏、再进入影院”，字幕均
+  保持最前。进入后 hover / 播放 / seek / 拖动正常；退出再进入后 hover 仍正常，同一 main 恢复列表
+  原位置、尺寸并可立即输入
+- tray 左键在列表或影院中都让同一 main 恢复普通列表并聚焦；右键菜单只有显示、检查更新和退出，
   不得出现形态切换、tray 下方定位或失焦自动隐藏
 - 旧版本正式 Desktop 启动后静默检查并持续显示“发现新版本 / 立即更新”；点击前不下载、不安装、
   不重启，点击后才显示下载进度并完成更新

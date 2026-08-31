@@ -39,4 +39,7 @@
 | [0017](0017-desktop-embedded-list-collapse-and-overlay-independent.md) | Desktop Embedded 列表收起与视频 Overlay 独立 | 已采纳 | 2026-08-13 |
 | [0018](0018-desktop-backward-compatible-native-protocol.md) | Desktop 对商店上一版 Native Messaging 协议保持向后兼容 | 已采纳 | 2026-08-14 |
 | [0019](0019-desktop-normal-window-and-dedicated-cinema-panel.md) | Desktop 固定普通主窗口，影院使用独立 NSPanel | 部分被 0020 取代 | 2026-08-16 |
-| [0020](0020-cinema-keeps-standard-nswindow.md) | 影院保留标准 NSWindow，不做运行时 NSPanel 转换 | 已采纳 | 2026-08-16 |
+| [0020](0020-cinema-keeps-standard-nswindow.md) | 影院保留标准 NSWindow，不做运行时 NSPanel 转换 | 已被 0023 取代 | 2026-08-16 |
+| [0021](0021-cinema-cross-app-fullscreen-overlay.md) | 影院使用跨应用全屏浮层策略 | 已否决并被 0023 取代 | 2026-08-31 |
+| [0022](0022-cinema-promotes-after-visible-webview.md) | 影院在 WebView 可见后可逆升级为 NSPanel | 已否决并被 0023 取代 | 2026-08-31 |
+| [0023](0023-main-dynamically-switches-list-window-and-cinema-panel.md) | main 动态切换普通列表窗口与影院 Panel | 候选，待 Production 复验 | 2026-08-31 |

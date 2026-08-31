@@ -1,6 +1,6 @@
 # 0020. 影院保留标准 NSWindow，不做运行时 NSPanel 转换
 
-- 状态：已采纳
+- 状态：已被 [ADR-0023](0023-main-dynamically-switches-list-window-and-cinema-panel.md) 取代；仅“list 使用标准 NSWindow”的结论保留
 - 日期：2026-08-16
 - 部分取代：[ADR-0019](0019-desktop-normal-window-and-dedicated-cinema-panel.md)
 - Plane：LISTENUP-30

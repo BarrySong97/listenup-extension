@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 双窗口/输入/native hover/更新/CLI 与发布边界不漂移。
+ * @purpose 校验环境标识、Native v5/Embedded/Cookie 隔离、共享原始音轨、Desktop 同窗 list/cinema/输入/native hover/更新/CLI 与发布边界不漂移。
  * @role    环境隔离 sensor；被 pre-commit 与人工验证调用。
  * @deps    环境矩阵、extension manifests/protocol/bridge、youtube-core、Desktop capabilities/CookieVault/i18n、website/Tauri/CLI/Query 配置
- * @gotcha  ADR-0008/0020：不得恢复英语优先、环境串库、WebviewWindow 运行时 class-swap、React pointer 伪 hover、旧单窗口几何键、启动强装、本地 `.app` 残留或发布缺口。
+ * @gotcha  ADR-0008/0020/0023：不得恢复英语优先、环境串库、独立隐藏影院 WebView、screen-saver 假置顶、React pointer 伪 hover、未成对恢复 main 原生语义、启动强装、本地 `.app` 残留或发布缺口。
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const ROOT = process.cwd();
@@ -109,12 +109,15 @@ assert.deepEqual(cliTauri.bundle.externalBin, ["target/sidecars/listenup"]);
 const defaultCapability = await readJson(
   "apps/listenup-desktop/src-tauri/capabilities/default.json"
 );
-const cinemaCapability = await readJson(
-  "apps/listenup-desktop/src-tauri/capabilities/cinema.json"
-);
 assert.deepEqual(defaultCapability.webviews, ["main"]);
-assert.deepEqual(cinemaCapability.webviews, ["cinema"]);
 assert.ok(!Object.hasOwn(defaultCapability, "windows"));
+const desktopCapabilityFiles = await readdir(
+  resolve(ROOT, "apps/listenup-desktop/src-tauri/capabilities")
+);
+assert.ok(
+  !desktopCapabilityFiles.includes("cinema.json"),
+  "ADR-0023: cinema must reuse the initialized main WebView and capability"
+);
 assert.ok(
   defaultCapability.permissions.includes("clipboard-manager:allow-write-text"),
   "trusted main must retain explicit copy support"
@@ -137,6 +140,7 @@ for (const permission of [
   "allow-get-embedded-player-host-url",
   "allow-get-youtube-cookie-status",
   "allow-enter-cinema-mode",
+  "allow-exit-cinema-mode",
   "allow-ensure-window-visible",
   "allow-reload-embedded-playback",
   "allow-report-embedded-player-failure",
@@ -162,38 +166,18 @@ const mainWindowPermissionSource = await readFile(
 assert.match(
   mainWindowPermissionSource,
   /identifier = "allow-enter-cinema-mode"[\s\S]*commands\.allow = \["enter_cinema_mode"\]/,
-  "only the main capability should expose the cinema entry command"
+  "main must expose its dynamic cinema promotion command"
 );
 assert.match(
   mainWindowPermissionSource,
-  /identifier = "allow-refresh-window-mouse-tracking"[\s\S]*commands\.allow = \["refresh_window_mouse_tracking"\]/,
-  "cinema hover refresh needs a dedicated command permission"
+  /identifier = "allow-exit-cinema-mode"[\s\S]*commands\.allow = \["exit_cinema_mode"\]/,
+  "main must expose the paired list restoration command"
 );
-for (const permission of [
-  "allow-control-playback",
-  "allow-ensure-window-visible",
-  "allow-exit-cinema-mode",
-  "allow-refresh-window-mouse-tracking",
-  "allow-select-subtitle-session",
-  "allow-set-vibrancy",
-  "allow-viewer-read",
-]) {
-  assert.ok(
-    cinemaCapability.permissions.includes(permission),
-    `cinema must retain ${permission}`
-  );
-}
-for (const forbiddenPermission of [
-  "allow-enter-cinema-mode",
-  "allow-save-youtube-cookies",
-  "allow-start-embedded-playback",
-  "updater:default",
-]) {
-  assert.ok(
-    !cinemaCapability.permissions.includes(forbiddenPermission),
-    `cinema must not receive ${forbiddenPermission}`
-  );
-}
+assert.doesNotMatch(
+  mainWindowPermissionSource,
+  /refresh_window_mouse_tracking|allow-refresh-window-mouse-tracking/,
+  "same-main cinema tracking must stay internal to the paired native transition"
+);
 const iframePlayerSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src/useYoutubeIframePlayer.ts"),
   "utf8"
@@ -502,42 +486,82 @@ assert.match(
 assert.match(
   rustSource,
   /updateTrackingAreas/,
-  "the cinema window must recalculate WebView tracking areas after resize/vibrancy changes"
+  "the main WebView must recalculate tracking areas after resize/vibrancy/native transitions"
 );
 assert.match(
   rustSource,
-  /fn refresh_window_mouse_tracking[\s\S]*window\.label\(\) != CINEMA_WINDOW_LABEL[\s\S]*run_on_main_thread[\s\S]*refresh_mouse_tracking/,
-  "the post-layout tracking command must be restricted to the cinema window"
+  /const MAIN_WINDOW_LABEL: &str = "main"/,
+  "the dynamic native transition is limited to the initialized main window"
 );
 assert.match(
   rustSource,
-  /const CINEMA_WINDOW_LABEL: &str = "cinema"/,
-  "the overlay must have a dedicated native window label"
+  /const RETURN_TO_LIST_EVENT: &str = "desktop-return-to-list"/,
+  "native close and tray paths need a stable React list reset event"
 );
 assert.match(
   rustSource,
-  /const CINEMA_PRESENTED_EVENT: &str = "desktop-cinema-presented"/,
-  "every reused cinema window presentation needs a stable reset event"
+  /const CINEMA_STATUS_LEVEL: isize = 25/,
+  "ADR-0023: same-main cinema must retain the historically verified status level"
 );
 assert.match(
   rustSource,
-  /fn configure_cinema_window_on_main_thread[\s\S]*set_vibrancy_on_main_thread\(window, false\)/,
-  "cinema must retain a dedicated standard NSWindow while applying its visual treatment"
+  /const CINEMA_CAN_JOIN_ALL_SPACES: usize = 1 << 0/,
+  "historical cinema must join all Spaces"
+);
+assert.match(
+  rustSource,
+  /const CINEMA_FULL_SCREEN_AUXILIARY: usize = 1 << 8/,
+  "historical cinema must remain an auxiliary window in native fullscreen"
+);
+assert.match(
+  rustSource,
+  /fn cinema_collection_behavior\(\) -> usize \{\s*CINEMA_CAN_JOIN_ALL_SPACES \| CINEMA_FULL_SCREEN_AUXILIARY\s*\}/,
+  "ADR-0023: collection behavior must exactly replace defaults with the verified two-bit baseline"
+);
+assert.match(
+  rustSource,
+  /fn promote_main_to_cinema_panel[\s\S]*window\.label\(\) != MAIN_WINDOW_LABEL[\s\S]*AnyClass::get\(c"NSPanel"\)[\s\S]*object_getClass[\s\S]*MAIN_ORIGINAL_CLASS\.store[\s\S]*object_setClass[\s\S]*setStyleMask: style \| CINEMA_NONACTIVATING_PANEL_STYLE[\s\S]*setBecomesKeyOnlyIfNeeded: true[\s\S]*CINEMA_PANEL_ACTIVE\.store\(true/,
+  "ADR-0023: only the initialized main may be promoted to the historical nonactivating NSPanel"
+);
+assert.match(
+  rustSource,
+  /fn restore_main_list_window[\s\S]*window\.label\(\) != MAIN_WINDOW_LABEL[\s\S]*MAIN_ORIGINAL_CLASS[\s\S]*MAIN_ORIGINAL_STYLE_MASK[\s\S]*MAIN_ORIGINAL_LEVEL[\s\S]*MAIN_ORIGINAL_COLLECTION_BEHAVIOR[\s\S]*object_setClass[\s\S]*setLevel: original_level[\s\S]*setCollectionBehavior: original_behavior[\s\S]*CINEMA_PANEL_ACTIVE\.store\(false/,
+  "ADR-0023: every list return must restore the original class, style, level, and collection behavior"
+);
+assert.match(
+  rustSource,
+  /fn enter_cinema_mode[\s\S]*window\.label\(\) != MAIN_WINDOW_LABEL[\s\S]*run_on_main_thread[\s\S]*promote_main_to_cinema_panel\(&target\)[\s\S]*apply_cinema_overlay_policy\(&target, true, true\)[\s\S]*refresh_mouse_tracking\(&target\)/,
+  "same-main cinema entry must promote, apply the historical policy, and refresh tracking on AppKit's thread"
+);
+assert.match(
+  rustSource,
+  /fn exit_cinema_mode[\s\S]*restore_main_window\(window\)/,
+  "cinema exit must use the paired main restoration path"
+);
+assert.match(
+  rustSource,
+  /fn spawn_cinema_overlay_keeper[\s\S]*CINEMA_PANEL_ACTIVE\.load[\s\S]*apply_cinema_overlay_policy\(&target, true, false\)/,
+  "the keeper must reassert the same historical policy only while main is a cinema Panel"
+);
+assert.match(
+  rustSource,
+  /spawn_cinema_overlay_keeper\(window\.clone\(\)\)/,
+  "the initialized main window must own the cinema overlay keeper"
+);
+assert.equal(
+  [...rustSource.matchAll(/object_setClass/g)].length,
+  2,
+  "runtime class changes are limited to paired main promotion and restoration"
 );
 assert.doesNotMatch(
   rustSource,
-  /object_setClass|setBecomesKeyOnlyIfNeeded|nonactivatingPanel/,
-  "ADR-0020: runtime NSPanel conversion breaks mouse delivery to a newly created cinema WebView"
+  /CINEMA_WINDOW_LABEL|CINEMA_PRESENTED_EVENT|CINEMA_SCREEN_SAVER_LEVEL|CINEMA_CAN_JOIN_ALL_APPLICATIONS|CINEMA_STATIONARY|WebviewWindowBuilder|refresh_window_mouse_tracking/,
+  "failed dedicated-window and screen-saver experiments must not return"
 );
 assert.match(
   rustSource,
-  /fn enter_cinema_mode[\s\S]*CINEMA_WINDOW_LABEL[\s\S]*\.always_on_top\(true\)/,
-  "cinema must be created as the only always-on-top runtime window"
-);
-assert.match(
-  rustSource,
-  /fn enter_cinema_mode[\s\S]*\.show\(\)[\s\S]*\.emit\(CINEMA_PRESENTED_EVENT, \(\)\)/,
-  "every cinema show must reset the persistent WebView hover lifecycle"
+  /fn show_main_window[\s\S]*restore_main_window\(window\.clone\(\)\)[\s\S]*emit\(RETURN_TO_LIST_EVENT, \(\)\)[\s\S]*window\.show\(\)/,
+  "tray presentation must first restore the regular list window and React view"
 );
 assert.match(
   rustSource,
@@ -569,13 +593,23 @@ const desktopAppSource = await readFile(
 assert.match(desktopAppSource, /CINEMA_TOOLBAR_HINT_DURATION_MS = 3_000/);
 assert.match(
   desktopAppSource,
-  /CURRENT_WINDOW\.listen\(CINEMA_PRESENTED_EVENT, handleCinemaPresented\)/,
-  "the reused cinema WebView must reset its entry hint on every native presentation"
+  /const \[mode, setMode\] = useState<ViewMode>\("list"\)[\s\S]*const modeRef = useRef<ViewMode>\("list"\)/,
+  "the initialized main WebView must start in ordinary list mode"
 );
 assert.match(
   desktopAppSource,
-  /handleCinemaPresented[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*invoke\("refresh_window_mouse_tracking"\)/,
-  "cinema must refresh native tracking after two visible WebView layout frames"
+  /if \(nextMode === "list"\) \{\s*await invoke\("exit_cinema_mode"\);\s*\}[\s\S]*modeRef\.current = nextMode;\s*setMode\(nextMode\)/,
+  "returning to list must restore the native NSWindow before rendering list controls"
+);
+assert.match(
+  desktopAppSource,
+  /if \(nextMode === "cinema"\) \{\s*await waitForTwoAnimationFrames\(\);\s*await invoke\("enter_cinema_mode"\);\s*\}/,
+  "cinema must render the same main WebView for two frames before native Panel promotion"
+);
+assert.match(
+  desktopAppSource,
+  /CURRENT_WINDOW\.listen\(RETURN_TO_LIST_EVENT, \(\) => \{\s*void switchMode\("list"\)/,
+  "native close and tray actions must reset the same React WebView to list"
 );
 assert.match(
   desktopAppSource,
@@ -603,18 +637,23 @@ assert.match(
   "BrowserSource switching must inspect only a user-generated paste event"
 );
 assert.doesNotMatch(desktopAppSource, /activateDesktopKeyboard|activate_text_input/);
-assert.match(desktopAppSource, /resolveWindowViewMode\(CURRENT_WINDOW\.label\)/);
+assert.doesNotMatch(
+  desktopAppSource,
+  /resolveWindowViewMode|CINEMA_PRESENTED_EVENT|refresh_window_mouse_tracking/,
+  "dedicated cinema WebView presentation code must not return"
+);
 const windowPresentationSource = await readFile(
   resolve(ROOT, "apps/listenup-desktop/src/windowPresentation.ts"),
   "utf8"
 );
 assert.match(windowPresentationSource, /listenup-window-position-main-v2/);
 assert.match(windowPresentationSource, /listenup-window-position-cinema-v2/);
-assert.match(windowPresentationSource, /desktop-cinema-presented/);
+assert.match(windowPresentationSource, /desktop-return-to-list/);
+assert.doesNotMatch(windowPresentationSource, /resolveWindowViewMode|desktop-cinema-presented/);
 assert.doesNotMatch(
   windowPresentationSource,
   /listenup-window-position-desktop|listenup-window-size-list|listenup-window-size-cinema"/,
-  "dedicated main/cinema windows must not reuse legacy single-panel geometry"
+  "same-main list/cinema modes must retain their separate v2 geometry"
 );
 assert.doesNotMatch(
   desktopAppSource,

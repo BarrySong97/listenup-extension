@@ -2,13 +2,13 @@
 
 ## 职责
 
-macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标，同步显示在普通主窗口或可浮于其他 app
-全屏之上的独立影院字幕层；可反向控制当前 YouTube 播放 / 暂停及点击字幕定点跳转。同时将原字幕保存到
+macOS 桌面端：把扩展抓到的 YouTube 完整字幕和实时播放游标，同步显示在同一 main 的普通列表或可浮于
+其他 app 全屏之上的影院字幕形态；可反向控制当前 YouTube 播放 / 暂停及点击字幕定点跳转。同时将原字幕保存到
 SQLite，并显示用户通过 CLI 导入的 AI 译文。
 Tauri v2，Rust 后端 + React 前端。
 
 边界：**管** 窗口渲染、Native Messaging Host、同窗官方 YouTube iframe、字幕持久化、
-安全 CLI、双窗口呈现生命周期和当前 session 的播放 / 暂停及字幕块起点 seek；浏览器页面字幕抓取仍
+安全 CLI、同窗 list/cinema 原生切换和当前 session 的播放 / 暂停及字幕块起点 seek；浏览器页面字幕抓取仍
 由扩展负责；Desktop 自播字幕由受限 Rust transport 独立获取。不内置翻译模型，也不
 提供任意进度条、音量、倍速等更宽的播放器遥控。
 
@@ -21,7 +21,7 @@ src/App.tsx        唯一 Desktop layout：浏览器/链接双入口、同窗视
 src/i18n/ / src/components/ui/LanguageSwitcher.tsx  Desktop 中英文资源、系统语言兜底、偏好持久化与 Footer 切换入口
 src/EmbeddedVideoPanel.tsx / src/useYoutubeIframePlayer.ts  官方 iframe 视频行与播放事件适配
 src/EmbeddedSubtitleOverlay.tsx / src/embeddedSubtitleOverlayPosition.ts  可拖动可信字幕层与归一化位置
-src/useViewerSession.ts / src/SubtitleViewer.tsx  两个可信窗口的快照订阅和共用字幕展示层
+src/useViewerSession.ts / src/SubtitleViewer.tsx  可信 main 的快照订阅和共用字幕展示层
 src/EmbeddedSourceEntry.tsx / src/embeddedPlayback.ts  双入口和本地 YouTube URL 安全门
 src/CookieSettings.tsx / src-tauri/src/cookie_vault.rs  HeroUI Cookie Modal、解析与 Keychain 保存
 src/EmbeddedLinkEditorModal.tsx / src/components/ui/DesktopModal.tsx  换链接表单与统一 HeroUI Modal
@@ -36,9 +36,9 @@ src/useSubtitleView.ts      React Query → Tauri SQLite 只读查询
 src/queryClient.ts          窗口 focus refetch；无轮询 / watcher
 src/main.tsx       React 挂载与 QueryClientProvider
 src/types.ts       与 Rust 侧共享的实时快照 / 持久字幕视图类型
-src/windowPresentation.ts  窗口 label → list/cinema 视图的纯映射
+src/windowPresentation.ts  同一 main 的 list/cinema 几何键与原生返回列表事件
 src/styles.css     Tailwind v4 @theme（唯一的设计 token 权威，见 design.md）
-src-tauri/src/lib.rs   Tauri 入口、普通 main、独立置顶 cinema NSWindow、双向 socket、SQLite、tray
+src-tauri/src/lib.rs   Tauri 入口、main 的 NSWindow/影院 Panel 成对切换、双向 socket、SQLite、tray
 src-tauri/src/browser_source.rs  浏览器字幕影子状态、多视频仲裁与 bridgeId 控制目标
 src-tauri/src/source_coordinator.rs  双来源权威、Embedded 锁与 playbackEpoch 退出屏障
 src-tauri/src/embedded_source.rs  Embedded schema、大小/频率/身份校验与单会话状态
@@ -53,7 +53,7 @@ src-tauri/src/main.rs  薄入口，调 lib::run()
 src-tauri/build.rs     把 LISTENUP_ENV 透传给 Rust（socket 路径按 bundle id 区分）
 src-tauri/tauri.conf.json / tauri.dev.conf.json / tauri.cli.conf.json   环境与 CLI sidecar 配置
 src-tauri/Info.plist   深链接 scheme（由 gen-info-plist.mjs 生成，不要手改）
-src-tauri/capabilities/default.json / cinema.json  普通 main 与影院浮层各自的最小授权；跨源 iframe 没有 Tauri capability
+src-tauri/capabilities/default.json  唯一可信 main 的最小授权；跨源 iframe 没有 Tauri capability
 src-tauri/permissions/embedded-player.toml  Embedded 自定义命令的精确 allow-list
 scripts/gen-info-plist.mjs      按 LISTENUP_ENV 生成 Info.plist，构建前自动跑
 scripts/prepare-cli.mjs         构建 listenup sidecar 并放入 .app
@@ -200,11 +200,10 @@ Cookie 原值、键名和数量不进入错误、Debug、日志、SQLite、viewe
 固定 `cli-v0.1.0` Skill URL 和 CLI `0.1.0`，要求 Agent 先询问目标语言、dry-run 后再 commit，
 Desktop 本身不下载 Skill、不安装 CLI、也不内置翻译。已有译文时列表按 AI 重组后的语义时间块
 显示；影院模式在双语时显示上下两层，并在 hover 工具条中提供原语、译文、双语切换，与列表
-模式共用同一份显示偏好。每次显示影院窗口时，Rust 都向复用中的 cinema Webview 发送
-`desktop-cinema-presented`；前端收到后重置 3 秒入场提示，并等两个 animation frame 让 WebView
-完成可见布局，再调用仅授予 cinema 的 `refresh_window_mouse_tracking`。该命令只执行原生 mouse
-tracking 刷新，不改变 vibrancy。之后工具条继续由
-WebKit `group-hover` 控制，鼠标离开窗口立即隐藏。
+模式共用同一份显示偏好。切到影院时，前端立即重置 3 秒入场提示，在同一 `main` WebView 完成影院
+DOM、尺寸、位置、阴影和 vibrancy 的两个 animation frame 后，调用原生命令把它升级为历史成功的
+cinema Panel，并在同一 AppKit 主线程刷新 mouse tracking。之后工具条继续由 WebKit
+`group-hover` 控制，鼠标离开窗口立即隐藏；返回列表时先恢复原始窗口类和层级，再呈现输入控件。
 
 Desktop 固定界面文案使用 `i18next` + `react-i18next`，只提供英文与简体中文；首次启动跟随
 macOS/WebView 语言，显式选择写入 `localStorage.listenup-ui-language`。界面语言与字幕目标语言
@@ -247,43 +246,48 @@ translation document 后交给 `translation apply`。apply/delete 默认 dry-run
 
 ## 窗口
 
-无边框透明 UI 使用两个职责明确的原生窗口。macOS 上：
+无边框透明 UI 只使用 Tauri 初始化的一个 `main` WebViewWindow；list / cinema 是它的两种动态原生
+形态。macOS 上：
 
 - 深色毛玻璃靠 `window-vibrancy`（`NSVisualEffectMaterial::HudWindow`），需要 `tauri.conf.json` 的 `app.macOSPrivateApi: true` **和** tauri 的 `macos-private-api` feature，缺一个就构建报错或背景不透明
-- `main` 始终是 Tauri 创建的标准 `NSWindow`，使用 `ActivationPolicy::Regular` 且
+- list 中 `main` 保持 Tauri 创建的标准 `NSWindow`，使用 `ActivationPolicy::Regular` 且
   `alwaysOnTop=false`。它可以被其他窗口遮挡，点击后正常成为 key window；WKWebView 输入框和
   `Cmd+A/C/X/V` 走系统标准 first-responder 链路，不需要任何 `activate_text_input` 或根级 pointer 激活。
-- `cinema` 是按需创建的独立标准 `NSWindow` WebviewWindow；不得运行时 class-swap 为 `NSPanel`。
-  只有它使用高 level、`canJoinAllSpaces`、`fullScreenAuxiliary` 和 always-on-top，因而仍可覆盖其他
-  app 的原生全屏 Space。仅移动鼠标不会激活应用；点击控件按标准 macOS 窗口规则处理焦点。
-- 进入影院时隐藏 main；退出影院、点击 tray 或关闭影院时隐藏 cinema，并显示、聚焦 main。两个窗口只
-  共享 Rust coordinator / SQLite / socket 权威，不复制连接或来源状态。
+- 切影院时，React 先在同一个 main 提交影院 DOM / 几何 / 视觉，等两个布局帧后，Rust 保存原始
+  class、style、level 和 collection behavior，再升级为 `NSPanel + nonactivatingPanel`。参数精确复现
+  `57eebdc` 的同屏严格测试：`setBecomesKeyOnlyIfNeeded=true`、level 25，并把 behavior 整体替换为
+  `canJoinAllSpaces | fullScreenAuxiliary`；不得叠加失败实验中的 screen-saver level、`stationary` 或
+  `canJoinAllApplications`。
+- 退出影院、关闭窗口或 tray 唤回时，先恢复保存的 style、class、level、collection behavior 和
+  mouse tracking，再把同一 React WebView 切回 list 并聚焦。2 秒 keeper 只在 cinema Panel 激活且
+  可见时重申同一历史策略。
 - Header 和 tray 都没有 Menubar Mode；旧 `desktop-preferences.json` 不再读取，应用不会切换
   Accessory、不会按 tray 定位，也不会失焦自动隐藏。
 - 拖动靠 `data-tauri-drag-region`（没有系统标题栏），关闭按钮在 header / 工具条里
 
-主窗口和影院窗口的尺寸、位置分别持久化在 `localStorage`。双窗口架构使用独立的 v2 key，升级时
+同一 main 的 list / cinema 尺寸、位置分别持久化在 `localStorage`。两种模式使用独立的 v2 key，升级时
 不读取旧单 NSPanel 的 `listenup-window-position-desktop` / `window-size-list|cinema`，避免把旧面板
-坐标和纵向尺寸套到新的原生窗口。恢复后 Rust 还会按物理像素检查窗口是否至少有 64×64 落在任一
+坐标和纵向尺寸套到当前模式。恢复后 Rust 还会按物理像素检查窗口是否至少有 64×64 落在任一
 当前显示器内；外接屏被拔掉或排列变化时自动居中：
 
 | | 列表模式 | 影院模式 |
 |---|---|---|
-| 原生窗口 | 普通 `main` NSWindow | 独立置顶 `cinema` NSWindow |
+| 原生窗口 | 普通 `main` NSWindow | 同一 `main` 可见两帧后升级的 NSPanel |
 | 形态 | YouTube 标志 + 标题 + 状态 + 完整字幕列表 + footer | 整窗为一条字幕带（当前句，最多两行） |
 | 背景 | vibrancy 磨砂 + `--color-glass` | **运行时关掉 vibrancy**（`set_vibrancy` 命令）+ 纯透明 + `--color-glass-cinema` |
 | 工具条 | 常驻 header | 默认隐藏；hover 整条影院字幕窗口时显示，可切换原语 / 译文 / 双语，鼠标离开窗口后隐藏 |
 
-切换前保存当前窗口几何；对应窗口 mount 时用 `setMinSize` + `setSize` + `setPosition` 恢复，再调用
+切换前保存当前模式几何；同一窗口用 `setMinSize` + `setSize` + `setPosition` 恢复目标模式，再调用
 `ensure_window_visible` 做原生显示器交集校验。
-main 与 cinema 权限分别在 `capabilities/default.json` 和 `capabilities/cinema.json`。
+只有 `capabilities/default.json` 授权 main 成对进入 / 退出 cinema；不存在独立 cinema capability。
 列表/影院缩放、vibrancy/阴影切换、全屏 Space 重排和 tray 重显都会重新启用
 `acceptsMouseMovedEvents` 并刷新 WebView tracking areas，避免窗口状态变化后停止命中 CSS `:hover`。
-窗口隐藏再显示还必须发送 presentation 事件，在 WebView 完成可见布局后再刷新一次；只换成 React
-pointer enter / leave 无法绕过失效的原生 tracking。运行时 `object_setClass(NSPanel)` 会让新建
-cinema WebView 永久收不到鼠标事件，已由 sensor 明确禁止。完整决策见
-[ADR-0019](../../decisions/0019-desktop-normal-window-and-dedicated-cinema-panel.md) 与
-[ADR-0020](../../decisions/0020-cinema-keeps-standard-nswindow.md)。
+只有同一 main 的影院 DOM 完成两个可见布局帧后才升级 Panel 并刷新 tracking；只换成 React pointer
+enter / leave 无法绕过失效的原生 tracking。升级和退出恢复必须成对；sensor 同时禁止独立隐藏
+cinema WebView 和两轮失败的高层级策略。完整决策见
+[ADR-0023](../../decisions/0023-main-dynamically-switches-list-window-and-cinema-panel.md)；
+[ADR-0020](../../decisions/0020-cinema-keeps-standard-nswindow.md) 至
+[ADR-0022](../../decisions/0022-cinema-promotes-after-visible-webview.md) 保留失败证据。
 
 ## 来源权威与多视频仲裁
 
@@ -347,8 +351,8 @@ Rust `SourceCoordinator` 是 viewer、SQLite 和播放控制来源的唯一权�
   100ms cursor 下有额外检查与 HMR 开销，可用于功能调试，但不能据此判断发布版帧率。
 - 实时原语列表以扩展传来的 `currentIndex` 为当前项权威值；所有更早的条目至少标记为已播放，
   避免字幕切换容差或相邻时间重叠让“当前项之前一条”短暂显示成未播放。译文与缓存列表仍按时间映射。
-- 影院工具条保持“每次呈现短显 + `group-hover`”；原生层负责 tracking，presentation 事件负责让
-  WebView 在两帧可见布局后重新触发刷新。不能用 React pointer state 或永久显示掩盖原生问题
+- 影院工具条保持“每次切换短显 + `group-hover`”；同一 main 在两帧影院布局后由原生升级 Panel 并
+  刷新 tracking。不能用 React pointer state 或永久显示掩盖原生问题
 - 滚动条只在滚动中显示：thumb 平时透明，`onScroll` / `onScrollEnd` 维护 `.scrolling` class
 - 列表 footer 只显示语义块数量，不暴露 YouTube videoId 或 SQLite 来源文案；这不改变 SQLite
   冷启动缓存和持久字幕查询
@@ -406,9 +410,9 @@ Footer 右下角和菜单栏 tray 提供用户主动触发的“检查更新”�
 
 DEV app 不会安装正式版更新，点击只显示说明；`tauri.dev.conf.json` 也关闭 updater artifact 生成。首个带 updater 的正式版本仍需用户手工安装一次，从下一版开始才能应用内更新。
 
-当前发布基线为 `v0.5.4`；该版本将目标语言 Select 与 Source / Translation / Bilingual 模式 Tab
-统一为紧凑工具行尺寸，并用 UI 棘轮锁定 HeroUI 默认样式重置。`v0.5.3` 新增的中英文界面、
-Footer 版本与更新入口保持不变。`v0.5.1 → v0.5.2` 的 Chrome 商店 Extension 1.5.2 / Native v4
+当前发布基线为 `v0.5.6`；该版本让同一 `main` 在普通列表 NSWindow 与历史影院 Panel 间动态切换，
+恢复 Chrome 原生全屏字幕覆盖，同时保留列表输入和影院 hover。`v0.5.4` 的紧凑模式工具行、
+`v0.5.3` 的中英文界面、Footer 版本与更新入口保持不变。`v0.5.1 → v0.5.2` 的 Chrome 商店 Extension 1.5.2 / Native v4
 向后兼容链路仍是发布回归基线，必须确认“已连接”后能收到字幕并以来源版本回发控制命令。
 
 ## 验证

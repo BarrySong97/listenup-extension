@@ -25,6 +25,7 @@
     "allow-get-youtube-cookie-status",
     "allow-get-embedded-player-host-url",
     "allow-enter-cinema-mode",
+    "allow-exit-cinema-mode",
     "allow-ensure-window-visible",
     "allow-reload-embedded-playback",
     "allow-report-embedded-player-failure",

@@ -1,8 +1,8 @@
 /**
- * @purpose 普通 Desktop 主窗口与独立影院浮层 UI：组合浏览器同步、YouTube iframe、字幕交互与原生 hover tracking。
- * @role    main 标签渲染标准窗口，cinema 标签只渲染置顶字幕浮层；两者共享 Rust 来源权威。
+ * @purpose 同一 Desktop main WebView 的普通列表/影院浮层 UI：组合浏览器同步、YouTube iframe、字幕交互与原生窗口切换。
+ * @role    React 在 main 内动态切换 list/cinema；Rust 只在影院布局完成后把同一原生窗口升级为 Panel，返回 list 时恢复。
  * @deps    @tauri-apps/api、@tauri-apps/plugin-clipboard-manager、@tanstack/react-query、react-i18next、BrowserSourceSwitchModal、EmbeddedLinkEditorModal、components/ui、EmbeddedVideoPanel、SubtitleViewer、useSubtitleView、./types
- * @gotcha  cinema 隐藏后会复用；每次原生呈现后须等 WebView 两帧布局再刷新 tracking，且不得把窗口运行时 class-swap 为 NSPanel。
+ * @gotcha  list 必须先恢复标准 NSWindow；cinema DOM、尺寸与 vibrancy 完成两帧后才能调用原生 Panel 升级。
  */
 import { Icon } from "@iconify/react";
 import { getVersion } from "@tauri-apps/api/app";
@@ -62,8 +62,7 @@ import { useSubtitleView } from "./useSubtitleView";
 import { VideoSessionPicker } from "./VideoSessionPicker";
 import { useViewerSession } from "./useViewerSession";
 import {
-  CINEMA_PRESENTED_EVENT,
-  resolveWindowViewMode,
+  RETURN_TO_LIST_EVENT,
   WINDOW_GEOMETRY_STORAGE_KEYS,
   type WindowViewMode,
 } from "./windowPresentation";
@@ -119,7 +118,6 @@ const iconButtonClassName =
   "grid h-[26px] w-[26px] flex-none cursor-pointer place-items-center rounded-[7px] border-none bg-transparent p-0 text-fg-muted transition-colors hover:bg-wash hover:text-fg";
 
 const CURRENT_WINDOW = getCurrentWindow();
-const IS_CINEMA_WINDOW = CURRENT_WINDOW.label === "cinema";
 
 const loadStoredSubtitleMode = (): SubtitleDisplayMode => {
   const stored = localStorage.getItem(SUBTITLE_MODE_STORAGE_KEY);
@@ -215,6 +213,13 @@ const persistCurrentWindowSize = async (mode: ViewMode) => {
     JSON.stringify(logicalSize)
   );
 };
+
+const waitForTwoAnimationFrames = () =>
+  new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
 
 const formatTime = (seconds: number) => {
   const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
@@ -370,7 +375,8 @@ const PlaybackTime = memo(function PlaybackTime({
 export default function App() {
   const { t, i18n: i18next } = useTranslation();
   const { viewer, connected, cursor, applyViewerSnapshot } = useViewerSession();
-  const mode = resolveWindowViewMode(CURRENT_WINDOW.label);
+  const [mode, setMode] = useState<ViewMode>("list");
+  const modeRef = useRef<ViewMode>("list");
   const [subtitleMode, setSubtitleMode] =
     useState<SubtitleDisplayMode>(loadStoredSubtitleMode);
   const [targetLanguage, setTargetLanguage] = useState<string | null>(() =>
@@ -417,8 +423,7 @@ export default function App() {
   } | null>(null);
   const scrollIdleTimerRef = useRef<number | null>(null);
   const cinemaToolbarHintTimerRef = useRef<number | null>(null);
-  const cinemaTrackingRefreshFrameRef = useRef<number | null>(null);
-  const updater = useDesktopUpdater({ enabled: !IS_DEV_BUILD && !IS_CINEMA_WINDOW });
+  const updater = useDesktopUpdater({ enabled: !IS_DEV_BUILD });
   const liveSession = viewer.activeSession;
   const embeddedSource =
     viewer.source?.kind === "embedded" ? viewer.source : null;
@@ -449,14 +454,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void applyWindowSizeForMode(mode)
-      .then(() => restoreCurrentWindowPosition(mode))
+    void applyWindowSizeForMode("list")
+      .then(() => restoreCurrentWindowPosition("list"))
       .then(() => invoke("ensure_window_visible"))
       .catch((error) => console.error("failed to initialize window geometry", error));
-  }, [mode]);
+  }, []);
 
   useEffect(() => {
-    if (IS_CINEMA_WINDOW) return;
     let unlisten: (() => void) | null = null;
     void CURRENT_WINDOW.onFocusChanged((event) => {
       if (!event.payload) return;
@@ -593,23 +597,11 @@ export default function App() {
     if (cinemaToolbarHintTimerRef.current !== null) {
       window.clearTimeout(cinemaToolbarHintTimerRef.current);
     }
-    if (cinemaTrackingRefreshFrameRef.current !== null) {
-      window.cancelAnimationFrame(cinemaTrackingRefreshFrameRef.current);
-    }
     setShowCinemaToolbarHint(true);
     cinemaToolbarHintTimerRef.current = window.setTimeout(() => {
       cinemaToolbarHintTimerRef.current = null;
       setShowCinemaToolbarHint(false);
     }, CINEMA_TOOLBAR_HINT_DURATION_MS);
-
-    cinemaTrackingRefreshFrameRef.current = window.requestAnimationFrame(() => {
-      cinemaTrackingRefreshFrameRef.current = window.requestAnimationFrame(() => {
-        cinemaTrackingRefreshFrameRef.current = null;
-        void invoke("refresh_window_mouse_tracking").catch((error) => {
-          console.error("failed to refresh cinema mouse tracking", error);
-        });
-      });
-    });
   }, []);
 
   useEffect(() => {
@@ -619,51 +611,64 @@ export default function App() {
     }
 
     handleCinemaPresented();
-    let disposed = false;
-    let unlisten: (() => void) | null = null;
-    void CURRENT_WINDOW.listen(CINEMA_PRESENTED_EVENT, handleCinemaPresented)
-      .then((dispose) => {
-        if (disposed) {
-          dispose();
-        } else {
-          unlisten = dispose;
-        }
-      })
-      .catch((error) => {
-        console.error("failed to listen for cinema presentation", error);
-      });
     return () => {
-      disposed = true;
-      unlisten?.();
       if (cinemaToolbarHintTimerRef.current !== null) {
         window.clearTimeout(cinemaToolbarHintTimerRef.current);
         cinemaToolbarHintTimerRef.current = null;
-      }
-      if (cinemaTrackingRefreshFrameRef.current !== null) {
-        window.cancelAnimationFrame(cinemaTrackingRefreshFrameRef.current);
-        cinemaTrackingRefreshFrameRef.current = null;
       }
     };
   }, [handleCinemaPresented, mode]);
 
   const switchMode = useCallback(async (nextMode: ViewMode) => {
-    if (nextMode === mode) return;
+    const currentMode = modeRef.current;
+    if (nextMode === currentMode) return;
 
     try {
       await Promise.all([
-        persistCurrentWindowSize(mode),
-        persistCurrentWindowPosition(mode),
+        persistCurrentWindowSize(currentMode),
+        persistCurrentWindowPosition(currentMode),
       ]);
     } catch (error) {
       console.error("failed to persist window geometry", error);
     }
 
     try {
-      await invoke(nextMode === "cinema" ? "enter_cinema_mode" : "exit_cinema_mode");
+      // 返回 list 时先撤销 Panel，再让任何列表输入控件重新进入 responder 链。
+      if (nextMode === "list") {
+        await invoke("exit_cinema_mode");
+      }
+
+      modeRef.current = nextMode;
+      setMode(nextMode);
+      await applyWindowSizeForMode(nextMode);
+      await restoreCurrentWindowPosition(nextMode);
+      await invoke("ensure_window_visible");
+
+      // 复现历史成功拓扑：同一个已初始化 main WebView 提交影院 DOM 两帧后才升级 Panel。
+      if (nextMode === "cinema") {
+        await waitForTwoAnimationFrames();
+        await invoke("enter_cinema_mode");
+      }
     } catch (error) {
       console.error("failed to switch window presentation", error);
+      if (nextMode === "cinema") {
+        await invoke("exit_cinema_mode").catch(() => undefined);
+        modeRef.current = "list";
+        setMode("list");
+        await applyWindowSizeForMode("list").catch(() => undefined);
+      }
     }
-  }, [mode]);
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void CURRENT_WINDOW.listen(RETURN_TO_LIST_EVENT, () => {
+      void switchMode("list");
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
+    return () => unlisten?.();
+  }, [switchMode]);
 
   const switchSubtitleMode = useCallback((nextMode: SubtitleDisplayMode) => {
     setSubtitleMode(nextMode);
