@@ -1,7 +1,7 @@
 # Desktop 影院跨应用全屏置顶 — 实现计划
 
 - 日期：2026-08-31
-- 状态：执行中（用户已批准）
+- 状态：已完成
 - Plane：LISTENUP-31
 
 ## 方案概述
@@ -41,10 +41,10 @@ style、level 与 collection behavior。不再创建第二个隐藏 WebviewWindo
 5. [x] 删除独立 cinema WebView，恢复 main 内的动态 list / cinema 视图与各自几何。
 6. [x] main 切影院时延后升级为 `57eebdc` 的精确 Panel 参数；所有返回 list 路径恢复原始 class / style / level / behavior。
 7. [x] 更新确定性单测 / sensor、最终 ADR、模块文档、测试清单和相关文件头。
-8. [ ] 跑 Desktop Node / Rust 测试、Production frontend / app 构建、environment/docs sensors、格式与 diff 检查。
-9. [ ] 安装 Production 验收包，真实验证“先开影院再进 Chrome 全屏”和“Chrome 已全屏再开影院”两条顺序；同时回归 hover、拖动、播放、seek、退出影院与 main 输入。
-10. [ ] 同步 Desktop 0.5.6 的 package / Cargo / Tauri 版本，提交修复与版本准备，推送发布分支和 annotated tag `v0.5.6`。
-11. [ ] 等待 tag workflow 完成签名、公证、DMG 替换、updater URL 重写与公开发布；核对四项资产、latest 链路和哈希并回写 Plane。
+8. [x] 跑 Desktop Node / Rust 测试、Production frontend / app 构建、environment/docs sensors、格式与 diff 检查。
+9. [x] 完整重启 DEV 并由用户复验原始顺序“先开影院再进 Chrome 全屏”；确认字幕恢复最前，退出日志确认 main 恢复普通 level / behavior。用户据此明确授权直接发布，不再等待额外确认。
+10. [x] 同步 Desktop 0.5.6 的 package / Cargo / Tauri 版本，提交修复与版本准备，推送发布分支和 annotated tag `v0.5.6`。
+11. [x] 等待 tag workflow 完成签名、公证、DMG 替换、updater URL 重写与公开发布；核对四项资产、latest 链路和哈希并回写 Plane。
 
 ## 风险 / 注意
 
@@ -78,3 +78,27 @@ level 0 窗口，输入与 `Cmd+A/C/X/V` 不受影响。
   `collectionBehavior=0b100000001`；返回 list 后恢复 `level=0`、`collectionBehavior=0b0`。
 - 发布版本为 Desktop `0.5.6`；Extension 与 Website 版本不变。正式资产只认 tag CI，workflow 任一步
   失败都保持 draft，不手工公开不完整资产。
+
+## 0.5.6 正式发布验证
+
+- 修复提交：`f5e8167`；版本提交：`7b7246d`；annotated tag：`v0.5.6`，精确指向版本提交。
+- 发布前验证：Desktop Node 34/34、Rust 52/52、Production frontend、完整 Production `.app`、
+  environment/docs sensors、cargo fmt 与 `git diff --check` 全部通过；本地 bundle 的 GUI 与 CLI
+  sidecar 均为 arm64，版本和正式 bundle ID 正确，随后按手册清理本地 `.app`。
+- GitHub Actions [run 33380429145](https://github.com/BarrySong97/listenup-extension/actions/runs/33380429145)
+  全部成功，用时 12m56s；完成 arm64 构建、Developer ID 签名、应用与 DMG 公证、DMG 替换、
+  updater URL 重写与公开发布。
+- 公开 Release：<https://github.com/BarrySong97/listenup-extension/releases/tag/v0.5.6>，非 draft、
+  非 prerelease，target 为 `7b7246d`；`releases/latest` 精确解析到 `v0.5.6`。
+- 四项资产齐全且 SHA-256 与 GitHub digest 一致：`latest.json` 为
+  `5f6bb0374eb58a83a5b7bc15e7fdf607bd5b336ec5f65f9fac71c1e5dd0d3fa3`；updater tarball 为
+  `9f5226b9c497e9194eaf72762b39033385e1050ca90ef67d25e1e27305c95c75`；416-byte `.sig` 为
+  `e4aee133601b6ea9e4a7ffca3dd3c6274486c0a2a93aa519841f87825248504f`；DMG 为
+  `454675334baed7eff16a8615d107f60ba9be9e07994d6365f3d849a84d614024`。
+- `latest.json` 版本为 `0.5.6`，`darwin-aarch64` / `darwin-aarch64-app` 均指向公开
+  `releases/download/v0.5.6` URL、无 `api.github.com`，两处内嵌签名与独立 `.sig` 完全一致。
+- 下载后的 DMG 与内部 `.app` 均通过 Gatekeeper，来源为 `Notarized Developer ID`；二者 stapler
+  ticket 有效，`.app` 通过 `codesign --verify --deep --strict`。Bundle identifier 为
+  `com.listenup.desktop`，short/build version 均为 `0.5.6`，主程序与 CLI sidecar 均为 arm64。
+- workflow 仅有 actions Node 20 被 runner 强制改用 Node 24 的 deprecation annotation，不影响本次
+  构建、签名、公证、资产或 updater 链路。
